@@ -93,7 +93,13 @@ if ~isempty(loadedPackages)
         end
         
         pkgLine = sprintf('%s %s (%s)', prefix, pkgName, version);
-        
+
+        % Add channel indicator
+        pkgChannel = mip.utils.get_package_channel(pkgName);
+        if ~isempty(pkgChannel) && ~strcmp(pkgChannel, 'core')
+            pkgLine = sprintf('%s [%s]', pkgLine, pkgChannel);
+        end
+
         % Add sticky indicator
         if isSticky
             pkgLine = sprintf('%s [sticky]', pkgLine);
@@ -122,7 +128,15 @@ if ~isempty(notLoadedPackages)
             % Ignore errors reading mip.json
         end
 
-        fprintf('   %s (%s)\n', pkgName, version);
+        pkgLine = sprintf('   %s (%s)', pkgName, version);
+
+        % Add channel indicator
+        pkgChannel = mip.utils.get_package_channel(pkgName);
+        if ~isempty(pkgChannel) && ~strcmp(pkgChannel, 'core')
+            pkgLine = sprintf('%s [%s]', pkgLine, pkgChannel);
+        end
+
+        fprintf('%s\n', pkgLine);
     end
 end
 

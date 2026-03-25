@@ -4,8 +4,12 @@ function install(varargin)
 % Usage:
 %   mip.install('packageName')
 %   mip.install('package1', 'package2', 'package3')
+%   mip.install('--channel', 'dev', 'packageName')
 %   mip.install('/path/to/package.mhl')
 %   mip.install('https://example.com/package.mhl')
+%
+% Options:
+%   --channel <name>  Install from a specific channel (default: core)
 %
 % Args:
 %   Package name(s), .mhl file path(s), or URL(s), as strings or char arrays.
@@ -17,7 +21,13 @@ function install(varargin)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
 
-    packageNames = varargin;
+    [channel, args] = mip.utils.parse_channel_flag(varargin);
+
+    if isempty(args)
+        error('mip:install:noPackage', 'At least one package name is required for install command.');
+    end
+
+    packageNames = args;
     packagesDir = mip.utils.get_packages_dir();
 
     % Create packages directory if it doesn't exist
@@ -42,7 +52,7 @@ function install(varargin)
     installedCount = 0;
 
     if ~isempty(repoPackages)
-        installedCount = installedCount + installFromRepository(repoPackages, packagesDir);
+        installedCount = installedCount + installFromRepository(repoPackages, packagesDir, channel);
     end
 
     % Handle .mhl file installations
@@ -60,14 +70,17 @@ function install(varargin)
     end
 end
 
-function count = installFromRepository(repoPackages, packagesDir)
+function count = installFromRepository(repoPackages, packagesDir, channel)
 % Install packages from the mip repository
 
     count = 0;
 
     try
         % Download and parse package index
-        indexUrl = mip.index();
+        indexUrl = mip.index(channel);
+        if ~isempty(channel)
+            fprintf('Using channel: %s\n', channel);
+        end
         fprintf('Fetching package index...\n');
 
         tempFile = [tempname, '.json'];
@@ -209,7 +222,14 @@ function count = installFromRepository(repoPackages, packagesDir)
                 count = count + 1;
             end
             
-            % Mark requested packages as directly installed
+            % Mark requested packages as directly installed and record channel
+            effectiveChannel = channel;
+            if isempty(effectiveChannel)
+                effectiveChannel = 'core';
+            end
+            for i = 1:length(toInstall)
+                mip.utils.set_package_channel(toInstall{i}, effectiveChannel);
+            end
             for i = 1:length(repoPackages)
                 mip.utils.add_directly_installed(repoPackages{i});
             end

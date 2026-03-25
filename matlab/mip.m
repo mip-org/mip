@@ -2,20 +2,27 @@ function varargout = mip(command, varargin)
 %MIP   A package manager for MATLAB/MEX.
 %
 % Usage:
-%   mip install <package> [...]     - Install one or more packages
-%   mip uninstall <package> [...]   - Uninstall one or more packages
-%   mip list                        - List installed packages
-%   mip load <package> [--sticky]   - Load a package into MATLAB path
-%   mip unload <package>            - Unload a package from MATLAB path
-%   mip unload --all                - Unload all non-sticky packages
-%   mip unload --all --force        - Unload all packages (including sticky)
-%   mip find-name-collisions        - Find symbol name collisions
-%   mip arch                        - Display current architecture tag
-%   mip info <package>              - Display package information
-%   mip avail                       - List available packages in repository
-%   mip index                       - Display the mip package index URL.
-%   mip version                     - Display mip version
-%   mip help [command]              - Show help text for command
+%   mip install <package> [...]              - Install one or more packages
+%   mip install --channel dev <package>      - Install from a specific channel
+%   mip uninstall <package> [...]            - Uninstall one or more packages
+%   mip list                                 - List installed packages
+%   mip load <package> [--sticky]            - Load a package into MATLAB path
+%   mip unload <package>                     - Unload a package from MATLAB path
+%   mip unload --all                         - Unload all non-sticky packages
+%   mip unload --all --force                 - Unload all packages (including sticky)
+%   mip find-name-collisions                 - Find symbol name collisions
+%   mip arch                                 - Display current architecture tag
+%   mip info <package>                       - Display package information
+%   mip info --channel dev <package>         - Display info from a specific channel
+%   mip avail                                - List available packages in repository
+%   mip avail --channel dev                  - List packages from a specific channel
+%   mip index                                - Display the mip package index URL
+%   mip version                              - Display mip version
+%   mip help [command]                       - Show help text for command
+%
+% Channels:
+%   The default channel is 'core'. Use --channel <name> to install from or
+%   query other channels (e.g., 'dev' for development/staging packages).
 
 if nargin < 1
     command = 'help';
@@ -64,14 +71,14 @@ switch command
         if nargin < 2
             error('mip:noPackage', 'No package specified for info command.');
         end
-        packageName = varargin{1};
-        mip.info(packageName);
+        mip.info(varargin{:});
 
     case 'avail'
-        mip.avail();
+        mip.avail(varargin{:});
 
     case 'index'
-        fprintf('%s\n', mip.index());
+        [ch, ~] = mip.utils.parse_channel_flag(varargin);
+        fprintf('%s\n', mip.index(ch));
 
     case 'root'
         fprintf('%s\n', mip.root());

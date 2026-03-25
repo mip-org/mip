@@ -71,8 +71,9 @@ function uninstall(varargin)
                   'Failed to uninstall package "%s": %s', pkg, ME.message);
         end
         
-        % Remove from directly installed packages
+        % Remove from directly installed packages and channel tracking
         mip.utils.remove_directly_installed(pkg);
+        mip.utils.remove_package_channel(pkg);
     end
 
     % Prune packages that are no longer needed
@@ -133,6 +134,7 @@ function pruneUnusedPackages(packagesDir)
             
             try
                 rmdir(packageDir, 's');
+                mip.utils.remove_package_channel(pkg);
                 fprintf('  Pruned package "%s"\n', pkg);
             catch ME
                 warning('mip:pruneFailed', ...
