@@ -4,6 +4,8 @@ function varargout = mip(command, varargin)
 % Usage:
 %   mip install <package> [...]              - Install one or more packages
 %   mip install --channel dev <package>      - Install from a specific channel
+%   mip update <package> [...]               - Update one or more packages
+%   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip list                                 - List installed packages
 %   mip load <package> [--sticky]            - Load a package into MATLAB path
@@ -28,6 +30,10 @@ if nargin < 1
     command = 'help';
 end
 
+% Ensure mip itself is always tracked as a loaded sticky package
+mip.utils.key_value_append('MIP_LOADED_PACKAGES', 'mip');
+mip.utils.key_value_append('MIP_STICKY_PACKAGES', 'mip');
+
 % Normalize command to lowercase
 command = lower(command);
 
@@ -38,6 +44,12 @@ switch command
             error('mip:noPackage', 'At least one package name required for install command.');
         end
         mip.install(varargin{:});
+
+    case 'update'
+        if nargin < 2
+            error('mip:noPackage', 'At least one package name required for update command.');
+        end
+        mip.update(varargin{:});
 
     case 'uninstall'
         if nargin < 2

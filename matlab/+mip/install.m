@@ -77,72 +77,19 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
 
     try
         % Download and parse package index
-        indexUrl = mip.index(channel);
         if ~isempty(channel)
             fprintf('Using channel: %s\n', channel);
         end
         fprintf('Fetching package index...\n');
 
-        tempFile = [tempname, '.json'];
-        websave(tempFile, indexUrl);
-        indexJson = fileread(tempFile);
-        delete(tempFile);
-
-        index = jsondecode(indexJson);
+        index = mip.utils.fetch_index(channel);
 
         % Get current architecture
         currentArch = mip.arch();
         fprintf('Detected architecture: %s\n', currentArch);
 
-        % Group packages by name
-        packagesByName = containers.Map('KeyType', 'char', 'ValueType', 'any');
-        % index.packages from jsondecode - handle both struct array and cell array
-        packages = index.packages;
-
-        % Determine how to access packages based on type
-        for i = 1:length(packages)
-            % Handle both cell arrays and struct arrays
-            if iscell(packages)
-                pkg = packages{i};  % Cell array access
-            else
-                pkg = packages(i);   % Struct array access
-            end
-
-            % Extract package name
-            if isstruct(pkg)
-                pkgName = pkg.name;
-            else
-                error('mip:invalidPackageFormat', 'Invalid package format in index');
-            end
-
-            if ~packagesByName.isKey(pkgName)
-                packagesByName(pkgName) = {};
-            end
-            variants = packagesByName(pkgName);
-            packagesByName(pkgName) = [variants, {pkg}];
-        end
-
-        % Select best variant for each package
-        packageInfoMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
-        unavailablePackages = containers.Map('KeyType', 'char', 'ValueType', 'any');
-
-        packageNames = keys(packagesByName);
-        for i = 1:length(packageNames)
-            pkgName = packageNames{i};
-            variants = packagesByName(pkgName);
-            bestVariant = selectBestVariant(variants, currentArch);
-
-            if ~isempty(bestVariant)
-                packageInfoMap(pkgName) = bestVariant;
-            else
-                % Track packages with no compatible variant
-                availableArchs = {};
-                for j = 1:length(variants)
-                    availableArchs = [availableArchs, {variants{j}.architecture}];
-                end
-                unavailablePackages(pkgName) = unique(availableArchs);
-            end
-        end
+        % Build package info map
+        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index);
 
         % Check if any requested packages are unavailable
         for i = 1:length(repoPackages)
@@ -337,49 +284,3 @@ function downloadAndInstall(packageName, packageInfo, packagesDir)
     end
 end
 
-function bestVariant = selectBestVariant(variants, currentArch)
-% Select the best package variant for the current architecture
-
-    if isempty(variants)
-        bestVariant = [];
-        return
-    end
-
-    % Filter to compatible variants (exact match or 'any')
-    compatible = {};
-    for i = 1:length(variants)
-        v = variants{i};
-        % Access architecture field safely
-        if isfield(v, 'architecture')
-            arch = v.architecture;
-        else
-            % Skip variants without architecture field
-            continue
-        end
-
-        if strcmp(arch, currentArch) || strcmp(arch, 'any')
-            compatible = [compatible, {v}];
-        end
-    end
-
-    if isempty(compatible)
-        bestVariant = [];
-        return
-    end
-
-    % Prefer exact architecture matches over 'any'
-    exactMatches = {};
-    for i = 1:length(compatible)
-        v = compatible{i};
-        arch = v.architecture;
-        if strcmp(arch, currentArch)
-            exactMatches = [exactMatches, {v}];
-        end
-    end
-
-    if ~isempty(exactMatches)
-        bestVariant = exactMatches{1};
-    else
-        bestVariant = compatible{1};
-    end
-end
