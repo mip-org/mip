@@ -1,11 +1,12 @@
-function info(packageName)
+function info(varargin)
 %INFO   Display detailed information about a package.
 %
 % Usage:
 %   mip.info('packageName')
+%   mip.info('--channel', 'dev', 'packageName')
 %
-% Args:
-%   packageName - Name of the package to display information for
+% Options:
+%   --channel <name>  Query a specific channel (default: core)
 %
 % Displays detailed information about a package from the repository,
 % including all available versions, installation status, loaded status,
@@ -18,13 +19,23 @@ if nargin < 1
     error('mip:noPackage', 'Package name is required');
 end
 
+[channel, args] = mip.utils.parse_channel_flag(varargin);
+
+if isempty(args)
+    error('mip:noPackage', 'Package name is required');
+end
+
+packageName = args{1};
 if isstring(packageName)
     packageName = char(packageName);
 end
 
 try
     % Download and parse package index
-    indexUrl = mip.index();
+    indexUrl = mip.index(channel);
+    if ~isempty(channel)
+        fprintf('Using channel: %s\n', channel);
+    end
     tempFile = [tempname, '.json'];
     websave(tempFile, indexUrl);
     indexJson = fileread(tempFile);
@@ -130,6 +141,10 @@ try
     if isInstalled
         fprintf('Installed: Yes (version %s)\n', installedVersion);
         fprintf('Installation Path: %s\n', pkgDir);
+        installedChannel = mip.utils.get_package_channel(packageName);
+        if ~isempty(installedChannel)
+            fprintf('Channel: %s\n', installedChannel);
+        end
     else
         fprintf('Installed: No\n');
     end

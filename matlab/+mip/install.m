@@ -4,8 +4,12 @@ function install(varargin)
 % Usage:
 %   mip.install('packageName')
 %   mip.install('package1', 'package2', 'package3')
+%   mip.install('--channel', 'dev', 'packageName')
 %   mip.install('/path/to/package.mhl')
 %   mip.install('https://example.com/package.mhl')
+%
+% Options:
+%   --channel <name>  Install from a specific channel (default: core)
 %
 % Args:
 %   Package name(s), .mhl file path(s), or URL(s), as strings or char arrays.
@@ -17,7 +21,13 @@ function install(varargin)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
 
-    packageNames = varargin;
+    [channel, args] = mip.utils.parse_channel_flag(varargin);
+
+    if isempty(args)
+        error('mip:install:noPackage', 'At least one package name is required for install command.');
+    end
+
+    packageNames = args;
     packagesDir = mip.utils.get_packages_dir();
 
     % Create packages directory if it doesn't exist
@@ -42,7 +52,7 @@ function install(varargin)
     installedCount = 0;
 
     if ~isempty(repoPackages)
-        installedCount = installedCount + installFromRepository(repoPackages, packagesDir);
+        installedCount = installedCount + installFromRepository(repoPackages, packagesDir, channel);
     end
 
     % Handle .mhl file installations
@@ -60,76 +70,26 @@ function install(varargin)
     end
 end
 
-function count = installFromRepository(repoPackages, packagesDir)
+function count = installFromRepository(repoPackages, packagesDir, channel)
 % Install packages from the mip repository
 
     count = 0;
 
     try
         % Download and parse package index
-        indexUrl = mip.index();
+        if ~isempty(channel)
+            fprintf('Using channel: %s\n', channel);
+        end
         fprintf('Fetching package index...\n');
 
-        tempFile = [tempname, '.json'];
-        websave(tempFile, indexUrl);
-        indexJson = fileread(tempFile);
-        delete(tempFile);
-
-        index = jsondecode(indexJson);
+        index = mip.utils.fetch_index(channel);
 
         % Get current architecture
         currentArch = mip.arch();
         fprintf('Detected architecture: %s\n', currentArch);
 
-        % Group packages by name
-        packagesByName = containers.Map('KeyType', 'char', 'ValueType', 'any');
-        % index.packages from jsondecode - handle both struct array and cell array
-        packages = index.packages;
-
-        % Determine how to access packages based on type
-        for i = 1:length(packages)
-            % Handle both cell arrays and struct arrays
-            if iscell(packages)
-                pkg = packages{i};  % Cell array access
-            else
-                pkg = packages(i);   % Struct array access
-            end
-
-            % Extract package name
-            if isstruct(pkg)
-                pkgName = pkg.name;
-            else
-                error('mip:invalidPackageFormat', 'Invalid package format in index');
-            end
-
-            if ~packagesByName.isKey(pkgName)
-                packagesByName(pkgName) = {};
-            end
-            variants = packagesByName(pkgName);
-            packagesByName(pkgName) = [variants, {pkg}];
-        end
-
-        % Select best variant for each package
-        packageInfoMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
-        unavailablePackages = containers.Map('KeyType', 'char', 'ValueType', 'any');
-
-        packageNames = keys(packagesByName);
-        for i = 1:length(packageNames)
-            pkgName = packageNames{i};
-            variants = packagesByName(pkgName);
-            bestVariant = selectBestVariant(variants, currentArch);
-
-            if ~isempty(bestVariant)
-                packageInfoMap(pkgName) = bestVariant;
-            else
-                % Track packages with no compatible variant
-                availableArchs = {};
-                for j = 1:length(variants)
-                    availableArchs = [availableArchs, {variants{j}.architecture}];
-                end
-                unavailablePackages(pkgName) = unique(availableArchs);
-            end
-        end
+        % Build package info map
+        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index);
 
         % Check if any requested packages are unavailable
         for i = 1:length(repoPackages)
@@ -209,7 +169,14 @@ function count = installFromRepository(repoPackages, packagesDir)
                 count = count + 1;
             end
             
-            % Mark requested packages as directly installed
+            % Mark requested packages as directly installed and record channel
+            effectiveChannel = channel;
+            if isempty(effectiveChannel)
+                effectiveChannel = 'core';
+            end
+            for i = 1:length(toInstall)
+                mip.utils.set_package_channel(toInstall{i}, effectiveChannel);
+            end
             for i = 1:length(repoPackages)
                 mip.utils.add_directly_installed(repoPackages{i});
             end
