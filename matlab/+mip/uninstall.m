@@ -18,6 +18,19 @@ function uninstall(varargin)
     end
 
     packageNames = varargin;
+
+    % mip cannot be uninstalled via this command
+    if any(strcmp(packageNames, 'mip'))
+        fprintf('Cannot uninstall mip via "mip uninstall".\n');
+        fprintf('To uninstall mip manually:\n');
+        fprintf('  1. Remove the mip directory: %s\n', mip.root());
+        fprintf('  2. Remove the mip entry from your MATLAB path (e.g., edit startup.m)\n');
+        packageNames = packageNames(~strcmp(packageNames, 'mip'));
+        if isempty(packageNames)
+            return
+        end
+    end
+
     packagesDir = mip.utils.get_packages_dir();
 
     % Check which requested packages are installed

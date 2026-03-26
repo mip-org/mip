@@ -37,6 +37,11 @@ function unload(varargin)
         error('mip:noPackage', 'No package name specified for unload command.');
     end
 
+    % mip cannot be unloaded
+    if strcmp(packageName, 'mip')
+        error('mip:cannotUnloadMip', 'Cannot unload mip itself.');
+    end
+
     % Check if package is loaded
     if ~mip.utils.is_loaded(packageName)
         fprintf('Package "%s" is not currently loaded\n', packageName);
@@ -243,13 +248,18 @@ function unloadAll(forceUnload)
     % Get the mip packages directory
     packagesDir = mip.utils.get_packages_dir();
 
-    % Find packages to unload
+    % Find packages to unload (never unload mip itself)
     packagesToUnload = {};
     if forceUnload
-        % Unload all packages
-        packagesToUnload = MIP_LOADED_PACKAGES;
+        % Unload all packages except mip
+        for i = 1:length(MIP_LOADED_PACKAGES)
+            pkg = MIP_LOADED_PACKAGES{i};
+            if ~strcmp(pkg, 'mip')
+                packagesToUnload{end+1} = pkg;
+            end
+        end
     else
-        % Unload all except sticky packages
+        % Unload all except sticky packages (mip is always sticky)
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
             if ~ismember(pkg, MIP_STICKY_PACKAGES)
@@ -286,12 +296,12 @@ function unloadAll(forceUnload)
         fprintf('  Unloaded package "%s"\n', pkg);
     end
 
-    % Update global variables
+    % Update global variables (mip always remains)
     if forceUnload
-        % Remove all packages
-        MIP_LOADED_PACKAGES = {};
-        MIP_DIRECTLY_LOADED_PACKAGES = {};
-        MIP_STICKY_PACKAGES = {};
+        % Remove all packages except mip
+        MIP_LOADED_PACKAGES = {'mip'};
+        MIP_DIRECTLY_LOADED_PACKAGES = {'mip'};
+        MIP_STICKY_PACKAGES = {'mip'};
     else
         % Keep only sticky packages in loaded list
         MIP_LOADED_PACKAGES = MIP_STICKY_PACKAGES;

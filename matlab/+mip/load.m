@@ -9,6 +9,12 @@ function load(packageName, varargin)
 % executing its load_package.m file. Use '--sticky' to mark the package as sticky,
 % which prevents it from being unloaded with 'mip unload --all'.
 
+    % mip is always loaded — nothing to do
+    if strcmp(packageName, 'mip')
+        fprintf('Package "mip" is always loaded\n');
+        return
+    end
+
     % Check for --sticky flag in arguments
     stickyPackage = false;
     remainingArgs = {};
