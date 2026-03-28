@@ -18,10 +18,10 @@ function uninstall(varargin)
 
     packageArgs = varargin;
 
-    % mip cannot be uninstalled via this command
+    % mip-org/core/mip cannot be uninstalled via this command
     hasMip = false;
     for i = 1:length(packageArgs)
-        if strcmp(packageArgs{i}, 'mip')
+        if strcmp(packageArgs{i}, 'mip') || strcmp(packageArgs{i}, 'mip-org/core/mip')
             hasMip = true;
             break;
         end
@@ -150,10 +150,11 @@ function pruneUnusedPackages()
     neededPackages = unique([directlyInstalled, neededPackages]);
 
     % Find packages to prune (installed but not needed)
+    % Never prune mip-org/core/mip - it is the package manager itself
     packagesToPrune = {};
     for i = 1:length(allInstalled)
         fqn = allInstalled{i};
-        if ~ismember(fqn, neededPackages)
+        if ~ismember(fqn, neededPackages) && ~strcmp(fqn, 'mip-org/core/mip')
             packagesToPrune{end+1} = fqn; %#ok<AGROW>
         end
     end

@@ -37,8 +37,8 @@ function unload(varargin)
     % Resolve to FQN
     fqn = resolveLoadedFqn(packageArg);
 
-    % mip cannot be unloaded
-    if strcmp(fqn, 'mip')
+    % mip-org/core/mip cannot be unloaded
+    if strcmp(fqn, 'mip') || strcmp(fqn, 'mip-org/core/mip')
         error('mip:cannotUnloadMip', 'Cannot unload mip itself.');
     end
 
@@ -156,10 +156,11 @@ function pruneUnusedPackages()
     neededPackages = unique([MIP_DIRECTLY_LOADED_PACKAGES, neededPackages]);
 
     % Find packages to prune (loaded but not needed)
+    % Never prune mip-org/core/mip - it is the package manager itself
     packagesToPrune = {};
     for i = 1:length(MIP_LOADED_PACKAGES)
         pkg = MIP_LOADED_PACKAGES{i};
-        if ~ismember(pkg, neededPackages)
+        if ~ismember(pkg, neededPackages) && ~strcmp(pkg, 'mip-org/core/mip')
             packagesToPrune{end+1} = pkg;
         end
     end
@@ -317,7 +318,7 @@ function unloadAll(forceUnload)
     if forceUnload
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~strcmp(pkg, 'mip')
+            if ~strcmp(pkg, 'mip') && ~strcmp(pkg, 'mip-org/core/mip')
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
