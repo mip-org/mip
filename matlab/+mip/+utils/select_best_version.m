@@ -3,7 +3,7 @@ function bestVersion = select_best_version(versions)
 %
 % Priority:
 %   1. Highest numeric version (x.y.z where all components are numeric)
-%   2. "main"
+%   2. "main" / "master"
 %   3. "unspecified"
 %   4. Alphabetically first
 %
@@ -50,6 +50,14 @@ end
 for i = 1:length(versions)
     if strcmp(versions{i}, 'main')
         bestVersion = 'main';
+        return
+    end
+end
+
+% Check for "master"
+for i = 1:length(versions)
+    if strcmp(versions{i}, 'master')
+        bestVersion = 'master';
         return
     end
 end
