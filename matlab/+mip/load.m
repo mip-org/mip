@@ -4,6 +4,7 @@ function load(packageArg, varargin)
 % Usage:
 %   mip.load('packageName')
 %   mip.load('packageName', '--sticky')
+%   mip.load('packageName', '--install')
 %   mip.load('org/channel/packageName')
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
@@ -13,22 +14,19 @@ function load(packageArg, varargin)
 %
 % Use '--sticky' to mark the package as sticky, which prevents it from
 % being unloaded with 'mip unload --all'.
+%
+% Use '--install' to automatically install the package if it is not already
+% installed before loading it.
 
-    % Resolve the FQN for this package
-    fqn = resolveToFqn(packageArg);
-
-    % mip is always loaded — nothing to do
-    if strcmp(fqn, 'mip')
-        fprintf('Package "mip" is always loaded\n');
-        return
-    end
-
-    % Check for --sticky flag in arguments
+    % Check for --sticky and --install flags in arguments
     stickyPackage = false;
+    installIfNeeded = false;
     remainingArgs = {};
     for i = 1:length(varargin)
         if ischar(varargin{i}) && strcmp(varargin{i}, '--sticky')
             stickyPackage = true;
+        elseif ischar(varargin{i}) && strcmp(varargin{i}, '--install')
+            installIfNeeded = true;
         else
             remainingArgs{end+1} = varargin{i}; %#ok<*AGROW>
         end
@@ -41,6 +39,15 @@ function load(packageArg, varargin)
     parse(p, remainingArgs{:});
     loadingStack = p.Results.loadingStack;
     isDirect = p.Results.isDirect;
+
+    % Resolve the FQN for this package
+    fqn = resolveToFqn(packageArg, installIfNeeded);
+
+    % mip is always loaded — nothing to do
+    if strcmp(fqn, 'mip')
+        fprintf('Package "mip" is always loaded\n');
+        return
+    end
 
     % Check for circular dependencies
     if ismember(fqn, loadingStack)
@@ -56,11 +63,20 @@ function load(packageArg, varargin)
     result = mip.utils.parse_package_arg(fqn);
     packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
 
-    % Check if package exists
+    % Install if needed and not already installed
     if ~exist(packageDir, 'dir')
-        error('mip:packageNotFound', ...
-              'Package "%s" is not installed. Run "mip install %s" first.', ...
-              fqn, fqn);
+        if installIfNeeded
+            fprintf('Package "%s" is not installed. Installing...\n', packageArg);
+            mip.install(packageArg);
+            % Re-resolve the FQN now that the package is installed
+            fqn = resolveToFqn(packageArg, false);
+            result = mip.utils.parse_package_arg(fqn);
+            packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+        else
+            error('mip:packageNotFound', ...
+                  'Package "%s" is not installed. Run "mip install %s" first.', ...
+                  fqn, fqn);
+        end
     end
 
     % Check if package is already loaded
@@ -153,9 +169,11 @@ function load(packageArg, varargin)
     end
 end
 
-function fqn = resolveToFqn(packageArg)
+function fqn = resolveToFqn(packageArg, installIfNeeded)
 % Resolve a package argument to a fully qualified name.
 % If already FQN, return as-is. If bare name, look up installed packages.
+% If installIfNeeded is true, return the bare name as-is when not installed
+% (so that mip.install can resolve it from the index).
 
     if strcmp(packageArg, 'mip')
         fqn = 'mip';
@@ -170,9 +188,14 @@ function fqn = resolveToFqn(packageArg)
         % Resolve bare name to installed FQN
         fqn = mip.utils.resolve_bare_name(result.name);
         if isempty(fqn)
-            error('mip:packageNotFound', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  result.name, result.name);
+            if installIfNeeded
+                % Return the bare name; the caller will install it
+                fqn = result.name;
+            else
+                error('mip:packageNotFound', ...
+                      'Package "%s" is not installed. Run "mip install %s" first.', ...
+                      result.name, result.name);
+            end
         end
     end
 end

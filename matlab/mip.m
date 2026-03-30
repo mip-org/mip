@@ -10,7 +10,7 @@ function varargout = mip(command, varargin)
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip list                                 - List installed packages
-%   mip load <package> [--sticky]            - Load a package into MATLAB path
+%   mip load <package> [--sticky] [--install] - Load a package into MATLAB path
 %   mip unload <package>                     - Unload a package from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
 %   mip unload --all --force                 - Unload all packages (including sticky)
