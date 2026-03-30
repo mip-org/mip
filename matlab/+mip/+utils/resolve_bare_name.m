@@ -46,8 +46,15 @@ if isempty(matches)
     return
 end
 
-% Priority: mip-org/core first
-coreMatch = [packageName]; % unused, just for clarity
+% Priority: local/editable first (editable installs take precedence)
+for i = 1:length(matches)
+    if startsWith(matches{i}, 'local/editable/')
+        fqn = matches{i};
+        return
+    end
+end
+
+% Then mip-org/core
 for i = 1:length(matches)
     if startsWith(matches{i}, 'mip-org/core/')
         fqn = matches{i};

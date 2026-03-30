@@ -61,6 +61,18 @@ function updateSinglePackage(packageArg, channelOverride)
               fqn, fqn);
     end
 
+    % Check if package is an editable install
+    try
+        pkgMeta = mip.utils.read_package_json(pkgDir);
+        if isfield(pkgMeta, 'editable') && pkgMeta.editable
+            fprintf('Package "%s" is an editable install (source: %s).\n', ...
+                    fqn, pkgMeta.source_path);
+            fprintf('Update the source directly (e.g., git pull) instead of using mip update.\n');
+            return
+        end
+    catch
+    end
+
     % Determine which channel to use for fetching updates
     if ~isempty(channelOverride)
         [fetchOrg, fetchChan] = mip.utils.parse_channel_spec(channelOverride);

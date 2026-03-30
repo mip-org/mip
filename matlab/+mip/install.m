@@ -9,16 +9,30 @@ function install(varargin)
 %   mip.install('owner/chan/packageName')
 %   mip.install('/path/to/package.mhl')
 %   mip.install('https://example.com/package.mhl')
+%   mip.install('-e', '/path/to/prepare/dir')
+%   mip.install('-e', '/path/to/prepare/dir', '--src-path', '/custom/src')
 %
 % Options:
 %   --channel <name>  Install from a specific channel (default: core)
 %                     Accepts 'core', 'dev', or 'owner/channel'
+%   -e <path>         Editable install from a prepare.yaml directory
+%   --src-path <path> Custom source clone location (with -e only)
 %
 % Packages can be specified by bare name or fully qualified name
 % (org/channel/package). Fully qualified names override the --channel flag.
 
     if nargin < 1
         error('mip:install:noPackage', 'At least one package name is required for install command.');
+    end
+
+    % Check for -e (editable) flag
+    for i = 1:length(varargin)
+        if ischar(varargin{i}) && strcmp(varargin{i}, '-e')
+            % Remove -e from args and delegate to install_editable
+            editableArgs = [varargin(1:i-1), varargin(i+1:end)];
+            mip.install_editable(editableArgs{:});
+            return
+        end
     end
 
     [channel, args] = mip.utils.parse_channel_flag(varargin);

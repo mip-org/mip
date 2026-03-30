@@ -79,6 +79,14 @@ else
             pkgLine = sprintf('%s [sticky]', pkgLine);
         end
 
+        % Check if editable
+        try
+            if isfield(pkgInfo, 'editable') && pkgInfo.editable
+                pkgLine = sprintf('%s [editable]', pkgLine);
+            end
+        catch
+        end
+
         fprintf('%s\n', pkgLine);
     end
     fprintf('\n');
@@ -102,7 +110,17 @@ if ~isempty(notLoadedPackages)
         catch
         end
 
-        fprintf('   %s (%s)\n', fqn, version);
+        pkgLine = sprintf('   %s (%s)', fqn, version);
+
+        % Check if editable
+        try
+            if isfield(pkgInfo, 'editable') && pkgInfo.editable
+                pkgLine = sprintf('%s [editable]', pkgLine);
+            end
+        catch
+        end
+
+        fprintf('%s\n', pkgLine);
     end
 end
 

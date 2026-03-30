@@ -94,9 +94,28 @@ function uninstall(varargin)
         pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
 
         try
+            % Check if this is an editable install
+            isEditable = false;
+            sourcePath = '';
+            try
+                pkgMeta = mip.utils.read_package_json(pkgDir);
+                if isfield(pkgMeta, 'editable') && pkgMeta.editable
+                    isEditable = true;
+                    if isfield(pkgMeta, 'source_path')
+                        sourcePath = pkgMeta.source_path;
+                    end
+                end
+            catch
+            end
+
             fprintf('Uninstalling "%s"...\n', fqn);
             rmdir(pkgDir, 's');
             fprintf('Uninstalled package "%s"\n', fqn);
+
+            if isEditable && ~isempty(sourcePath) && exist(sourcePath, 'dir')
+                fprintf('Note: Source tree was not removed: %s\n', sourcePath);
+                fprintf('  Delete it manually if no longer needed.\n');
+            end
         catch ME
             error('mip:uninstallFailed', ...
                   'Failed to uninstall package "%s": %s', fqn, ME.message);

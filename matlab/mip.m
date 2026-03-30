@@ -6,6 +6,8 @@ function varargout = mip(command, varargin)
 %   mip install --channel dev <package>      - Install from a specific channel
 %   mip install --channel owner/chan <pkg>   - Install from a user-hosted channel
 %   mip install owner/chan/package           - Install using fully qualified name
+%   mip install -e <path>                    - Editable install from prepare.yaml dir
+%   mip install -e <path> --src-path <dir>   - Editable install with custom source location
 %   mip update <package> [...]               - Update one or more packages
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
