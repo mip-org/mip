@@ -6,6 +6,7 @@ function load(varargin)
 %   mip.load('package1', 'package2', ...)
 %   mip.load('packageName', '--sticky')
 %   mip.load('packageName', '--install')
+%   mip.load('--channel', 'owner/chan', 'packageName', '--install')
 %   mip.load('org/channel/packageName')
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
@@ -14,22 +15,33 @@ function load(varargin)
 %   2. First alphabetically by org/channel
 %
 % Options:
-%   --sticky    Mark the package(s) as sticky (prevents unload with 'mip unload --all')
-%   --install   Automatically install the package(s) if not already installed
+%   --sticky      Mark the package(s) as sticky (prevents unload with 'mip unload --all')
+%   --install     Automatically install the package(s) if not already installed
+%   --channel <c> Channel to install from when using --install (e.g. 'mip-org/staging')
 
     % Parse flags and package names from arguments
     installIfMissing = false;
     stickyPackage = false;
+    channel = '';
     packageArgs = {};
-    for i = 1:length(varargin)
+    i = 1;
+    while i <= length(varargin)
         arg = varargin{i};
         if ischar(arg) && strcmp(arg, '--install')
             installIfMissing = true;
         elseif ischar(arg) && strcmp(arg, '--sticky')
             stickyPackage = true;
+        elseif ischar(arg) && strcmp(arg, '--channel')
+            if i < length(varargin)
+                i = i + 1;
+                channel = varargin{i};
+            else
+                error('mip:load:missingChannel', '--channel requires a value');
+            end
         elseif ischar(arg) && ~startsWith(arg, '--')
             packageArgs{end+1} = arg; %#ok<*AGROW>
         end
+        i = i + 1;
     end
 
     if isempty(packageArgs)
@@ -38,11 +50,11 @@ function load(varargin)
 
     % Load each package
     for i = 1:length(packageArgs)
-        loadSingle(packageArgs{i}, installIfMissing, stickyPackage, true, {});
+        loadSingle(packageArgs{i}, installIfMissing, stickyPackage, channel, true, {});
     end
 end
 
-function loadSingle(packageArg, installIfMissing, stickyPackage, isDirect, loadingStack)
+function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDirect, loadingStack)
 % Load a single package (and its dependencies recursively).
 
     % Resolve the FQN for this package, installing first if requested
@@ -51,7 +63,11 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, isDirect, loadi
     catch ME
         if installIfMissing && strcmp(ME.identifier, 'mip:packageNotFound')
             fprintf('Package "%s" is not installed. Installing...\n', packageArg);
-            mip.install(packageArg);
+            if ~isempty(channel)
+                mip.install('--channel', channel, packageArg);
+            else
+                mip.install(packageArg);
+            end
             fqn = resolveToFqn(packageArg);
         else
             rethrow(ME);
@@ -127,7 +143,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, isDirect, loadi
                     % Resolve dependency: same channel first, then core
                     depFqn = resolveDependency(dep, result.org, result.channel);
                     if ~mip.utils.is_loaded(depFqn)
-                        loadSingle(depFqn, installIfMissing, false, false, loadingStack);
+                        loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
                     else
                         fprintf('  Dependency "%s" is already loaded\n', depFqn);
                     end
