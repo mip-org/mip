@@ -96,16 +96,21 @@ function fqn = resolveLoadedFqn(packageArg)
         return
     end
 
-    % Prefer mip-org/core
-    for i = 1:length(matches)
-        if startsWith(matches{i}, 'mip-org/core/')
-            fqn = matches{i};
-            return
-        end
+    if length(matches) == 1
+        fqn = matches{1};
+        return
     end
 
-    matches = sort(matches);
-    fqn = matches{1};
+    % Multiple matches: pick the most recently loaded (last in load order)
+    lastIdx = 0;
+    for i = 1:length(matches)
+        for j = 1:length(loadedPackages)
+            if strcmp(loadedPackages{j}, matches{i}) && j > lastIdx
+                lastIdx = j;
+            end
+        end
+    end
+    fqn = loadedPackages{lastIdx};
 end
 
 function executeUnload(packageDir, fqn)

@@ -152,5 +152,43 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
         end
 
+        function testUnloadBareName_AmbiguousUnloadsMostRecent(testCase)
+            % When bare name matches multiple loaded packages,
+            % unload the most recently loaded one
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'duppkg');
+            createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
+
+            % Load core first, then extras (extras is most recent)
+            mip.load('mip-org/core/duppkg');
+            mip.load('other-org/extras/duppkg');
+
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/duppkg'));
+            testCase.verifyTrue(mip.utils.is_loaded('other-org/extras/duppkg'));
+
+            % Unloading bare name should unload the most recently loaded one
+            mip.unload('duppkg');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/duppkg'), ...
+                'Earlier loaded package should remain');
+            testCase.verifyFalse(mip.utils.is_loaded('other-org/extras/duppkg'), ...
+                'Most recently loaded package should be unloaded');
+        end
+
+        function testUnloadBareName_AmbiguousRespectsLoadOrder(testCase)
+            % Verify it is load order, not alphabetical or mip-org priority
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'duppkg');
+            createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
+
+            % Load extras first, then core (core is most recent)
+            mip.load('other-org/extras/duppkg');
+            mip.load('mip-org/core/duppkg');
+
+            % Unloading bare name should unload core (most recent), not extras
+            mip.unload('duppkg');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/duppkg'), ...
+                'Most recently loaded (core) should be unloaded');
+            testCase.verifyTrue(mip.utils.is_loaded('other-org/extras/duppkg'), ...
+                'Earlier loaded (extras) should remain');
+        end
+
     end
 end

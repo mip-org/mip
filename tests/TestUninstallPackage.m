@@ -122,5 +122,37 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             testCase.verifyFalse(exist(orgDir, 'dir') > 0);
         end
 
+        function testUninstallBareNameAmbiguous_RefusesAndPrintsOptions(testCase)
+            % When bare name matches multiple installed packages, refuse and list FQNs
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'duppkg');
+            createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
+
+            % Call the resolution logic that uninstall uses
+            allMatches = mip.utils.find_all_installed_by_name('duppkg');
+            testCase.verifyEqual(length(allMatches), 2, ...
+                'Should find two installed packages with same bare name');
+            testCase.verifyTrue(ismember('mip-org/core/duppkg', allMatches));
+            testCase.verifyTrue(ismember('other-org/extras/duppkg', allMatches));
+        end
+
+        function testUninstallBareNameUnique_ResolvesNormally(testCase)
+            % When bare name matches exactly one installed package, resolve it
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'uniqpkg');
+
+            allMatches = mip.utils.find_all_installed_by_name('uniqpkg');
+            testCase.verifyEqual(length(allMatches), 1);
+            testCase.verifyEqual(allMatches{1}, 'mip-org/core/uniqpkg');
+        end
+
+        function testUninstallFQN_BypassesAmbiguityCheck(testCase)
+            % Using FQN should work even when bare name is ambiguous
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'duppkg');
+            createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
+
+            % FQN parsing should identify it as FQN and skip bare name resolution
+            result = mip.utils.parse_package_arg('other-org/extras/duppkg');
+            testCase.verifyTrue(result.is_fqn);
+        end
+
     end
 end

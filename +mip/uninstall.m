@@ -30,11 +30,19 @@ function uninstall(varargin)
             fqn = arg;
             pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
         else
-            fqn = mip.utils.resolve_bare_name(result.name);
-            if isempty(fqn)
+            allMatches = mip.utils.find_all_installed_by_name(result.name);
+            if isempty(allMatches)
                 notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
                 continue
+            elseif length(allMatches) > 1
+                fprintf('Package name "%s" is ambiguous. It is installed in multiple channels:\n', result.name);
+                for k = 1:length(allMatches)
+                    fprintf('  %s\n', allMatches{k});
+                end
+                fprintf('Please specify the fully qualified name to uninstall.\n');
+                continue
             end
+            fqn = allMatches{1};
             r = mip.utils.parse_package_arg(fqn);
             pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
         end
