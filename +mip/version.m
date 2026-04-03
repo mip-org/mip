@@ -2,14 +2,14 @@ function v = version()
 %VERSION   Return the mip package manager version string.
 
 thisDir = fileparts(mfilename('fullpath'));  % +mip directory
-pkgRoot = fileparts(thisDir);  % package root
-mipJsonPath = fullfile(pkgRoot, 'mip.json');
-if ~exist(mipJsonPath, 'file')
-    error('mip:version:noMipJson', ...
-          'mip.json not found at %s. Is mip installed correctly?', pkgRoot);
+pkgRoot = fileparts(thisDir);  % package root (contains mip.yaml)
+mipYamlPath = fullfile(pkgRoot, 'mip.yaml');
+if ~exist(mipYamlPath, 'file')
+    error('mip:version:noMipYaml', ...
+          'mip.yaml not found at %s. Is mip installed correctly?', pkgRoot);
 end
-pkgInfo = mip.utils.read_package_json(pkgRoot);
-v = pkgInfo.version;
+mipConfig = mip.utils.read_mip_yaml(pkgRoot);
+v = mipConfig.version;
 if isnumeric(v)
     v = num2str(v);
 end
