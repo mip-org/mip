@@ -67,15 +67,16 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
         end
 
         function testParseChannelCore(testCase)
-            [org, ch] = mip.utils.parse_channel_spec('core');
+            [org, ch] = mip.utils.parse_channel_spec('mip-org/core');
             testCase.verifyEqual(org, 'mip-org');
             testCase.verifyEqual(ch, 'core');
         end
 
-        function testParseChannelDev(testCase)
-            [org, ch] = mip.utils.parse_channel_spec('dev');
-            testCase.verifyEqual(org, 'mip-org');
-            testCase.verifyEqual(ch, 'dev');
+        function testParseChannelBareNameErrors(testCase)
+            testCase.verifyError(@() mip.utils.parse_channel_spec('core'), ...
+                'mip:invalidChannel');
+            testCase.verifyError(@() mip.utils.parse_channel_spec('dev'), ...
+                'mip:invalidChannel');
         end
 
         function testParseChannelOwnerChannel(testCase)

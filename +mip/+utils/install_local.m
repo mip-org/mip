@@ -40,8 +40,14 @@ if ~isempty(mipConfig.dependencies)
     fprintf('Dependencies: %s\n', strjoin(mipConfig.dependencies, ', '));
     for i = 1:length(mipConfig.dependencies)
         dep = mipConfig.dependencies{i};
-        depFqn = mip.utils.resolve_bare_name(dep);
-        if isempty(depFqn)
+        depResult = mip.utils.parse_package_arg(dep);
+        if depResult.is_fqn
+            depDir = mip.utils.get_package_dir(depResult.org, depResult.channel, depResult.name);
+        else
+            % Bare name dependency: resolve to mip-org/core
+            depDir = mip.utils.get_package_dir('mip-org', 'core', depResult.name);
+        end
+        if ~exist(depDir, 'dir')
             error('mip:dependencyNotFound', ...
                   'Dependency "%s" is not installed. Install it first.', dep);
         end

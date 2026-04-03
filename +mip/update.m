@@ -107,13 +107,14 @@ function updateSinglePackage(packageArg, channelOverride, force)
 
     % Fetch the index and build package info map
     index = mip.utils.fetch_index(channelStr);
-    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index);
+    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, fetchOrg, fetchChan);
 
-    % Find the package in the index
+    % Find the package in the index (use FQN for the fetch channel)
     currentArch = mip.arch();
-    if ~packageInfoMap.isKey(packageName)
-        if unavailablePackages.isKey(packageName)
-            archs = unavailablePackages(packageName);
+    indexFqn = mip.utils.make_fqn(fetchOrg, fetchChan, packageName);
+    if ~packageInfoMap.isKey(indexFqn)
+        if unavailablePackages.isKey(indexFqn)
+            archs = unavailablePackages(indexFqn);
             error('mip:update:unavailable', ...
                   'Package "%s" is not available for architecture "%s". Available: %s', ...
                   packageName, currentArch, strjoin(archs, ', '));
@@ -124,7 +125,7 @@ function updateSinglePackage(packageArg, channelOverride, force)
         end
     end
 
-    latestInfo = packageInfoMap(packageName);
+    latestInfo = packageInfoMap(indexFqn);
     latestVersion = latestInfo.version;
 
     % Compare versions and commit hashes

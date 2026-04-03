@@ -1,36 +1,32 @@
-function sortedPackages = topological_sort(packageNames, packageInfoMap)
+function sortedPackages = topological_sort(packageFqns, packageInfoMap)
 %TOPOLOGICAL_SORT   Sort packages in topological order (dependencies first).
 %
 % Args:
-%   packageNames - Cell array of package names to sort
-%   packageInfoMap - Map (containers.Map or struct) of package name -> package info
+%   packageFqns    - Cell array of fully qualified package names to sort
+%   packageInfoMap - containers.Map of FQN -> package info
 %
 % Returns:
-%   sortedPackages - Cell array of package names in topological order
+%   sortedPackages - Cell array of FQNs in topological order
+%
+% Bare-name dependencies are always resolved to mip-org/core/<name>.
 %
 % Example:
-%   sorted = mip.dependency.topological_sort({'pkg1', 'pkg2'}, pkgMap);
+%   sorted = mip.dependency.topological_sort({'mip-org/core/pkg1', 'mip-org/core/pkg2'}, pkgMap);
 
-if isempty(packageNames)
+if isempty(packageFqns)
     sortedPackages = {};
     return
 end
 
-% Build adjacency list (package -> list of dependencies)
+% Build adjacency list (FQN -> list of dependency names from metadata)
 dependencies = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
-for i = 1:length(packageNames)
-    pkgName = packageNames{i};
+for i = 1:length(packageFqns)
+    pkgFqn = packageFqns{i};
 
     % Get package info
-    if isa(packageInfoMap, 'containers.Map')
-        if isKey(packageInfoMap, pkgName)
-            pkgInfo = packageInfoMap(pkgName);
-        else
-            pkgInfo = struct('dependencies', {{}});
-        end
-    elseif isstruct(packageInfoMap) && isfield(packageInfoMap, pkgName)
-        pkgInfo = packageInfoMap.(pkgName);
+    if isKey(packageInfoMap, pkgFqn)
+        pkgInfo = packageInfoMap(pkgFqn);
     else
         pkgInfo = struct('dependencies', {{}});
     end
@@ -48,36 +44,42 @@ for i = 1:length(packageNames)
         deps = {};
     end
 
-    dependencies(pkgName) = deps;
+    dependencies(pkgFqn) = deps;
 end
 
 % Topological sort using DFS
 visited = containers.Map('KeyType', 'char', 'ValueType', 'logical');
 sortedPackages = {};
 
-    function visit(pkgName)
-        if visited.isKey(pkgName)
+    function visit(pkgFqn)
+        if visited.isKey(pkgFqn)
             return
         end
-        visited(pkgName) = true;
+        visited(pkgFqn) = true;
 
         % Visit dependencies first
-        if dependencies.isKey(pkgName)
-            deps = dependencies(pkgName);
+        if dependencies.isKey(pkgFqn)
+            deps = dependencies(pkgFqn);
             for j = 1:length(deps)
                 dep = deps{j};
-                if ismember(dep, packageNames)
-                    visit(dep);
+                depResult = mip.utils.parse_package_arg(dep);
+                if depResult.is_fqn
+                    depFqn = dep;
+                else
+                    depFqn = mip.utils.make_fqn('mip-org', 'core', depResult.name);
+                end
+                if ismember(depFqn, packageFqns)
+                    visit(depFqn);
                 end
             end
         end
 
-        sortedPackages = [sortedPackages, {pkgName}];
+        sortedPackages = [sortedPackages, {pkgFqn}];
     end
 
 % Visit all packages
-for i = 1:length(packageNames)
-    visit(packageNames{i});
+for i = 1:length(packageFqns)
+    visit(packageFqns{i});
 end
 
 end

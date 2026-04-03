@@ -14,8 +14,8 @@ function install(varargin)
 %   mip.install('-e', '/path/to/package')           - Editable install (short form)
 %
 % Options:
-%   --channel <name>    Install from a specific channel (default: core)
-%                       Accepts 'core', 'dev', or 'owner/channel'
+%   --channel <name>    Install from a specific channel (default: mip-org/core)
+%                       Format: 'org/channel' (e.g. 'mip-org/core')
 %   --editable, -e      Install in editable mode (local packages only)
 %
 % Local packages:
@@ -52,9 +52,9 @@ function install(varargin)
     for i = 1:length(args)
         pkg = args{i};
         % Resolve '.' and relative paths
-        if exist(pkg, 'dir')
+        if isfolder(pkg)
             mipYamlPath = fullfile(pkg, 'mip.yaml');
-            if exist(mipYamlPath, 'file')
+            if isfile(mipYamlPath)
                 mip.utils.install_local(pkg, editable);
                 return;
             else
@@ -125,22 +125,19 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
 
     % Determine effective channel for bare-name packages
     if isempty(channel)
-        channel = 'core';
+        channel = 'mip-org/core';
     end
 
     [defaultOrg, defaultChan] = mip.utils.parse_channel_spec(channel);
 
     fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
-    fprintf('Fetching package index...\n');
-
-    % Fetch the primary channel index
-    index = mip.utils.fetch_index(channel);
 
     % Get current architecture
     currentArch = mip.arch();
     fprintf('Detected architecture: %s\n', currentArch);
 
     % Resolve each package argument to org/channel/name (with optional version)
+    % The --channel flag only applies to user-specified bare names, not dependencies
     resolvedPackages = {};  % cell array of structs with .org, .channel, .name, .fqn
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     for i = 1:length(repoPackages)
@@ -154,22 +151,46 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         end
     end
 
-    % Build package info map for the primary channel (with version constraints)
-    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, requestedVersions);
+    % Build package info map by fetching indexes for all needed channels.
+    % Always fetch mip-org/core (bare-name deps resolve there).
+    % Also fetch the default channel and any channels referenced by FQN args.
+    packageInfoMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    unavailablePackages = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    fetchedChannels = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+
+    % Collect all channels we need upfront
+    channelsToFetch = {channel};
+    if ~(strcmp(defaultOrg, 'mip-org') && strcmp(defaultChan, 'core'))
+        channelsToFetch{end+1} = 'mip-org/core';
+    end
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        pkgChannel = [s.org '/' s.channel];
+        if ~ismember(pkgChannel, channelsToFetch)
+            channelsToFetch{end+1} = pkgChannel;
+        end
+    end
+
+    % Fetch all needed channel indexes
+    for i = 1:length(channelsToFetch)
+        ch = channelsToFetch{i};
+        fetchChannelIndex(ch, packageInfoMap, unavailablePackages, ...
+                          fetchedChannels, requestedVersions, channel);
+    end
 
     % Check if any requested packages are unavailable
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
-        if ~packageInfoMap.isKey(s.name)
-            if unavailablePackages.isKey(s.name)
-                archs = unavailablePackages(s.name);
+        if ~packageInfoMap.isKey(s.fqn)
+            if unavailablePackages.isKey(s.fqn)
+                archs = unavailablePackages(s.fqn);
                 fprintf('\nError: Package "%s" is not available for architecture "%s"\n', ...
-                        s.name, currentArch);
+                        s.fqn, currentArch);
                 fprintf('Available architectures: %s\n', strjoin(archs, ', '));
                 error('mip:packageUnavailable', 'Package not available for this architecture');
             else
                 error('mip:packageNotFound', ...
-                      'Package "%s" not found in repository', s.name);
+                      'Package "%s" not found in repository', s.fqn);
             end
         end
     end
@@ -181,36 +202,59 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         fprintf('Resolving dependencies for %d packages...\n', length(resolvedPackages));
     end
 
-    % Build combined dependency graph (using bare names for index lookup)
-    allRequiredNames = {};
-    for i = 1:length(resolvedPackages)
-        installOrder = mip.dependency.build_dependency_graph(resolvedPackages{i}.name, packageInfoMap);
-        allRequiredNames = [allRequiredNames, installOrder];
+    % Build combined dependency graph.
+    % If a cross-channel FQN dep is not in the map, fetch its channel and retry.
+    allRequiredFqns = {};
+    for attempt = 1:10
+        try
+            allRequiredFqns = {};
+            for i = 1:length(resolvedPackages)
+                installOrder = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
+                allRequiredFqns = [allRequiredFqns, installOrder];
+            end
+            break  % success
+        catch ME
+            if ~strcmp(ME.identifier, 'mip:packageNotFound')
+                rethrow(ME);
+            end
+            % Extract missing FQN from error message
+            tokens = regexp(ME.message, '"([^"]+)"', 'tokens');
+            if isempty(tokens)
+                rethrow(ME);
+            end
+            missingFqn = tokens{1}{1};
+            missingResult = mip.utils.parse_package_arg(missingFqn);
+            if ~missingResult.is_fqn
+                rethrow(ME);
+            end
+            missingChannel = [missingResult.org '/' missingResult.channel];
+            if fetchedChannels.isKey(missingChannel)
+                rethrow(ME);  % Already fetched this channel; package truly missing
+            end
+            % Fetch the missing channel's index
+            fprintf('Fetching %s index for cross-channel dependency...\n', missingChannel);
+            fetchChannelIndex(missingChannel, packageInfoMap, unavailablePackages, ...
+                              fetchedChannels, requestedVersions, channel);
+        end
     end
-    allRequiredNames = unique(allRequiredNames, 'stable');
+    allRequiredFqns = unique(allRequiredFqns, 'stable');
 
     % Sort topologically
-    allPackagesToInstall = mip.dependency.topological_sort(allRequiredNames, packageInfoMap);
+    allPackagesToInstall = mip.dependency.topological_sort(allRequiredFqns, packageInfoMap);
 
-    % Map each bare name to its FQN (all dependencies go to the same channel)
+    % Determine which packages need installing vs already installed
     toInstallFqns = {};
     alreadyInstalled = {};
 
     for i = 1:length(allPackagesToInstall)
-        name = allPackagesToInstall{i};
-        fqn = mip.utils.make_fqn(defaultOrg, defaultChan, name);
-        pkgDir = mip.utils.get_package_dir(defaultOrg, defaultChan, name);
+        fqn = allPackagesToInstall{i};
+        result = mip.utils.parse_package_arg(fqn);
+        pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
 
         if exist(pkgDir, 'dir')
             alreadyInstalled{end+1} = fqn;
         else
-            % Also check if the dependency is installed from another channel
-            existingFqn = mip.utils.resolve_bare_name(name);
-            if ~isempty(existingFqn)
-                alreadyInstalled{end+1} = existingFqn;
-            else
-                toInstallFqns{end+1} = fqn;
-            end
+            toInstallFqns{end+1} = fqn;
         end
     end
 
@@ -229,8 +273,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
 
         for i = 1:length(toInstallFqns)
             fqn = toInstallFqns{i};
-            result = mip.utils.parse_package_arg(fqn);
-            pkgInfo = packageInfoMap(result.name);
+            pkgInfo = packageInfoMap(fqn);
             fprintf('  - %s %s\n', fqn, pkgInfo.version);
         end
         fprintf('\n');
@@ -238,8 +281,8 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         % Install each package
         for i = 1:length(toInstallFqns)
             fqn = toInstallFqns{i};
+            pkgInfo = packageInfoMap(fqn);
             result = mip.utils.parse_package_arg(fqn);
-            pkgInfo = packageInfoMap(result.name);
             pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
             downloadAndInstall(fqn, pkgInfo, pkgDir);
         end
@@ -276,7 +319,7 @@ function installedFqn = installFromMhl(mhlSource, packagesDir, channel)
     mkdir(tempDir);
 
     if isempty(channel)
-        channel = 'core';
+        channel = 'mip-org/core';
     end
     [org, channelName] = mip.utils.parse_channel_spec(channel);
 
@@ -398,4 +441,29 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
     if exist(tempDir, 'dir')
         rmdir(tempDir, 's');
     end
+end
+
+function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions, primaryChannel)
+% Fetch a channel's index and merge into the package info map.
+    if fetchedChannels.isKey(ch)
+        return
+    end
+    fprintf('Fetching package index for %s...\n', ch);
+    [chOrg, chName] = mip.utils.parse_channel_spec(ch);
+    chIndex = mip.utils.fetch_index(ch);
+    % Apply version constraints only if this is the primary channel
+    if strcmp(ch, primaryChannel)
+        [chMap, chUnavail] = mip.utils.build_package_info_map(chIndex, chOrg, chName, requestedVersions);
+    else
+        [chMap, chUnavail] = mip.utils.build_package_info_map(chIndex, chOrg, chName);
+    end
+    chKeys = keys(chMap);
+    for j = 1:length(chKeys)
+        packageInfoMap(chKeys{j}) = chMap(chKeys{j});
+    end
+    chUnavailKeys = keys(chUnavail);
+    for j = 1:length(chUnavailKeys)
+        unavailablePackages(chUnavailKeys{j}) = chUnavail(chUnavailKeys{j});
+    end
+    fetchedChannels(ch) = true;
 end

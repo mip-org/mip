@@ -38,6 +38,11 @@ suite = [ ...
     TestSuite.fromClass(?TestUninstallPackage), ...
 ];
 
+% Add remote/channel tests unless MIP_SKIP_REMOTE is set
+if isempty(getenv('MIP_SKIP_REMOTE'))
+    suite = [suite, TestSuite.fromClass(?TestChannelInstall)];
+end
+
 % Run tests
 runner = TestRunner.withTextOutput('Verbosity', 3);
 results = runner.run(suite);

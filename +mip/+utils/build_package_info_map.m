@@ -1,17 +1,19 @@
-function [packageInfoMap, unavailablePackages] = build_package_info_map(index, requestedVersions)
-%BUILD_PACKAGE_INFO_MAP   Build a map from package name to best variant info.
+function [packageInfoMap, unavailablePackages] = build_package_info_map(index, org, channelName, requestedVersions)
+%BUILD_PACKAGE_INFO_MAP   Build a map from package FQN to best variant info.
 %
 % Args:
 %   index             - Parsed index struct (from fetch_index)
-%   requestedVersions - (optional) containers.Map of name -> version string.
+%   org               - Organization name (e.g. 'mip-org')
+%   channelName       - Channel name (e.g. 'core')
+%   requestedVersions - (optional) containers.Map of bare name -> version string.
 %                       When a version is specified for a package, that version
 %                       is used instead of the automatic best-version selection.
 %
 % Returns:
-%   packageInfoMap      - containers.Map: package name -> best variant struct
-%   unavailablePackages - containers.Map: package name -> cell array of available architectures
+%   packageInfoMap      - containers.Map: FQN -> best variant struct
+%   unavailablePackages - containers.Map: FQN -> cell array of available architectures
 
-if nargin < 2
+if nargin < 4
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
 end
 
@@ -73,14 +75,16 @@ for i = 1:length(packageNames)
     variants = versionMap(chosenVersion);
     bestVariant = mip.utils.select_best_variant(variants, currentArch);
 
+    fqn = mip.utils.make_fqn(org, channelName, pkgName);
+
     if ~isempty(bestVariant)
-        packageInfoMap(pkgName) = bestVariant;
+        packageInfoMap(fqn) = bestVariant;
     else
         availableArchs = {};
         for j = 1:length(variants)
             availableArchs = [availableArchs, {variants{j}.architecture}]; %#ok<AGROW>
         end
-        unavailablePackages(pkgName) = unique(availableArchs);
+        unavailablePackages(fqn) = unique(availableArchs);
     end
 end
 

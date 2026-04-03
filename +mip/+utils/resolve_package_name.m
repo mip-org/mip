@@ -7,7 +7,7 @@ function [org, channelName, name, version] = resolve_package_name(packageArg, de
 % Args:
 %   packageArg     - Package string: 'name', 'name@version',
 %                    'org/channel/name', or 'org/channel/name@version'
-%   defaultChannel - Default channel string (e.g. 'core', 'owner/chan')
+%   defaultChannel - Default channel string (e.g. 'mip-org/core', 'owner/chan')
 %                    Used when packageArg is a bare name.
 %
 % Returns:
@@ -17,7 +17,7 @@ function [org, channelName, name, version] = resolve_package_name(packageArg, de
 %   version     - Requested version (empty string if not specified)
 
 if nargin < 2 || isempty(defaultChannel)
-    defaultChannel = 'core';
+    defaultChannel = 'mip-org/core';
 end
 
 result = mip.utils.parse_package_arg(packageArg);

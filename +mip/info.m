@@ -8,7 +8,7 @@ function info(varargin)
 %   mip.info('--channel', 'owner/chan', 'packageName')
 %
 % Options:
-%   --channel <name>  Query a specific channel (default: core)
+%   --channel <name>  Query a specific channel (default: mip-org/core)
 %
 % Displays detailed information about a package from the repository,
 % including all available versions, installation status, loaded status,
@@ -31,7 +31,7 @@ end
 
 % Determine channel from FQN or flag
 if isempty(channel)
-    channel = 'core';
+    channel = 'mip-org/core';
 end
 
 [org, channelName, packageName] = mip.utils.resolve_package_name(packageArg, channel);

@@ -2,7 +2,7 @@ function index = fetch_index(channel)
 %FETCH_INDEX   Download and parse the mip package index for a channel.
 %
 % Args:
-%   channel - Channel name (e.g., 'core', 'dev'), or empty for default
+%   channel - Channel spec (e.g., 'mip-org/core'), or empty for default
 %
 % Returns:
 %   index - Parsed struct from the index JSON

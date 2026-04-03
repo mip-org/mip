@@ -7,8 +7,8 @@ function avail(varargin)
 %   mip.avail('--channel', 'owner/channel')
 %
 % Options:
-%   --channel <name>  List packages from a specific channel (default: core)
-%                     Accepts 'core', 'dev', or 'owner/channel'
+%   --channel <name>  List packages from a specific channel (default: mip-org/core)
+%                     Format: 'org/channel' (e.g. 'mip-org/core')
 %
 % Displays an alphabetical list of all available packages in the online
 % repository for the current architecture, shown with fully qualified names.
@@ -16,7 +16,7 @@ function avail(varargin)
 [channel, ~] = mip.utils.parse_channel_flag(varargin);
 
 if isempty(channel)
-    channel = 'core';
+    channel = 'mip-org/core';
 end
 
 [org, channelName] = mip.utils.parse_channel_spec(channel);

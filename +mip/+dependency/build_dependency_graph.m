@@ -1,17 +1,19 @@
-function depList = build_dependency_graph(packageName, packageInfoMap, visited, path)
+function depList = build_dependency_graph(packageFqn, packageInfoMap, visited, path)
 %BUILD_DEPENDENCY_GRAPH   Recursively build dependency graph for a package.
 %
 % Args:
-%   packageName - Name of the package
-%   packageInfoMap - Map (containers.Map or struct) of package name -> package info
-%   visited - (Optional) Cell array of already visited packages
-%   path - (Optional) Cell array representing current dependency path
+%   packageFqn     - Fully qualified package name (org/channel/name)
+%   packageInfoMap - containers.Map of FQN -> package info
+%   visited        - (Optional) Cell array of already visited FQNs
+%   path           - (Optional) Cell array representing current dependency path
 %
 % Returns:
-%   depList - Cell array of package names in dependency order (dependencies first)
+%   depList - Cell array of FQNs in dependency order (dependencies first)
+%
+% Bare-name dependencies are always resolved to mip-org/core/<name>.
 %
 % Example:
-%   deps = mip.dependency.build_dependency_graph('mypackage', pkgMap);
+%   deps = mip.dependency.build_dependency_graph('mip-org/core/mypackage', pkgMap);
 
 if nargin < 3
     visited = {};
@@ -21,39 +23,28 @@ if nargin < 4
 end
 
 % Check for circular dependency
-if ismember(packageName, path)
-    cycle = strjoin([path, {packageName}], ' -> ');
+if ismember(packageFqn, path)
+    cycle = strjoin([path, {packageFqn}], ' -> ');
     error('mip:circularDependency', ...
           'Circular dependency detected: %s', cycle);
 end
 
 % If already visited, skip
-if ismember(packageName, visited)
+if ismember(packageFqn, visited)
     depList = {};
     return
 end
 
 % Find package info
-if isa(packageInfoMap, 'containers.Map')
-    if ~isKey(packageInfoMap, packageName)
-        error('mip:packageNotFound', ...
-              'Package "%s" not found in repository', packageName);
-    end
-    pkgInfo = packageInfoMap(packageName);
-elseif isstruct(packageInfoMap)
-    if ~isfield(packageInfoMap, packageName)
-        error('mip:packageNotFound', ...
-              'Package "%s" not found in repository', packageName);
-    end
-    pkgInfo = packageInfoMap.(packageName);
-else
-    error('mip:invalidPackageMap', ...
-          'packageInfoMap must be a containers.Map or struct');
+if ~isKey(packageInfoMap, packageFqn)
+    error('mip:packageNotFound', ...
+          'Package "%s" not found in repository', packageFqn);
 end
+pkgInfo = packageInfoMap(packageFqn);
 
 % Mark as visited and add to path
-visited = [visited, {packageName}];
-path = [path, {packageName}];
+visited = [visited, {packageFqn}];
+path = [path, {packageFqn}];
 
 % Collect all dependencies first
 depList = {};
@@ -67,11 +58,18 @@ end
 
 for i = 1:length(dependencies)
     dep = dependencies{i};
-    subDeps = mip.dependency.build_dependency_graph(dep, packageInfoMap, visited, path);
+    depResult = mip.utils.parse_package_arg(dep);
+    if depResult.is_fqn
+        depFqn = dep;
+    else
+        depFqn = mip.utils.make_fqn('mip-org', 'core', depResult.name);
+    end
+
+    subDeps = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
     depList = [depList, subDeps]; %#ok<*AGROW>
 end
 
 % Then add this package
-depList = [depList, {packageName}];
+depList = [depList, {packageFqn}];
 
 end
