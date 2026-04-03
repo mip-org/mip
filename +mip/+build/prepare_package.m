@@ -94,6 +94,13 @@ if exist(sourceHashFile, 'file')
     fclose(fid);
     delete(sourceHashFile);
 end
+commitHashFile = fullfile(pkgSubdir, '.commit_hash');
+if exist(commitHashFile, 'file')
+    fid = fopen(commitHashFile, 'r');
+    jsonOpts.commit_hash = strtrim(fread(fid, '*char')');
+    fclose(fid);
+    delete(commitHashFile);
+end
 mip.build.create_mip_json(stagingDir, mipConfig, resolvedConfig, effectiveArch, jsonOpts);
 
 end

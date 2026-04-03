@@ -65,6 +65,10 @@ if isfield(opts, 'source_hash') && ~isempty(opts.source_hash)
     mipData.source_hash = opts.source_hash;
 end
 
+if isfield(opts, 'commit_hash') && ~isempty(opts.commit_hash)
+    mipData.commit_hash = opts.commit_hash;
+end
+
 if isfield(opts, 'editable') && opts.editable
     mipData.editable = true;
     if isfield(opts, 'source_path')
