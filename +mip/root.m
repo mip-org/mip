@@ -24,12 +24,17 @@ root = fileparts(packages_dir);               % .../root
 if ~isfolder(fullfile(root, 'packages'))
     % Path-based detection failed (e.g., editable install where
     % mfilename returns the source path). Fall back to ~/.mip.
-    root = fullfile(getenv('HOME'), '.mip');
+    if ispc
+        home_dir = char(java.lang.System.getProperty('user.home'));
+    else
+        home_dir = '~';
+    end
+    root = fullfile(home_dir, '.mip');
     if ~isfolder(fullfile(root, 'packages'))
         error('mip:rootNotFound', ...
             ['Could not determine the mip root directory.\n' ...
              'Set the MIP_ROOT environment variable to point to your mip root directory.\n' ...
-             'For example: setenv(''MIP_ROOT'', ''%s/.mip'')'], getenv('HOME'));
+             'For example: setenv(''MIP_ROOT'', ''%s/.mip'')'], home_dir);
     end
 end
 
