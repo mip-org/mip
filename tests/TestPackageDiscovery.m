@@ -1,0 +1,205 @@
+classdef TestPackageDiscovery < matlab.unittest.TestCase
+%TESTPACKAGEDISCOVERY   Tests for resolve_bare_name, list_installed_packages,
+%   and directly_installed file operations.
+
+    properties
+        OrigMipRoot
+        TestRoot
+    end
+
+    methods (TestMethodSetup)
+        function setupTestEnvironment(testCase)
+            testCase.OrigMipRoot = getenv('MIP_ROOT');
+            testCase.TestRoot = [tempname '_mip_test'];
+            mkdir(testCase.TestRoot);
+            mkdir(fullfile(testCase.TestRoot, 'packages'));
+            setenv('MIP_ROOT', testCase.TestRoot);
+            clearMipState();
+        end
+    end
+
+    methods (TestMethodTeardown)
+        function teardownTestEnvironment(testCase)
+            setenv('MIP_ROOT', testCase.OrigMipRoot);
+            if exist(testCase.TestRoot, 'dir')
+                rmdir(testCase.TestRoot, 's');
+            end
+            clearMipState();
+        end
+    end
+
+    methods (Test)
+
+        %% resolve_bare_name tests
+
+        function testResolveBareName_NotFound(testCase)
+            fqn = mip.utils.resolve_bare_name('nonexistent');
+            testCase.verifyEqual(fqn, '');
+        end
+
+        function testResolveBareName_SingleMatch(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'chebfun');
+            fqn = mip.utils.resolve_bare_name('chebfun');
+            testCase.verifyEqual(fqn, 'mip-org/core/chebfun');
+        end
+
+        function testResolveBareName_PrefersCoreChannel(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'testpkg');
+            fqn = mip.utils.resolve_bare_name('testpkg');
+            testCase.verifyEqual(fqn, 'mip-org/core/testpkg');
+        end
+
+        function testResolveBareName_FallsBackToAlphabetical(testCase)
+            createTestPackage(testCase.TestRoot, 'alab', 'chan1', 'testpkg');
+            createTestPackage(testCase.TestRoot, 'zlab', 'chan2', 'testpkg');
+            fqn = mip.utils.resolve_bare_name('testpkg');
+            testCase.verifyEqual(fqn, 'alab/chan1/testpkg');
+        end
+
+        function testResolveBareName_CustomChannelOnly(testCase)
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mypkg');
+            fqn = mip.utils.resolve_bare_name('mypkg');
+            testCase.verifyEqual(fqn, 'mylab/custom/mypkg');
+        end
+
+        function testResolveBareName_LocalInstall(testCase)
+            createTestPackage(testCase.TestRoot, 'local', 'local', 'devpkg');
+            fqn = mip.utils.resolve_bare_name('devpkg');
+            testCase.verifyEqual(fqn, 'local/local/devpkg');
+        end
+
+        %% list_installed_packages tests
+
+        function testListInstalled_EmptyDir(testCase)
+            pkgs = mip.utils.list_installed_packages();
+            testCase.verifyEqual(pkgs, {});
+        end
+
+        function testListInstalled_SinglePackage(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'chebfun');
+            pkgs = mip.utils.list_installed_packages();
+            testCase.verifyEqual(pkgs, {'mip-org/core/chebfun'});
+        end
+
+        function testListInstalled_MultiplePackages(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'alpha');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'beta');
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'gamma');
+            pkgs = mip.utils.list_installed_packages();
+            testCase.verifyEqual(sort(pkgs), ...
+                sort({'mip-org/core/alpha', 'mip-org/core/beta', 'mylab/custom/gamma'}));
+        end
+
+        function testListInstalled_IsSorted(testCase)
+            createTestPackage(testCase.TestRoot, 'zlab', 'chan', 'zpkg');
+            createTestPackage(testCase.TestRoot, 'alab', 'chan', 'apkg');
+            pkgs = mip.utils.list_installed_packages();
+            testCase.verifyEqual(pkgs, {'alab/chan/apkg', 'zlab/chan/zpkg'});
+        end
+
+        %% directly_installed tests
+
+        function testDirectlyInstalled_EmptyByDefault(testCase)
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(pkgs, {});
+        end
+
+        function testDirectlyInstalled_AddAndGet(testCase)
+            mip.utils.add_directly_installed('mip-org/core/chebfun');
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(pkgs, {'mip-org/core/chebfun'});
+        end
+
+        function testDirectlyInstalled_AddDuplicate(testCase)
+            mip.utils.add_directly_installed('mip-org/core/chebfun');
+            mip.utils.add_directly_installed('mip-org/core/chebfun');
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(pkgs, {'mip-org/core/chebfun'});
+        end
+
+        function testDirectlyInstalled_AddMultiple(testCase)
+            mip.utils.add_directly_installed('mip-org/core/alpha');
+            mip.utils.add_directly_installed('mip-org/core/beta');
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(sort(pkgs), sort({'mip-org/core/alpha', 'mip-org/core/beta'}));
+        end
+
+        function testDirectlyInstalled_Remove(testCase)
+            mip.utils.add_directly_installed('mip-org/core/alpha');
+            mip.utils.add_directly_installed('mip-org/core/beta');
+            mip.utils.remove_directly_installed('mip-org/core/alpha');
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(pkgs, {'mip-org/core/beta'});
+        end
+
+        function testDirectlyInstalled_RemoveNonExistent(testCase)
+            mip.utils.add_directly_installed('mip-org/core/alpha');
+            mip.utils.remove_directly_installed('mip-org/core/nonexistent');
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(pkgs, {'mip-org/core/alpha'});
+        end
+
+        function testDirectlyInstalled_SetOverwrites(testCase)
+            mip.utils.add_directly_installed('mip-org/core/old');
+            mip.utils.set_directly_installed({'mip-org/core/new1', 'mip-org/core/new2'});
+            pkgs = mip.utils.get_directly_installed();
+            testCase.verifyEqual(sort(pkgs), sort({'mip-org/core/new1', 'mip-org/core/new2'}));
+        end
+
+        %% get_package_dir tests
+
+        function testGetPackageDir(testCase)
+            pkgDir = mip.utils.get_package_dir('mip-org', 'core', 'chebfun');
+            expected = fullfile(testCase.TestRoot, 'packages', 'mip-org', 'core', 'chebfun');
+            testCase.verifyEqual(pkgDir, expected);
+        end
+
+        %% is_loaded / is_sticky / is_directly_loaded tests
+
+        function testIsLoaded_False(testCase)
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/chebfun'));
+        end
+
+        function testIsLoaded_True(testCase)
+            mip.utils.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/chebfun');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/chebfun'));
+        end
+
+        function testIsSticky_False(testCase)
+            testCase.verifyFalse(mip.utils.is_sticky('mip-org/core/chebfun'));
+        end
+
+        function testIsSticky_True(testCase)
+            mip.utils.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/chebfun');
+            testCase.verifyTrue(mip.utils.is_sticky('mip-org/core/chebfun'));
+        end
+
+        function testIsDirectlyLoaded_False(testCase)
+            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/chebfun'));
+        end
+
+        function testIsDirectlyLoaded_True(testCase)
+            mip.utils.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', 'mip-org/core/chebfun');
+            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/chebfun'));
+        end
+
+        %% read_package_json tests
+
+        function testReadPackageJson(testCase)
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg', ...
+                'version', '2.0.0');
+            info = mip.utils.read_package_json(pkgDir);
+            testCase.verifyEqual(info.name, 'testpkg');
+            testCase.verifyEqual(info.version, '2.0.0');
+        end
+
+        function testReadPackageJson_MissingFile(testCase)
+            emptyDir = fullfile(testCase.TestRoot, 'empty_pkg');
+            mkdir(emptyDir);
+            testCase.verifyError(@() mip.utils.read_package_json(emptyDir), ...
+                'mip:mipJsonNotFound');
+        end
+
+    end
+end
