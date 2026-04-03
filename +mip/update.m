@@ -113,10 +113,25 @@ function updateSinglePackage(packageArg, channelOverride)
     latestInfo = packageInfoMap(packageName);
     latestVersion = latestInfo.version;
 
-    % Compare versions
+    % Compare versions and commit hashes
     if strcmp(installedVersion, latestVersion)
-        fprintf('Package "%s" is already up to date (%s)\n', fqn, installedVersion);
-        return
+        % Versions match — check if commit hash has changed (e.g. branch tracking)
+        installedHash = '';
+        if isfield(pkgInfo, 'commit_hash')
+            installedHash = pkgInfo.commit_hash;
+        end
+        latestHash = '';
+        if isfield(latestInfo, 'commit_hash')
+            latestHash = latestInfo.commit_hash;
+        end
+
+        if isempty(latestHash) || strcmp(installedHash, latestHash)
+            fprintf('Package "%s" is already up to date (%s)\n', fqn, installedVersion);
+            return
+        end
+
+        fprintf('Version is "%s" but commit hash has changed (%s -> %s)\n', ...
+                installedVersion, installedHash, latestHash);
     end
 
     fprintf('Updating "%s": %s -> %s\n', fqn, installedVersion, latestVersion);
