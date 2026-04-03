@@ -188,6 +188,8 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
                 'Most recently loaded (core) should be unloaded');
             testCase.verifyTrue(mip.utils.is_loaded('other-org/extras/duppkg'), ...
                 'Earlier loaded (extras) should remain');
+        end
+
         function testUnloadPackage_MultiplePackagesAtOnce(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
