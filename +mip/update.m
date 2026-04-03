@@ -156,7 +156,7 @@ function updateSinglePackage(packageArg, channelOverride, force)
 
     % Check if the package is currently loaded
     wasLoaded = mip.utils.is_loaded(fqn);
-    isSelfUpdate = strcmp(packageName, 'mip');
+    isSelfUpdate = strcmp(fqn, 'mip-org/core/mip');
 
     % Download the new version
     tempDir = tempname;
