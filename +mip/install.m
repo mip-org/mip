@@ -141,6 +141,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
     fprintf('Detected architecture: %s\n', currentArch);
 
     % Resolve each package argument to org/channel/name (with optional version)
+    % The --channel flag only applies to user-specified bare names, not dependencies
     resolvedPackages = {};  % cell array of structs with .org, .channel, .name, .fqn
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     for i = 1:length(repoPackages)
@@ -154,8 +155,29 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         end
     end
 
-    % Build package info map for the primary channel (with version constraints)
-    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, defaultOrg, defaultChan, requestedVersions);
+    % Build package info map
+    isCore = strcmp(defaultOrg, 'mip-org') && strcmp(defaultChan, 'core');
+    if isCore
+        % Core channel: single index with version constraints
+        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, defaultOrg, defaultChan, requestedVersions);
+    else
+        % Non-core channel: also fetch core index for dependency resolution
+        % (bare-name dependencies always resolve to mip-org/core)
+        fprintf('Fetching core package index for dependency resolution...\n');
+        coreIndex = mip.utils.fetch_index('core');
+        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(coreIndex, 'mip-org', 'core');
+
+        % Add channel packages (version constraints only apply to these)
+        [channelMap, channelUnavail] = mip.utils.build_package_info_map(index, defaultOrg, defaultChan, requestedVersions);
+        channelKeys = keys(channelMap);
+        for i = 1:length(channelKeys)
+            packageInfoMap(channelKeys{i}) = channelMap(channelKeys{i});
+        end
+        channelUnavailKeys = keys(channelUnavail);
+        for i = 1:length(channelUnavailKeys)
+            unavailablePackages(channelUnavailKeys{i}) = channelUnavail(channelUnavailKeys{i});
+        end
+    end
 
     % Check if any requested packages are unavailable
     for i = 1:length(resolvedPackages)
