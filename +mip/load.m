@@ -17,8 +17,8 @@ function load(packageArg, varargin)
     % Resolve the FQN for this package
     fqn = resolveToFqn(packageArg);
 
-    % mip is always loaded — nothing to do
-    if strcmp(fqn, 'mip')
+    % mip-org/core/mip is always loaded — nothing to do
+    if strcmp(fqn, 'mip-org/core/mip')
         fprintf('Package "mip" is always loaded\n');
         return
     end
@@ -156,11 +156,6 @@ end
 function fqn = resolveToFqn(packageArg)
 % Resolve a package argument to a fully qualified name.
 % If already FQN, return as-is. If bare name, look up installed packages.
-
-    if strcmp(packageArg, 'mip')
-        fqn = 'mip';
-        return
-    end
 
     result = mip.utils.parse_package_arg(packageArg);
 

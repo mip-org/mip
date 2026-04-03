@@ -18,26 +18,6 @@ function uninstall(varargin)
 
     packageArgs = varargin;
 
-    % mip cannot be uninstalled via this command
-    mipFqns = {'mip', 'mip-org/core/mip', 'mip-org/core/mip'};
-    hasMip = false;
-    for i = 1:length(packageArgs)
-        if ismember(packageArgs{i}, mipFqns)
-            hasMip = true;
-            break;
-        end
-    end
-    if hasMip
-        fprintf('Cannot uninstall mip via "mip uninstall".\n');
-        fprintf('To uninstall mip manually:\n');
-        fprintf('  1. Remove the mip directory: %s\n', mip.root());
-        fprintf('  2. Remove the mip entry from your MATLAB path (e.g., using pathtool)\n');
-        packageArgs = packageArgs(~ismember(packageArgs, mipFqns));
-        if isempty(packageArgs)
-            return
-        end
-    end
-
     % Resolve all package arguments to FQNs
     notInstalled = {};
     resolvedPackages = {};
@@ -64,6 +44,15 @@ function uninstall(varargin)
         else
             resolvedPackages = [resolvedPackages, {fqn}];
         end
+    end
+
+    % mip-org/core/mip cannot be uninstalled via this command
+    if ismember('mip-org/core/mip', resolvedPackages)
+        fprintf('Cannot uninstall mip via "mip uninstall".\n');
+        fprintf('To uninstall mip manually:\n');
+        fprintf('  1. Remove the mip directory: %s\n', mip.root());
+        fprintf('  2. Remove the mip entry from your MATLAB path (e.g., using pathtool)\n');
+        resolvedPackages = resolvedPackages(~strcmp(resolvedPackages, 'mip-org/core/mip'));
     end
 
     % Report packages that aren't installed
@@ -164,7 +153,6 @@ function pruneUnusedPackages()
     for i = 1:length(allInstalled)
         fqn = allInstalled{i};
         if ~ismember(fqn, neededPackages) && ...
-                ~strcmp(fqn, 'mip-org/core/mip') && ...
                 ~strcmp(fqn, 'mip-org/core/mip')
             packagesToPrune{end+1} = fqn; %#ok<AGROW>
         end

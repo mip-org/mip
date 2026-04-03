@@ -38,7 +38,7 @@ function unload(varargin)
     fqn = resolveLoadedFqn(packageArg);
 
     % mip-org/core/mip cannot be unloaded
-    if strcmp(fqn, 'mip') || strcmp(fqn, 'mip-org/core/mip')
+    if strcmp(fqn, 'mip-org/core/mip')
         error('mip:cannotUnloadMip', 'Cannot unload mip itself.');
     end
 
@@ -72,11 +72,6 @@ end
 
 function fqn = resolveLoadedFqn(packageArg)
 % Resolve a package argument to its FQN among loaded packages.
-
-    if strcmp(packageArg, 'mip')
-        fqn = 'mip';
-        return
-    end
 
     result = mip.utils.parse_package_arg(packageArg);
 
@@ -318,7 +313,7 @@ function unloadAll(forceUnload)
     if forceUnload
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~strcmp(pkg, 'mip') && ~strcmp(pkg, 'mip-org/core/mip')
+            if ~strcmp(pkg, 'mip-org/core/mip')
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
@@ -364,9 +359,9 @@ function unloadAll(forceUnload)
 
     % Update global variables (mip always remains)
     if forceUnload
-        MIP_LOADED_PACKAGES = {'mip'};
+        MIP_LOADED_PACKAGES = {'mip-org/core/mip'};
         MIP_DIRECTLY_LOADED_PACKAGES = {};
-        MIP_STICKY_PACKAGES = {'mip'};
+        MIP_STICKY_PACKAGES = {'mip-org/core/mip'};
     else
         MIP_LOADED_PACKAGES = MIP_STICKY_PACKAGES;
         MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES(    ...
