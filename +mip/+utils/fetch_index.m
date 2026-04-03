@@ -11,7 +11,7 @@ indexUrl = mip.index(channel);
 
 tempFile = [tempname, '.json'];
 try
-    websave(tempFile, indexUrl);
+    websave(tempFile, indexUrl, weboptions('Timeout', 60));
     indexJson = fileread(tempFile);
     delete(tempFile);
 catch ME

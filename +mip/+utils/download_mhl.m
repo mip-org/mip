@@ -39,7 +39,7 @@ if isURL
         fprintf('Downloading from %s...\n', source);
         % Note: websave() does not support progress callbacks or custom headers
         % This is a limitation of MATLAB's HTTP capabilities
-        websave(localPath, source);
+        websave(localPath, source, weboptions('Timeout', 60));
         fprintf('Download complete.\n');
     catch ME
         error('mip:downloadFailed', ...

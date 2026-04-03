@@ -48,7 +48,7 @@ try
     indexUrl = mip.index(channelStr);
     fprintf('Using channel: %s/%s\n', org, channelName);
     tempFile = [tempname, '.json'];
-    websave(tempFile, indexUrl);
+    websave(tempFile, indexUrl, weboptions('Timeout', 60));
     indexJson = fileread(tempFile);
     delete(tempFile);
 
