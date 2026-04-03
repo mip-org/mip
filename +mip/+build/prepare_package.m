@@ -55,8 +55,10 @@ if exist(gitDir, 'dir')
 end
 
 % Strip pre-existing mex binaries
-fprintf('Stripping pre-existing MEX binaries...\n');
-mip.build.strip_mex_binaries(pkgSubdir);
+numStripped = mip.build.strip_mex_binaries(pkgSubdir);
+if numStripped > 0
+    fprintf('Stripping pre-existing MEX binaries...\n');
+end
 
 % Compute addpaths relative to the source subdir
 addpathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.addpaths);
