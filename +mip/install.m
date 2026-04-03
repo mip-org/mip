@@ -49,10 +49,14 @@ function install(varargin)
     end
 
     % Check if any argument is a local directory with mip.yaml
+    % Only treat as local path if it looks like one (contains separator,
+    % starts with '.' or '~'), not for bare package names or FQNs
     for i = 1:length(args)
         pkg = args{i};
-        % Resolve '.' and relative paths
-        if exist(pkg, 'dir')
+        looksLikePath = startsWith(pkg, '.') || startsWith(pkg, '~') || ...
+                        startsWith(pkg, '/') || startsWith(pkg, '\') || ...
+                        contains(pkg, [filesep filesep]);
+        if looksLikePath && exist(pkg, 'dir')
             mipYamlPath = fullfile(pkg, 'mip.yaml');
             if exist(mipYamlPath, 'file')
                 mip.utils.install_local(pkg, editable);
@@ -131,10 +135,6 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
     [defaultOrg, defaultChan] = mip.utils.parse_channel_spec(channel);
 
     fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
-    fprintf('Fetching package index...\n');
-
-    % Fetch the primary channel index
-    index = mip.utils.fetch_index(channel);
 
     % Get current architecture
     currentArch = mip.arch();
@@ -155,28 +155,31 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         end
     end
 
-    % Build package info map
-    isCore = strcmp(defaultOrg, 'mip-org') && strcmp(defaultChan, 'core');
-    if isCore
-        % Core channel: single index with version constraints
-        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, defaultOrg, defaultChan, requestedVersions);
-    else
-        % Non-core channel: also fetch core index for dependency resolution
-        % (bare-name dependencies always resolve to mip-org/core)
-        fprintf('Fetching core package index for dependency resolution...\n');
-        coreIndex = mip.utils.fetch_index('mip-org/core');
-        [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(coreIndex, 'mip-org', 'core');
+    % Build package info map by fetching indexes for all needed channels.
+    % Always fetch mip-org/core (bare-name deps resolve there).
+    % Also fetch the default channel and any channels referenced by FQN args.
+    packageInfoMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    unavailablePackages = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    fetchedChannels = containers.Map('KeyType', 'char', 'ValueType', 'logical');
 
-        % Add channel packages (version constraints only apply to these)
-        [channelMap, channelUnavail] = mip.utils.build_package_info_map(index, defaultOrg, defaultChan, requestedVersions);
-        channelKeys = keys(channelMap);
-        for i = 1:length(channelKeys)
-            packageInfoMap(channelKeys{i}) = channelMap(channelKeys{i});
+    % Collect all channels we need upfront
+    channelsToFetch = {channel};
+    if ~(strcmp(defaultOrg, 'mip-org') && strcmp(defaultChan, 'core'))
+        channelsToFetch{end+1} = 'mip-org/core';
+    end
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        pkgChannel = [s.org '/' s.channel];
+        if ~ismember(pkgChannel, channelsToFetch)
+            channelsToFetch{end+1} = pkgChannel;
         end
-        channelUnavailKeys = keys(channelUnavail);
-        for i = 1:length(channelUnavailKeys)
-            unavailablePackages(channelUnavailKeys{i}) = channelUnavail(channelUnavailKeys{i});
-        end
+    end
+
+    % Fetch all needed channel indexes
+    for i = 1:length(channelsToFetch)
+        ch = channelsToFetch{i};
+        fetchChannelIndex(ch, packageInfoMap, unavailablePackages, ...
+                          fetchedChannels, requestedVersions, channel);
     end
 
     % Check if any requested packages are unavailable
@@ -203,11 +206,40 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         fprintf('Resolving dependencies for %d packages...\n', length(resolvedPackages));
     end
 
-    % Build combined dependency graph
+    % Build combined dependency graph.
+    % If a cross-channel FQN dep is not in the map, fetch its channel and retry.
     allRequiredFqns = {};
-    for i = 1:length(resolvedPackages)
-        installOrder = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
-        allRequiredFqns = [allRequiredFqns, installOrder];
+    for attempt = 1:10
+        try
+            allRequiredFqns = {};
+            for i = 1:length(resolvedPackages)
+                installOrder = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
+                allRequiredFqns = [allRequiredFqns, installOrder];
+            end
+            break  % success
+        catch ME
+            if ~strcmp(ME.identifier, 'mip:packageNotFound')
+                rethrow(ME);
+            end
+            % Extract missing FQN from error message
+            tokens = regexp(ME.message, '"([^"]+)"', 'tokens');
+            if isempty(tokens)
+                rethrow(ME);
+            end
+            missingFqn = tokens{1}{1};
+            missingResult = mip.utils.parse_package_arg(missingFqn);
+            if ~missingResult.is_fqn
+                rethrow(ME);
+            end
+            missingChannel = [missingResult.org '/' missingResult.channel];
+            if fetchedChannels.isKey(missingChannel)
+                rethrow(ME);  % Already fetched this channel; package truly missing
+            end
+            % Fetch the missing channel's index
+            fprintf('Fetching %s index for cross-channel dependency...\n', missingChannel);
+            fetchChannelIndex(missingChannel, packageInfoMap, unavailablePackages, ...
+                              fetchedChannels, requestedVersions, channel);
+        end
     end
     allRequiredFqns = unique(allRequiredFqns, 'stable');
 
@@ -413,4 +445,29 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
     if exist(tempDir, 'dir')
         rmdir(tempDir, 's');
     end
+end
+
+function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions, primaryChannel)
+% Fetch a channel's index and merge into the package info map.
+    if fetchedChannels.isKey(ch)
+        return
+    end
+    fprintf('Fetching package index for %s...\n', ch);
+    [chOrg, chName] = mip.utils.parse_channel_spec(ch);
+    chIndex = mip.utils.fetch_index(ch);
+    % Apply version constraints only if this is the primary channel
+    if strcmp(ch, primaryChannel)
+        [chMap, chUnavail] = mip.utils.build_package_info_map(chIndex, chOrg, chName, requestedVersions);
+    else
+        [chMap, chUnavail] = mip.utils.build_package_info_map(chIndex, chOrg, chName);
+    end
+    chKeys = keys(chMap);
+    for j = 1:length(chKeys)
+        packageInfoMap(chKeys{j}) = chMap(chKeys{j});
+    end
+    chUnavailKeys = keys(chUnavail);
+    for j = 1:length(chUnavailKeys)
+        unavailablePackages(chUnavailKeys{j}) = chUnavail(chUnavailKeys{j});
+    end
+    fetchedChannels(ch) = true;
 end

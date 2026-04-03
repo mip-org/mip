@@ -65,12 +65,6 @@ for i = 1:length(dependencies)
         depFqn = mip.utils.make_fqn('mip-org', 'core', depResult.name);
     end
 
-    % If dep is not in the map, skip it
-    % (cross-channel dependency assumed to be pre-installed)
-    if ~isKey(packageInfoMap, depFqn)
-        continue
-    end
-
     subDeps = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
     depList = [depList, subDeps]; %#ok<*AGROW>
 end
