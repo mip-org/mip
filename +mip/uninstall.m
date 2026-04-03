@@ -87,6 +87,14 @@ function uninstall(varargin)
         return
     end
 
+    % Unload any packages that are currently loaded
+    for i = 1:length(resolvedPackages)
+        fqn = resolvedPackages{i};
+        if mip.utils.is_loaded(fqn)
+            mip.unload(fqn);
+        end
+    end
+
     % Uninstall each requested package
     fprintf('\n');
     for i = 1:length(resolvedPackages)
