@@ -122,12 +122,52 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
         channel = 'core';
     end
 
+    % Group packages by effective channel: FQN packages use their own
+    % channel, bare-name packages use the default channel.
+    channelGroups = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    for i = 1:length(repoPackages)
+        pkg = repoPackages{i};
+        result = mip.utils.parse_package_arg(pkg);
+        if result.is_fqn
+            effectiveChannel = [result.org '/' result.channel];
+            % Convert to bare name (with version) for the channel group
+            barePkg = result.name;
+            if ~isempty(result.version)
+                barePkg = [barePkg '@' result.version];
+            end
+        else
+            effectiveChannel = channel;
+            barePkg = pkg;
+        end
+        if ~channelGroups.isKey(effectiveChannel)
+            channelGroups(effectiveChannel) = {};
+        end
+        group = channelGroups(effectiveChannel);
+        group{end+1} = barePkg;
+        channelGroups(effectiveChannel) = group;
+    end
+
+    % Install each channel group
+    channels = channelGroups.keys();
+    for k = 1:length(channels)
+        ch = channels{k};
+        pkgs = channelGroups(ch);
+        count = count + installChannelGroup(pkgs, ch);
+    end
+
+end
+
+function count = installChannelGroup(repoPackages, channel)
+% Install a group of packages that all belong to the same channel.
+
+    count = 0;
+
     [defaultOrg, defaultChan] = mip.utils.parse_channel_spec(channel);
 
     fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
     fprintf('Fetching package index...\n');
 
-    % Fetch the primary channel index
+    % Fetch the channel index
     index = mip.utils.fetch_index(channel);
 
     % Get current architecture
@@ -148,7 +188,7 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
         end
     end
 
-    % Build package info map for the primary channel (with version constraints)
+    % Build package info map for this channel (with version constraints)
     [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, requestedVersions);
 
     % Check if any requested packages are unavailable
@@ -186,6 +226,12 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
     % Sort topologically
     allPackagesToInstall = mip.dependency.topological_sort(allRequiredNames, packageInfoMap);
 
+    % Build set of requested bare names
+    requestedBareNames = {};
+    for i = 1:length(resolvedPackages)
+        requestedBareNames{end+1} = resolvedPackages{i}.name;
+    end
+
     % Map each bare name to its FQN (all dependencies go to the same channel)
     toInstallFqns = {};
     alreadyInstalled = {};
@@ -197,8 +243,12 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
 
         if exist(pkgDir, 'dir')
             alreadyInstalled{end+1} = fqn;
+        elseif ismember(name, requestedBareNames)
+            % User explicitly requested this package; install it even if
+            % the same name exists on another channel
+            toInstallFqns{end+1} = fqn;
         else
-            % Also check if the dependency is installed from another channel
+            % For dependencies, any channel satisfies the requirement
             existingFqn = mip.utils.resolve_bare_name(name);
             if ~isempty(existingFqn)
                 alreadyInstalled{end+1} = existingFqn;
