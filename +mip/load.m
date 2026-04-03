@@ -4,6 +4,7 @@ function load(packageArg, varargin)
 % Usage:
 %   mip.load('packageName')
 %   mip.load('packageName', '--sticky')
+%   mip.load('packageName', '--install')
 %   mip.load('org/channel/packageName')
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
@@ -11,27 +12,42 @@ function load(packageArg, varargin)
 %   1. mip-org/core
 %   2. First alphabetically by org/channel
 %
-% Use '--sticky' to mark the package as sticky, which prevents it from
-% being unloaded with 'mip unload --all'.
+% Options:
+%   --sticky    Mark the package as sticky (prevents unload with 'mip unload --all')
+%   --install   Automatically install the package if it is not already installed
 
-    % Resolve the FQN for this package
-    fqn = resolveToFqn(packageArg);
+    % Parse flags
+    installIfMissing = false;
+    stickyPackage = false;
+    remainingArgs = {};
+    for i = 1:length(varargin)
+        arg = varargin{i};
+        if ischar(arg) && strcmp(arg, '--install')
+            installIfMissing = true;
+        elseif ischar(arg) && strcmp(arg, '--sticky')
+            stickyPackage = true;
+        else
+            remainingArgs{end+1} = arg; %#ok<*AGROW>
+        end
+    end
+
+    % Resolve the FQN for this package, installing first if requested
+    try
+        fqn = resolveToFqn(packageArg);
+    catch ME
+        if installIfMissing && strcmp(ME.identifier, 'mip:packageNotFound')
+            fprintf('Package "%s" is not installed. Installing...\n', packageArg);
+            mip.install(packageArg);
+            fqn = resolveToFqn(packageArg);
+        else
+            rethrow(ME);
+        end
+    end
 
     % mip is always loaded — nothing to do
     if strcmp(fqn, 'mip')
         fprintf('Package "mip" is always loaded\n');
         return
-    end
-
-    % Check for --sticky flag in arguments
-    stickyPackage = false;
-    remainingArgs = {};
-    for i = 1:length(varargin)
-        if ischar(varargin{i}) && strcmp(varargin{i}, '--sticky')
-            stickyPackage = true;
-        else
-            remainingArgs{end+1} = varargin{i}; %#ok<*AGROW>
-        end
     end
 
     % Parse optional arguments for internal use
