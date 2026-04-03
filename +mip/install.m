@@ -246,6 +246,18 @@ function count = installFromRepository(repoPackages, packagesDir, channel)
         end
     end
 
+    % Warn if any installed package name exists in multiple channels
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        allInstalled = mip.utils.find_all_installed_by_name(s.name);
+        if length(allInstalled) > 1
+            fprintf('\nWarning: Package "%s" is installed from multiple channels:\n', s.name);
+            for k = 1:length(allInstalled)
+                fprintf('  - %s\n', allInstalled{k});
+            end
+        end
+    end
+
 end
 
 function success = installFromMhl(mhlSource, packagesDir, channel)
