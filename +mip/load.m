@@ -1,8 +1,9 @@
-function load(packageArg, varargin)
-%LOAD   Load a mip package into the MATLAB path.
+function load(varargin)
+%LOAD   Load one or more mip packages into the MATLAB path.
 %
 % Usage:
 %   mip.load('packageName')
+%   mip.load('package1', 'package2', ...)
 %   mip.load('packageName', '--sticky')
 %   mip.load('packageName', '--install')
 %   mip.load('org/channel/packageName')
@@ -13,23 +14,48 @@ function load(packageArg, varargin)
 %   2. First alphabetically by org/channel
 %
 % Options:
-%   --sticky    Mark the package as sticky (prevents unload with 'mip unload --all')
-%   --install   Automatically install the package if it is not already installed
+%   --sticky    Mark the package(s) as sticky (prevents unload with 'mip unload --all')
+%   --install   Automatically install the package(s) if not already installed
 
-    % Parse flags
+    % Parse flags and package names from arguments
     installIfMissing = false;
     stickyPackage = false;
-    remainingArgs = {};
+    packageArgs = {};
+    internalArgs = {};
     for i = 1:length(varargin)
         arg = varargin{i};
         if ischar(arg) && strcmp(arg, '--install')
             installIfMissing = true;
         elseif ischar(arg) && strcmp(arg, '--sticky')
             stickyPackage = true;
+        elseif ischar(arg) && ~startsWith(arg, '--')
+            packageArgs{end+1} = arg; %#ok<*AGROW>
         else
-            remainingArgs{end+1} = arg; %#ok<*AGROW>
+            internalArgs{end+1} = arg; %#ok<*AGROW>
         end
     end
+
+    if isempty(packageArgs)
+        error('mip:noPackage', 'No package specified for load command.');
+    end
+
+    % If multiple packages, load each one sequentially
+    if length(packageArgs) > 1
+        for i = 1:length(packageArgs)
+            args = {packageArgs{i}};
+            if installIfMissing
+                args{end+1} = '--install';
+            end
+            if stickyPackage
+                args{end+1} = '--sticky';
+            end
+            mip.load(args{:});
+        end
+        return
+    end
+
+    packageArg = packageArgs{1};
+    remainingArgs = internalArgs;
 
     % Resolve the FQN for this package, installing first if requested
     try

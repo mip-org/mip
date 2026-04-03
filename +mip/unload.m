@@ -1,8 +1,9 @@
 function unload(varargin)
-%UNLOAD   Unload a mip package from MATLAB path.
+%UNLOAD   Unload one or more mip packages from MATLAB path.
 %
 % Usage:
 %   mip.unload('packageName')
+%   mip.unload('package1', 'package2', ...)
 %   mip.unload('org/channel/packageName')
 %   mip.unload('--all')
 %   mip.unload('--all', '--force')
@@ -21,52 +22,56 @@ function unload(varargin)
         return
     end
 
-    % Get package name (first non-flag argument)
-    packageArg = '';
+    % Collect all non-flag arguments as package names
+    packageArgs = {};
     for i = 1:length(varargin)
         if ~startsWith(varargin{i}, '--')
-            packageArg = varargin{i};
-            break;
+            packageArgs{end+1} = varargin{i};
         end
     end
 
-    if isempty(packageArg)
+    if isempty(packageArgs)
         error('mip:noPackage', 'No package name specified for unload command.');
     end
 
-    % Resolve to FQN
-    fqn = resolveLoadedFqn(packageArg);
+    % Unload each package
+    for k = 1:length(packageArgs)
+        packageArg = packageArgs{k};
 
-    % mip-org/core/mip cannot be unloaded
-    if strcmp(fqn, 'mip-org/core/mip')
-        error('mip:cannotUnloadMip', 'Cannot unload mip itself.');
+        % Resolve to FQN
+        fqn = resolveLoadedFqn(packageArg);
+
+        % mip-org/core/mip cannot be unloaded
+        if strcmp(fqn, 'mip-org/core/mip')
+            error('mip:cannotUnloadMip', 'Cannot unload mip itself.');
+        end
+
+        % Check if package is loaded
+        if ~mip.utils.is_loaded(fqn)
+            fprintf('Package "%s" is not currently loaded\n', fqn);
+            continue
+        end
+
+        % Get package directory
+        result = mip.utils.parse_package_arg(fqn);
+        packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+
+        % Execute unload_package.m if it exists
+        executeUnload(packageDir, fqn);
+
+        % Remove from sticky packages
+        mip.utils.key_value_remove('MIP_STICKY_PACKAGES', fqn);
+
+        % Remove from directly loaded packages
+        mip.utils.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+
+        % Remove from loaded packages
+        mip.utils.key_value_remove('MIP_LOADED_PACKAGES', fqn);
+
+        fprintf('Unloaded package "%s"\n', fqn);
     end
 
-    % Check if package is loaded
-    if ~mip.utils.is_loaded(fqn)
-        fprintf('Package "%s" is not currently loaded\n', fqn);
-        return
-    end
-
-    % Get package directory
-    result = mip.utils.parse_package_arg(fqn);
-    packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
-
-    % Execute unload_package.m if it exists
-    executeUnload(packageDir, fqn);
-
-    % Remove from sticky packages
-    mip.utils.key_value_remove('MIP_STICKY_PACKAGES', fqn);
-
-    % Remove from directly loaded packages
-    mip.utils.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
-
-    % Remove from loaded packages
-    mip.utils.key_value_remove('MIP_LOADED_PACKAGES', fqn);
-
-    fprintf('Unloaded package "%s"\n', fqn);
-
-    % Prune packages that are no longer needed
+    % Prune packages that are no longer needed (once, after all unloads)
     pruneUnusedPackages();
 end
 

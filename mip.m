@@ -12,8 +12,8 @@ function varargout = mip(command, varargin)
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip list                                 - List installed packages (reverse load order)
 %   mip list --sort-by-name                   - List installed packages (alphabetical)
-%   mip load <package> [--sticky]            - Load a package into MATLAB path
-%   mip unload <package>                     - Unload a package from MATLAB path
+%   mip load <package> [...]  [--sticky]     - Load one or more packages into MATLAB path
+%   mip unload <package> [...]               - Unload one or more packages from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
 %   mip unload --all --force                 - Unload all packages (including sticky)
 %   mip arch                                 - Display current architecture tag
@@ -77,8 +77,7 @@ switch command
         if nargin < 2
             error('mip:noPackage', 'No package specified for load command.');
         end
-        packageName = varargin{1};
-        mip.load(packageName, varargin{2:end});
+        mip.load(varargin{:});
 
     case 'unload'
         if nargin < 2

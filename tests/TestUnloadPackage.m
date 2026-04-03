@@ -152,5 +152,51 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
         end
 
+        function testUnloadPackage_MultiplePackagesAtOnce(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+
+            mip.unload('mip-org/core/pkgA', 'mip-org/core/pkgB');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgB'));
+        end
+
+        function testUnloadPackage_MultiplePackagesBareNames(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+
+            mip.unload('pkgA', 'pkgB');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgB'));
+        end
+
+        function testUnloadPackage_MultipleWithOneNotLoaded(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            % pkgB is not loaded — should print message but not error
+            mip.unload('mip-org/core/pkgA', 'mip-org/core/pkgB');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
+        end
+
+        function testUnloadPackage_MultiplePrunesDeps(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'dep');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA', ...
+                'dependencies', {'dep'});
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB', ...
+                'dependencies', {'dep'});
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/dep'));
+
+            % Unloading both should prune the shared dependency
+            mip.unload('pkgA', 'pkgB');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/dep'));
+        end
+
     end
 end
