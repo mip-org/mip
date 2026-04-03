@@ -1,20 +1,26 @@
-function list()
+function list(varargin)
 %LIST   List all installed mip packages.
 %
 % Usage:
-%   mip.list()
+%   mip list              - List packages (default: reverse load order)
+%   mip list --sort-by-name  - List packages sorted alphabetically by name
 %
-% Displays all currently installed packages with their versions.
-% Packages are shown by their fully qualified name (org/channel/package).
-% Loaded packages are shown in a separate section at the top.
-% An asterisk (*) indicates a directly loaded package.
-% [sticky] indicates a sticky package.
+% Columns: name, fqn, version. Asterisk (*) marks directly loaded packages.
+% Editable packages show their source location.
 
 packagesDir = mip.utils.get_packages_dir();
 
 if ~exist(packagesDir, 'dir')
     fprintf('No packages installed yet\n');
     return
+end
+
+% Parse flags
+sortAlpha = false;
+for i = 1:length(varargin)
+    if strcmp(varargin{i}, '--sort-by-name')
+        sortAlpha = true;
+    end
 end
 
 % Get all installed packages as FQNs
@@ -30,96 +36,110 @@ MIP_LOADED_PACKAGES          = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
 MIP_DIRECTLY_LOADED_PACKAGES = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 MIP_STICKY_PACKAGES          = mip.utils.key_value_get('MIP_STICKY_PACKAGES');
 
-% Categorize packages into loaded and not loaded
-loadedPackages = {};
-notLoadedPackages = {};
+% Build info for each package
+n = length(allPackages);
+names = cell(1, n);
+versions = cell(1, n);
+editablePaths = cell(1, n);
+loaded = false(1, n);
+direct = false(1, n);
+sticky = false(1, n);
+editable = false(1, n);
 
-for i = 1:length(allPackages)
+for i = 1:n
     fqn = allPackages{i};
-    if ismember(fqn, MIP_LOADED_PACKAGES)
-        loadedPackages{end+1} = fqn; %#ok<AGROW>
-    else
-        notLoadedPackages{end+1} = fqn; %#ok<AGROW>
+    result = mip.utils.parse_package_arg(fqn);
+    names{i} = result.name;
+    pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+
+    versions{i} = 'unknown';
+    editablePaths{i} = '';
+    try
+        pkgInfo = mip.utils.read_package_json(pkgDir);
+        if isfield(pkgInfo, 'version')
+            versions{i} = pkgInfo.version;
+        end
+        if isfield(pkgInfo, 'editable') && pkgInfo.editable && isfield(pkgInfo, 'source_path')
+            editable(i) = true;
+            editablePaths{i} = pkgInfo.source_path;
+        end
+    catch
     end
+
+    loaded(i) = ismember(fqn, MIP_LOADED_PACKAGES);
+    direct(i) = ismember(fqn, MIP_DIRECTLY_LOADED_PACKAGES);
+    sticky(i) = ismember(fqn, MIP_STICKY_PACKAGES);
 end
 
+loadedIdx = find(loaded);
+notLoadedIdx = find(~loaded);
+
+% Sort loaded packages
+if sortAlpha
+    [~, si] = sort(lower(names(loadedIdx)));
+    loadedIdx = loadedIdx(si);
+else
+    % Reverse load order (most recent first = MATLAB path precedence)
+    loadOrder = zeros(size(loadedIdx));
+    for i = 1:length(loadedIdx)
+        pos = find(strcmp(allPackages{loadedIdx(i)}, MIP_LOADED_PACKAGES));
+        if ~isempty(pos)
+            loadOrder(i) = pos;
+        end
+    end
+    [~, si] = sort(loadOrder, 'descend');
+    loadedIdx = loadedIdx(si);
+end
+
+% Sort non-loaded packages alphabetically by name
+[~, si] = sort(lower(names(notLoadedIdx)));
+notLoadedIdx = notLoadedIdx(si);
+
 % Display loaded packages section
-if isempty(loadedPackages)
+if isempty(loadedIdx)
     fprintf('No packages are currently loaded. Use "mip load <package>" to load one.\n\n');
 else
     fprintf('=== Loaded Packages ===\n');
-    for i = 1:length(loadedPackages)
-        fqn = loadedPackages{i};
-        result = mip.utils.parse_package_arg(fqn);
-        pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+    print_packages(loadedIdx, names, allPackages, versions, direct, sticky, editable, editablePaths);
+    fprintf('\n');
+end
 
-        % Try to read version from mip.json
-        version = 'unknown';
-        try
-            pkgInfo = mip.utils.read_package_json(pkgDir);
-            if isfield(pkgInfo, 'version')
-                version = pkgInfo.version;
-            end
-        catch
-        end
+% Display not-loaded packages section
+if ~isempty(notLoadedIdx)
+    fprintf('=== Other Installed Packages ===\n');
+    print_packages(notLoadedIdx, names, allPackages, versions, direct, sticky, editable, editablePaths);
+end
 
-        % Check if direct and sticky
-        isDirect = ismember(fqn, MIP_DIRECTLY_LOADED_PACKAGES);
-        isSticky = ismember(fqn, MIP_STICKY_PACKAGES);
+end
 
-        if isDirect
+
+function print_packages(idx, names, fqns, versions, direct, sticky, editable, editablePaths)
+    % Compute column widths for this section
+    maxNameLen = 0;
+    maxFqnLen = 0;
+    for i = idx
+        maxNameLen = max(maxNameLen, length(names{i}));
+        maxFqnLen = max(maxFqnLen, length(fqns{i}));
+    end
+
+    for i = idx
+        if direct(i)
             prefix = ' *';
         else
             prefix = '  ';
         end
 
-        pkgLine = sprintf('%s %s (%s)', prefix, fqn, version);
+        line = sprintf('%s %-*s  %-*s  %s', prefix, maxNameLen, names{i}, ...
+            maxFqnLen, fqns{i}, versions{i});
 
-        if isSticky
-            pkgLine = sprintf('%s [sticky]', pkgLine);
+        if sticky(i)
+            line = sprintf('%s [sticky]', line);
         end
 
-        % Show editable/local status
-        try
-            if isfield(pkgInfo, 'editable') && pkgInfo.editable
-                pkgLine = sprintf('%s [editable: %s]', pkgLine, pkgInfo.source_path);
-            elseif isfield(pkgInfo, 'install_type') && strcmp(pkgInfo.install_type, 'local')
-                pkgLine = sprintf('%s [local]', pkgLine);
-            end
-        catch
+        if editable(i)
+            line = sprintf('%s [editable: %s]', line, editablePaths{i});
         end
 
-        fprintf('%s\n', pkgLine);
+        fprintf('%s\n', line);
     end
-    fprintf('\n');
-end
-
-% Display not loaded packages section
-if ~isempty(notLoadedPackages)
-    fprintf('=== Other Installed Packages ===\n');
-    for i = 1:length(notLoadedPackages)
-        fqn = notLoadedPackages{i};
-        result = mip.utils.parse_package_arg(fqn);
-        pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
-
-        % Try to read version from mip.json
-        version = 'unknown';
-        installSuffix = '';
-        try
-            pkgInfo = mip.utils.read_package_json(pkgDir);
-            if isfield(pkgInfo, 'version')
-                version = pkgInfo.version;
-            end
-            if isfield(pkgInfo, 'editable') && pkgInfo.editable
-                installSuffix = sprintf(' [editable: %s]', pkgInfo.source_path);
-            elseif isfield(pkgInfo, 'install_type') && strcmp(pkgInfo.install_type, 'local')
-                installSuffix = ' [local]';
-            end
-        catch
-        end
-
-        fprintf('   %s (%s)%s\n', fqn, version, installSuffix);
-    end
-end
-
 end

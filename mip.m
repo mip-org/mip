@@ -9,7 +9,8 @@ function varargout = mip(command, varargin)
 %   mip update <package> [...]               - Update one or more packages
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
-%   mip list                                 - List installed packages
+%   mip list                                 - List installed packages (reverse load order)
+%   mip list --sort-by-name                   - List installed packages (alphabetical)
 %   mip load <package> [--sticky]            - Load a package into MATLAB path
 %   mip unload <package>                     - Unload a package from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
@@ -71,7 +72,7 @@ switch command
         mip.uninstall(varargin{:});
 
     case 'list'
-        mip.list();
+        mip.list(varargin{:});
 
     case 'load'
         if nargin < 2
