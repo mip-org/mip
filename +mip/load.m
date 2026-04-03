@@ -21,7 +21,6 @@ function load(varargin)
     installIfMissing = false;
     stickyPackage = false;
     packageArgs = {};
-    internalArgs = {};
     for i = 1:length(varargin)
         arg = varargin{i};
         if ischar(arg) && strcmp(arg, '--install')
@@ -30,8 +29,6 @@ function load(varargin)
             stickyPackage = true;
         elseif ischar(arg) && ~startsWith(arg, '--')
             packageArgs{end+1} = arg; %#ok<*AGROW>
-        else
-            internalArgs{end+1} = arg; %#ok<*AGROW>
         end
     end
 
@@ -39,23 +36,14 @@ function load(varargin)
         error('mip:noPackage', 'No package specified for load command.');
     end
 
-    % If multiple packages, load each one sequentially
-    if length(packageArgs) > 1
-        for i = 1:length(packageArgs)
-            args = {packageArgs{i}};
-            if installIfMissing
-                args{end+1} = '--install';
-            end
-            if stickyPackage
-                args{end+1} = '--sticky';
-            end
-            mip.load(args{:});
-        end
-        return
+    % Load each package
+    for i = 1:length(packageArgs)
+        loadSingle(packageArgs{i}, installIfMissing, stickyPackage, true, {});
     end
+end
 
-    packageArg = packageArgs{1};
-    remainingArgs = internalArgs;
+function loadSingle(packageArg, installIfMissing, stickyPackage, isDirect, loadingStack)
+% Load a single package (and its dependencies recursively).
 
     % Resolve the FQN for this package, installing first if requested
     try
@@ -75,14 +63,6 @@ function load(varargin)
         fprintf('Package "mip" is always loaded\n');
         return
     end
-
-    % Parse optional arguments for internal use
-    p = inputParser;
-    addParameter(p, 'loadingStack', {}, @iscell);
-    addParameter(p, 'isDirect', true, @islogical);
-    parse(p, remainingArgs{:});
-    loadingStack = p.Results.loadingStack;
-    isDirect = p.Results.isDirect;
 
     % Check for circular dependencies
     if ismember(fqn, loadingStack)
@@ -147,7 +127,7 @@ function load(varargin)
                     % Resolve dependency: same channel first, then core
                     depFqn = resolveDependency(dep, result.org, result.channel);
                     if ~mip.utils.is_loaded(depFqn)
-                        mip.load(depFqn, 'loadingStack', loadingStack, 'isDirect', false);
+                        loadSingle(depFqn, installIfMissing, false, false, loadingStack);
                     else
                         fprintf('  Dependency "%s" is already loaded\n', depFqn);
                     end
