@@ -165,5 +165,32 @@ classdef TestLocalInstall < matlab.unittest.TestCase
                 'mip:dependencyNotFound');
         end
 
+        function testInstallLocal_ShowsLoadHintWithBareName(testCase)
+            % When no other package shares the name, hint uses bare name
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            output = evalc('mip.utils.install_local(srcDir, true)');
+            testCase.verifyTrue(contains(output, 'mip load mypkg'), ...
+                'Should show bare name in load hint when name is unique');
+            testCase.verifyFalse(contains(output, 'mip load local/local/mypkg'), ...
+                'Should not show FQN when name is unique');
+        end
+
+        function testInstallLocal_ShowsLoadHintWithFQN(testCase)
+            % When another package with the same name exists, hint uses FQN
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            output = evalc('mip.utils.install_local(srcDir, true)');
+            testCase.verifyTrue(contains(output, 'mip load local/local/mypkg'), ...
+                'Should show FQN in load hint when name is not unique');
+        end
+
+        function testInstallLocal_HintSectionPresent(testCase)
+            % Verify the hint section header is present
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            output = evalc('mip.utils.install_local(srcDir, true)');
+            testCase.verifyTrue(contains(output, 'To use this package, run:'), ...
+                'Should show hint section header after install');
+        end
+
     end
 end
