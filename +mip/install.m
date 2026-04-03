@@ -49,16 +49,12 @@ function install(varargin)
     end
 
     % Check if any argument is a local directory with mip.yaml
-    % Only treat as local path if it looks like one (contains separator,
-    % starts with '.' or '~'), not for bare package names or FQNs
     for i = 1:length(args)
         pkg = args{i};
-        looksLikePath = startsWith(pkg, '.') || startsWith(pkg, '~') || ...
-                        startsWith(pkg, '/') || startsWith(pkg, '\') || ...
-                        contains(pkg, [filesep filesep]);
-        if looksLikePath && exist(pkg, 'dir')
+        % Resolve '.' and relative paths
+        if isfolder(pkg)
             mipYamlPath = fullfile(pkg, 'mip.yaml');
-            if exist(mipYamlPath, 'file')
+            if isfile(mipYamlPath)
                 mip.utils.install_local(pkg, editable);
                 return;
             else
