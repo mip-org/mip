@@ -93,6 +93,9 @@ end
 
 function installEditable(sourceDir, mipConfig, pkgDir, fqn)
 % Editable install: create thin wrapper pointing to original source.
+% Unlike installCopy, this intentionally skips prepare_package (and
+% therefore skips MEX binary stripping and compilation) because the
+% install references the user's source directory directly.
 
     fprintf('Installing "%s" in editable mode...\n', fqn);
 
