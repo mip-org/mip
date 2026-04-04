@@ -63,11 +63,12 @@ classdef TestInfoPackage < matlab.unittest.TestCase
                 'Path should point into test root');
         end
 
-        function testInfoShowsNotInstalled(testCase)
-            % Package not installed — should show "Not installed"
-            output = evalc('try; mip.info(''mip-org/core/nonexistent''); catch; end');
+        function testInfoShowsNotInstalledWhenRemoteExists(testCase)
+            % Package not installed locally but exists in a remote channel
+            % should show "Not installed" in the local section (not error).
+            output = evalc('try; mip.info(''mip-org/test-channel1/alpha''); catch; end');
             testCase.verifyTrue(contains(output, 'Not installed'), ...
-                'Info should indicate package is not installed');
+                'Info should indicate package is not installed locally');
         end
 
         function testInfoShowsLoadedStatus(testCase)
@@ -170,6 +171,26 @@ classdef TestInfoPackage < matlab.unittest.TestCase
             output = evalc('try; mip.info(''mip-org/core/mypkg''); catch; end');
             testCase.verifyTrue(contains(output, 'Remote Channel'), ...
                 'Info should have a Remote Channel section');
+        end
+
+        %% --- Unknown package error ---
+
+        function testInfoErrorsForUnknownPackage(testCase)
+            % A package that is not installed and not in any channel should
+            % throw an error.
+            testCase.verifyError(@() mip.info('nonexistent_pkg_xyz'), ...
+                'mip:unknownPackage');
+        end
+
+        function testInfoErrorsForUnknownFQN(testCase)
+            testCase.verifyError(@() mip.info('mip-org/core/nonexistent_pkg_xyz'), ...
+                'mip:unknownPackage');
+        end
+
+        function testInfoErrorsForUnknownPackageInChannel(testCase)
+            testCase.verifyError( ...
+                @() mip.info('--channel', 'mip-org/test-channel1', 'nonexistent_pkg_xyz'), ...
+                'mip:unknownPackage');
         end
 
     end

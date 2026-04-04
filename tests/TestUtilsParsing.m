@@ -58,6 +58,28 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 'mip:invalidPackageSpec');
         end
 
+        function testParseRejectsDot(testCase)
+            testCase.verifyError(@() mip.utils.parse_package_arg('.'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseRejectsDoubleDot(testCase)
+            testCase.verifyError(@() mip.utils.parse_package_arg('..'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseRejectsSpecialChars(testCase)
+            testCase.verifyError(@() mip.utils.parse_package_arg('pkg name'), ...
+                'mip:invalidPackageSpec');
+            testCase.verifyError(@() mip.utils.parse_package_arg('pkg!'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseAcceptsDotInName(testCase)
+            r = mip.utils.parse_package_arg('.github');
+            testCase.verifyEqual(r.name, '.github');
+        end
+
         %% parse_channel_spec tests
 
         function testParseChannelEmpty(testCase)

@@ -56,6 +56,47 @@ else
     installedFqns = mip.utils.find_all_installed_by_name(packageName);
 end
 
+% ---- Collect channels to query ----
+
+channelsToQuery = {[org '/' channelName]};
+for i = 1:length(installedFqns)
+    r = mip.utils.parse_package_arg(installedFqns{i});
+    ch = [r.org '/' r.channel];
+    % Skip local/local — no remote index for local installs
+    if strcmp(ch, 'local/local')
+        continue
+    end
+    if ~ismember(ch, channelsToQuery)
+        channelsToQuery{end+1} = ch; %#ok<AGROW>
+    end
+end
+
+% ---- Pre-fetch remote indexes ----
+
+remoteIndexes = cell(size(channelsToQuery));
+for i = 1:length(channelsToQuery)
+    remoteIndexes{i} = fetchRemoteIndex(channelsToQuery{i});
+end
+
+% Check if package exists in any remote channel
+foundRemote = false;
+for i = 1:length(remoteIndexes)
+    if ~isempty(remoteIndexes{i}) && packageInIndex(remoteIndexes{i}, packageName)
+        foundRemote = true;
+        break
+    end
+end
+
+% If the package is not installed locally and not in any remote channel,
+% error before printing anything.
+if isempty(installedFqns) && ~foundRemote
+    error('mip:unknownPackage', ...
+        'Unknown package "%s" in channel "%s".', ...
+        packageName, strjoin(channelsToQuery, '", "'));
+end
+
+% ---- Section 1: Local installation(s) ----
+
 fprintf('\n');
 
 if ~isempty(installedFqns)
@@ -71,23 +112,8 @@ end
 
 % ---- Section 2: Remote channel info ----
 
-% Collect channels to query: the specified channel + any channels where
-% the package is installed locally (to show remote info for those too).
-channelsToQuery = {[org '/' channelName]};
-for i = 1:length(installedFqns)
-    r = mip.utils.parse_package_arg(installedFqns{i});
-    ch = [r.org '/' r.channel];
-    % Skip local/local — no remote index for local installs
-    if strcmp(ch, 'local/local')
-        continue
-    end
-    if ~ismember(ch, channelsToQuery)
-        channelsToQuery{end+1} = ch; %#ok<AGROW>
-    end
-end
-
 for i = 1:length(channelsToQuery)
-    showRemoteChannelInfo(channelsToQuery{i}, packageName);
+    showRemoteChannelInfo(channelsToQuery{i}, packageName, remoteIndexes{i});
 end
 
 end
@@ -148,13 +174,8 @@ function showLocalInstallInfo(fqn)
 end
 
 
-function showRemoteChannelInfo(channelStr, packageName)
-% Fetch and display remote channel info for a package.
-
-    [chOrg, chName] = mip.utils.parse_channel_spec(channelStr);
-
-    fprintf('=== Remote Channel: %s/%s ===\n\n', chOrg, chName);
-
+function index = fetchRemoteIndex(channelStr)
+% Fetch the remote index for a channel. Returns [] on failure.
     try
         indexUrl = mip.index(channelStr);
         tempFile = [tempname, '.json'];
@@ -162,8 +183,39 @@ function showRemoteChannelInfo(channelStr, packageName)
         indexJson = fileread(tempFile);
         delete(tempFile);
         index = jsondecode(indexJson);
-    catch ME
-        fprintf('  Could not fetch index: %s\n\n', ME.message);
+    catch
+        index = [];
+    end
+end
+
+
+function found = packageInIndex(index, packageName)
+% Check if a package exists in a pre-fetched index.
+    found = false;
+    packages = index.packages;
+    for i = 1:length(packages)
+        if iscell(packages)
+            pkg = packages{i};
+        else
+            pkg = packages(i);
+        end
+        if isstruct(pkg) && strcmp(pkg.name, packageName)
+            found = true;
+            return
+        end
+    end
+end
+
+
+function showRemoteChannelInfo(channelStr, packageName, index)
+% Display remote channel info for a package using a pre-fetched index.
+
+    [chOrg, chName] = mip.utils.parse_channel_spec(channelStr);
+
+    fprintf('=== Remote Channel: %s/%s ===\n\n', chOrg, chName);
+
+    if isempty(index)
+        fprintf('  Could not fetch index.\n\n');
         return
     end
 

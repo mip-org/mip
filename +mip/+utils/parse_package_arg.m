@@ -55,6 +55,18 @@ else
           'Invalid package spec "%s". Use "package[@version]" or "org/channel/package[@version]".', arg);
 end
 
+% Validate components: alphanumeric, hyphens, underscores, periods.
+% Reject '.' and '..' which are reserved filesystem names.
+validName = @(s) ~isempty(regexp(s, '^[-a-zA-Z0-9_.]+$', 'once')) && ...
+                  ~strcmp(s, '.') && ~strcmp(s, '..');
+allParts = {result.name, result.org, result.channel};
+for k = 1:length(allParts)
+    if ~isempty(allParts{k}) && ~validName(allParts{k})
+        error('mip:invalidPackageSpec', ...
+              'Invalid package spec "%s".', arg);
+    end
+end
+
 result.version = requestedVersion;
 
 end
