@@ -65,21 +65,25 @@ if isfield(pkgInfo, 'compile_script') && ~isempty(pkgInfo.compile_script)
     end
 else
     % Try reading compile_script from mip.yaml in source or package dir
-    compileDir = pkgDir;
+    yamlSearchDir = pkgDir;
     if isfield(pkgInfo, 'source_path') && ~isempty(pkgInfo.source_path) ...
             && isfolder(pkgInfo.source_path)
-        compileDir = pkgInfo.source_path;
+        yamlSearchDir = pkgInfo.source_path;
     end
 
-    mipYamlPath = fullfile(compileDir, 'mip.yaml');
+    mipYamlPath = fullfile(yamlSearchDir, 'mip.yaml');
     if isfile(mipYamlPath)
-        mipConfig = mip.utils.read_mip_yaml(compileDir);
+        mipConfig = mip.utils.read_mip_yaml(yamlSearchDir);
         [buildEntry, ~] = mip.build.match_build(mipConfig);
         resolvedConfig = mip.build.resolve_build_config(mipConfig, buildEntry);
         if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
             compileScript = resolvedConfig.compile_script;
         end
     end
+
+    % Non-editable installs compile in the package subdirectory
+    % (prepare_package copies source into pkgDir/<package_name>/)
+    compileDir = fullfile(pkgDir, pkgInfo.name);
 end
 
 if isempty(compileScript)

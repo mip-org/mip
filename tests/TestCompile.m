@@ -157,11 +157,47 @@ classdef TestCompile < matlab.unittest.TestCase
                 'mip:compile:noCompileScript');
         end
 
+        %% --- mip compile on non-editable local install ---
+
+        function testCompile_NonEditableCompilesInPkgDir(testCase)
+            % mip compile on a non-editable local install should compile
+            % in the installed package directory, not the source directory.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'compile_script', 'do_compile.m');
+            mip.utils.install_local(srcDir, false);
+
+            % Source lives under pkgDir/mypkg/ for non-editable installs
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            pkgSubdir = fullfile(pkgDir, 'mypkg');
+
+            % prepare_package compiled during install; remove the marker
+            delete(fullfile(pkgSubdir, '.compiled'));
+            testCase.assertFalse(isfile(fullfile(pkgSubdir, '.compiled')));
+            testCase.assertFalse(isfile(fullfile(srcDir, '.compiled')));
+
+            % Run mip compile — should compile in pkgSubdir, not srcDir
+            mip.compile('mypkg');
+
+            testCase.verifyTrue(isfile(fullfile(pkgSubdir, '.compiled')), ...
+                'mip compile should create .compiled in the installed package directory');
+            testCase.verifyFalse(isfile(fullfile(srcDir, '.compiled')), ...
+                'mip compile should not compile in the source directory');
+        end
+
         %% --- --no-compile flag validation ---
 
         function testInstall_NoCompileWithoutEditableErrors(testCase)
             testCase.verifyError( ...
                 @() mip.install('somepkg', '--no-compile'), ...
+                'mip:install:noCompileRequiresEditable');
+        end
+
+        function testInstall_NoCompileLocalWithoutEditableErrors(testCase)
+            % --no-compile on a local directory without --editable should error
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'compile_script', 'do_compile.m');
+            testCase.verifyError( ...
+                @() mip.install(srcDir, '--no-compile'), ...
                 'mip:install:noCompileRequiresEditable');
         end
 

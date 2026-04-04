@@ -47,6 +47,11 @@ function install(varargin)
         end
     end
 
+    if noCompile && ~editable
+        error('mip:install:noCompileRequiresEditable', ...
+              '--no-compile can only be used with --editable local installs.');
+    end
+
     [channel, args] = mip.utils.parse_channel_flag(filteredArgs);
 
     if isempty(args)
@@ -72,11 +77,6 @@ function install(varargin)
     if editable
         error('mip:install:editableRequiresLocal', ...
               '--editable can only be used with local directory packages.');
-    end
-
-    if noCompile
-        error('mip:install:noCompileRequiresEditable', ...
-              '--no-compile can only be used with --editable local installs.');
     end
 
     packageNames = args;

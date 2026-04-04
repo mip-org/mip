@@ -131,9 +131,12 @@ function installCopy(sourceDir, pkgDir, fqn)
         fprintf('Install complete.\n');
 
     catch ME
-        % Clean up staging dir on failure
+        % Clean up on failure (stagingDir if before movefile, pkgDir if after)
         if exist(stagingDir, 'dir')
             rmdir(stagingDir, 's');
+        end
+        if exist(pkgDir, 'dir')
+            rmdir(pkgDir, 's');
         end
         rethrow(ME);
     end
