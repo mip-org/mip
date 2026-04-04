@@ -1,5 +1,5 @@
-classdef TestLocalInstall < matlab.unittest.TestCase
-%TESTLOCALINSTALL   Tests for mip.utils.install_local (editable and copy).
+classdef TestInstallLocal < matlab.unittest.TestCase
+%TESTINSTALLLOCAL   Tests for mip.install with local directories (editable and copy).
 
     properties
         OrigMipRoot
@@ -39,7 +39,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_CreatesPackageDir(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
@@ -48,7 +48,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_CreatesMipJson(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(fullfile(pkgDir, 'mip.json'), 'file') > 0);
@@ -60,7 +60,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_CreatesLoadScript(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(fullfile(pkgDir, 'load_package.m'), 'file') > 0);
@@ -68,7 +68,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_CreatesUnloadScript(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(fullfile(pkgDir, 'unload_package.m'), 'file') > 0);
@@ -76,7 +76,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_MarkedAsDirectlyInstalled(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgs = mip.utils.get_directly_installed();
             testCase.verifyTrue(ismember('local/local/mypkg', pkgs));
@@ -84,7 +84,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_LoadScriptUsesAbsolutePaths(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             loadScript = fileread(fullfile(pkgDir, 'load_package.m'));
@@ -95,7 +95,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_MipJsonHasSourcePath(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             info = mip.utils.read_package_json(pkgDir);
@@ -105,7 +105,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_UsesLocalLocalChannel(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgs = mip.utils.list_installed_packages();
             testCase.verifyTrue(ismember('local/local/mypkg', pkgs));
@@ -113,14 +113,14 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testEditableInstall_AlreadyInstalled(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
             % Second install should print message but not error
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
         end
 
         function testCopyInstall_CreatesPackageDir(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, false);
+            mip.install(srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
@@ -128,7 +128,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testCopyInstall_CreatesMipJson(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, false);
+            mip.install(srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             info = mip.utils.read_package_json(pkgDir);
@@ -137,7 +137,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
         function testCopyInstall_LoadScriptUsesRelativePaths(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, false);
+            mip.install(srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             loadScript = fileread(fullfile(pkgDir, 'load_package.m'));
@@ -152,7 +152,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
 
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'depA'});
-            mip.utils.install_local(srcDir, true);
+            mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
@@ -161,14 +161,14 @@ classdef TestLocalInstall < matlab.unittest.TestCase
         function testInstallLocal_MissingDependencyErrors(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'nonexistent_dep'});
-            testCase.verifyError(@() mip.utils.install_local(srcDir, true), ...
+            testCase.verifyError(@() mip.install('-e', srcDir), ...
                 'mip:dependencyNotFound');
         end
 
         function testInstallLocal_ShowsLoadHintWithBareName(testCase)
             % When no other package shares the name, hint uses bare name
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            output = evalc('mip.utils.install_local(srcDir, true)');
+            output = evalc('mip.install(''-e'', srcDir)');
             testCase.verifyTrue(contains(output, 'mip load mypkg'), ...
                 'Should show bare name in load hint when name is unique');
             testCase.verifyFalse(contains(output, 'mip load local/local/mypkg'), ...
@@ -179,7 +179,7 @@ classdef TestLocalInstall < matlab.unittest.TestCase
             % When another package with the same name exists, hint uses FQN
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            output = evalc('mip.utils.install_local(srcDir, true)');
+            output = evalc('mip.install(''-e'', srcDir)');
             testCase.verifyTrue(contains(output, 'mip load local/local/mypkg'), ...
                 'Should show FQN in load hint when name is not unique');
         end
@@ -187,9 +187,31 @@ classdef TestLocalInstall < matlab.unittest.TestCase
         function testInstallLocal_HintSectionPresent(testCase)
             % Verify the hint section header is present
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            output = evalc('mip.utils.install_local(srcDir, true)');
+            output = evalc('mip.install(''-e'', srcDir)');
             testCase.verifyTrue(contains(output, 'To use this package, run:'), ...
                 'Should show hint section header after install');
+        end
+
+        function testCopyInstall_StoresSourcePath(testCase)
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            mip.install(srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            info = mip.utils.read_package_json(pkgDir);
+            testCase.verifyTrue(isfield(info, 'source_path'), ...
+                'Non-editable local install should store source_path in mip.json');
+            testCase.verifyTrue(contains(info.source_path, testCase.SourceDir), ...
+                'source_path should point to original source directory');
+        end
+
+        function testEditableInstall_StoresSourcePath(testCase)
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            mip.install('-e', srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            info = mip.utils.read_package_json(pkgDir);
+            testCase.verifyTrue(isfield(info, 'source_path'));
+            testCase.verifyTrue(contains(info.source_path, testCase.SourceDir));
         end
 
     end

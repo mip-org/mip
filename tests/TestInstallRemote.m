@@ -1,5 +1,5 @@
-classdef TestChannelInstall < matlab.unittest.TestCase
-%TESTCHANNELINSTALL   Integration tests for installing/loading packages
+classdef TestInstallRemote < matlab.unittest.TestCase
+%TESTINSTALLREMOTE   Integration tests for installing/loading packages
 %   from remote channels (test-channel1, test-channel2).
 %
 %   These tests require network access to GitHub Pages.

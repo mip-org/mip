@@ -69,11 +69,12 @@ if isfield(opts, 'commit_hash') && ~isempty(opts.commit_hash)
     mipData.commit_hash = opts.commit_hash;
 end
 
+if isfield(opts, 'source_path') && ~isempty(opts.source_path)
+    mipData.source_path = opts.source_path;
+end
+
 if isfield(opts, 'editable') && opts.editable
     mipData.editable = true;
-    if isfield(opts, 'source_path')
-        mipData.source_path = opts.source_path;
-    end
 end
 
 jsonText = jsonencode(mipData);

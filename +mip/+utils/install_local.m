@@ -109,6 +109,19 @@ function installCopy(sourceDir, pkgDir, fqn)
 
         % Move staging dir to final location
         movefile(stagingDir, pkgDir);
+
+        % Store source_path in mip.json for update tracking
+        mipJsonPath = fullfile(pkgDir, 'mip.json');
+        jsonText = fileread(mipJsonPath);
+        mipData = jsondecode(jsonText);
+        mipData.source_path = sourceDir;
+        fid = fopen(mipJsonPath, 'w');
+        if fid == -1
+            error('mip:fileError', 'Could not write to mip.json at %s', mipJsonPath);
+        end
+        fwrite(fid, jsonencode(mipData));
+        fclose(fid);
+
         fprintf('Install complete.\n');
 
     catch ME
