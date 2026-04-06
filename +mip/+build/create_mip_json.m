@@ -81,6 +81,10 @@ if isfield(opts, 'compile_script') && ~isempty(opts.compile_script)
     mipData.compile_script = opts.compile_script;
 end
 
+if isfield(opts, 'test_script') && ~isempty(opts.test_script)
+    mipData.test_script = opts.test_script;
+end
+
 jsonText = jsonencode(mipData);
 mipJsonPath = fullfile(outputDir, 'mip.json');
 fid = fopen(mipJsonPath, 'w');

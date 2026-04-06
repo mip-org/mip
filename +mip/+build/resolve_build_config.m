@@ -14,7 +14,7 @@ function resolved = resolve_build_config(mipConfig, buildEntry)
 resolved = struct();
 
 % Top-level defaults
-mergeFields = {'addpaths', 'compile_script', 'release_number', 'build_on'};
+mergeFields = {'addpaths', 'compile_script', 'test_script', 'release_number', 'build_on'};
 for i = 1:length(mergeFields)
     key = mergeFields{i};
     if isfield(mipConfig, key)

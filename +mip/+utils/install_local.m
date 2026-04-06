@@ -186,10 +186,19 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
         compileScript = resolvedConfig.compile_script;
     end
 
-    % Create mip.json (include compile_script for mip compile)
+    % Determine test_script
+    testScript = '';
+    if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
+        testScript = resolvedConfig.test_script;
+    end
+
+    % Create mip.json (include compile_script and test_script)
     jsonOpts = struct('editable', true, 'source_path', sourceDir);
     if ~isempty(compileScript)
         jsonOpts.compile_script = compileScript;
+    end
+    if ~isempty(testScript)
+        jsonOpts.test_script = testScript;
     end
     mip.build.create_mip_json(pkgDir, mipConfig, resolvedConfig, effectiveArch, jsonOpts);
 

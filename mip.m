@@ -23,6 +23,7 @@ function varargout = mip(command, varargin)
 %   mip avail --channel dev                  - List packages from a specific channel
 %   mip index                                - Display the mip package index URL
 %   mip version                              - Display mip version
+%   mip test <package>                         - Run package test script
 %   mip compile <package>                     - Compile/recompile MEX files
 %   mip bundle <directory> [--output <dir>]   - Build .mhl from local package
 %   mip help [command]                       - Show help text for command
@@ -94,6 +95,12 @@ switch command
             error('mip:noPackage', 'No package specified for info command.');
         end
         mip.info(varargin{:});
+
+    case 'test'
+        if nargin < 2
+            error('mip:noPackage', 'Package name is required for test command.');
+        end
+        mip.test(varargin{:});
 
     case 'compile'
         if nargin < 2
