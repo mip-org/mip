@@ -103,6 +103,12 @@ if exist(commitHashFile, 'file')
     fclose(fid);
     delete(commitHashFile);
 end
+if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
+    jsonOpts.test_script = resolvedConfig.test_script;
+end
+if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
+    jsonOpts.compile_script = resolvedConfig.compile_script;
+end
 mip.build.create_mip_json(stagingDir, mipConfig, resolvedConfig, effectiveArch, jsonOpts);
 
 end
