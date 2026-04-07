@@ -26,6 +26,7 @@ function varargout = mip(command, varargin)
 %   mip test <package>                       - Run package test script
 %   mip compile <package>                    - Compile/recompile MEX files
 %   mip bundle <directory> [--output <dir>]  - Build .mhl from local package
+%   mip reset                                - Reset mip to a clean state
 %   mip help [command]                       - Show help text for command
 %
 % Channels:
@@ -113,6 +114,9 @@ switch command
             error('mip:noDirectory', 'A directory path is required for bundle command.');
         end
         mip.bundle(varargin{:});
+
+    case 'reset'
+        mip.reset();
 
     case 'avail'
         mip.avail(varargin{:});
