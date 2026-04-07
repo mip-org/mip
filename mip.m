@@ -23,9 +23,9 @@ function varargout = mip(command, varargin)
 %   mip avail --channel dev                  - List packages from a specific channel
 %   mip index                                - Display the mip package index URL
 %   mip version                              - Display mip version
-%   mip test <package>                         - Run package test script
-%   mip compile <package>                     - Compile/recompile MEX files
-%   mip bundle <directory> [--output <dir>]   - Build .mhl from local package
+%   mip test <package>                       - Run package test script
+%   mip compile <package>                    - Compile/recompile MEX files
+%   mip bundle <directory> [--output <dir>]  - Build .mhl from local package
 %   mip help [command]                       - Show help text for command
 %
 % Channels:
