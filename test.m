@@ -6,7 +6,6 @@ scriptDir = fileparts(mfilename('fullpath'));
 testsDir = fullfile(scriptDir, 'tests');
 
 addpath(testsDir);
-cleanupObj = onCleanup(@() rmpath(testsDir));
 
 results = run_tests();
 
