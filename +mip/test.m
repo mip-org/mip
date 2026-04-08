@@ -114,6 +114,27 @@ try
     run(testScript);
 catch ME
     cd(originalDir);
+    % Print the original error's stack so failures inside the test script
+    % aren't hidden behind the mip:test:failed wrapper below.
+    fprintf(2, '\nError inside test script for "%s":\n', fqn);
+    fprintf(2, '  %s\n', ME.message);
+    if ~isempty(ME.identifier)
+        fprintf(2, '  (identifier: %s)\n', ME.identifier);
+    end
+    % ME.stack is a struct array (may be empty).  Accessing it works on
+    % both numbl's wrapped struct and MATLAB's MException object.
+    if ~isempty(ME.stack)
+        fprintf(2, 'Call stack (most recent call first):\n');
+        for k = 1:numel(ME.stack)
+            frame = ME.stack(k);
+            if ~isempty(frame.name)
+                fprintf(2, '  at %s (%s:%d)\n', frame.name, frame.file, frame.line);
+            else
+                fprintf(2, '  at %s:%d\n', frame.file, frame.line);
+            end
+        end
+    end
+    fprintf(2, '\n');
     error('mip:test:failed', ...
           'Test failed for "%s": %s', fqn, ME.message);
 end
