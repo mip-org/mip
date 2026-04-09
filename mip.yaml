@@ -9,7 +9,7 @@ dependencies: []
 addpaths:
   - path: "."
 
-test_script: test.m
+test_script: test_mip.m
 
 builds:
   - architectures: [any]
