@@ -166,6 +166,20 @@ Used by: `mip install` for remote packages
 
 ## 3. Installation
 
+### 3.0 Argument Categorization
+
+`mip install` accepts a mix of argument types in a single call. Each positional argument is categorized **before** any installation work happens:
+
+1. If the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
+2. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
+3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`org/channel/pkg`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
+
+This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
+
+If a channel install fails (e.g. `mip:packageNotFound`, `mip:indexFetchFailed`) and one of the requested names also exists as a relative directory in the current folder, the error message is augmented with a hint about prefixing with `./` so the user knows how to install it as a local package instead.
+
+The `--editable` / `-e` flag is only valid when at least one local path is present in the argument list. Using `-e` with only bare-name or FQN arguments raises `mip:install:editableRequiresLocal`.
+
 ### 3.1 Remote Installation (`mip install <package>`)
 
 #### 3.1.1 Channel Resolution
@@ -234,9 +248,14 @@ If a package is already installed, `mip install` prints a message and skips it. 
 
 `mip install pkg1 pkg2 pkg3` installs all listed packages and their combined dependencies in a single operation.
 
-### 3.2 Local Installation (`mip install <directory>`)
+### 3.2 Local Installation
 
-A directory argument is detected by checking `isfolder()`. The directory must contain a `mip.yaml` file, otherwise `mip:install:noMipYaml` is raised.
+An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory containing a `mip.yaml` file:
+
+- If the path is not a directory, raises `mip:install:notADirectory`.
+- If the directory does not contain `mip.yaml`, raises `mip:install:noMipYaml`.
+
+Bare names without a path prefix are **never** dispatched to local install, even if a directory of the same name exists in the current folder ([§3.0](#30-argument-categorization), [#107](https://github.com/mip-org/mip/issues/107)).
 
 #### 3.2.1 Non-Editable (Copy) Install
 

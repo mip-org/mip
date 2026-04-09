@@ -380,6 +380,67 @@ classdef TestInstallRemote < matlab.unittest.TestCase
                 'FQN beta should be installed from its own channel');
         end
 
+        %% --- Bare-name vs local directory dispatch (issue #107) ---
+
+        function testInstall_BareNamePrefersChannelOverLocalDir(testCase)
+            % If a directory with the same name exists in the cwd, a bare
+            % name should still install from the channel -- not as a local
+            % directory install.
+            scratch = [tempname '_mip_cwd'];
+            mkdir(scratch);
+            cleanupScratch = onCleanup(@() rmdir(scratch, 's'));
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(scratch);
+
+            % Create a local 'alpha/' directory with a valid mip.yaml that
+            % would otherwise have been picked up by the old behavior.
+            localAlpha = fullfile(scratch, 'alpha');
+            mkdir(localAlpha);
+            fid = fopen(fullfile(localAlpha, 'mip.yaml'), 'w');
+            fprintf(fid, 'name: alpha\nversion: "9.9.9"\naddpaths:\n  - path: "."\nbuilds:\n  - architectures: [any]\n');
+            fclose(fid);
+
+            mip.install('--channel', 'mip-org/test-channel1', 'alpha');
+
+            channelDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'alpha');
+            localPkgDir = fullfile(testCase.TestRoot, 'packages', ...
+                'local', 'local', 'alpha');
+
+            testCase.verifyTrue(exist(channelDir, 'dir') > 0, ...
+                'alpha should be installed from test-channel1');
+            testCase.verifyFalse(exist(localPkgDir, 'dir') > 0, ...
+                'alpha should NOT be installed as a local package');
+
+            % Keep cleanup objects alive until end of test
+            assert(isobject(cleanupScratch) && isobject(cleanupCwd));
+        end
+
+        function testInstall_BareNameFailureMentionsLocalDirHint(testCase)
+            % If the channel install fails AND a directory with the bare
+            % name exists in cwd, the error message should hint at './name'.
+            scratch = [tempname '_mip_cwd'];
+            mkdir(scratch);
+            cleanupScratch = onCleanup(@() rmdir(scratch, 's'));
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(scratch);
+
+            % Create a local 'no_such_pkg_xyz/' directory in cwd
+            mkdir(fullfile(scratch, 'no_such_pkg_xyz'));
+
+            try
+                mip.install('no_such_pkg_xyz');
+                testCase.verifyFail('Expected mip.install to fail');
+            catch ME
+                testCase.verifyTrue(contains(ME.message, './no_such_pkg_xyz'), ...
+                    'Error message should hint at ./no_such_pkg_xyz');
+            end
+
+            assert(isobject(cleanupScratch) && isobject(cleanupCwd));
+        end
+
     end
 
 end

@@ -214,5 +214,78 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             testCase.verifyTrue(contains(info.source_path, testCase.SourceDir));
         end
 
+        %% --- Path-vs-name dispatch (issue #107) ---
+
+        function testInstall_TwoPartSpecRaisesInvalidPackageSpec(testCase)
+            % "foo/bar" is neither a bare name nor a FQN; it should be
+            % rejected with a parse error before any channel fetch.
+            testCase.verifyError(@() mip.install('foo/bar'), ...
+                'mip:install:invalidPackageSpec');
+        end
+
+        function testInstall_FourPartSpecRaisesInvalidPackageSpec(testCase)
+            testCase.verifyError(@() mip.install('a/b/c/d'), ...
+                'mip:install:invalidPackageSpec');
+        end
+
+        function testInstall_TwoPartSpecHintsAtSlashPrefix(testCase)
+            % The error message for an invalid spec should hint at './foo/bar'
+            % so the user knows how to install it as a local package.
+            try
+                mip.install('foo/bar');
+                testCase.verifyFail('Expected mip.install to error');
+            catch ME
+                testCase.verifyEqual(ME.identifier, 'mip:install:invalidPackageSpec');
+                testCase.verifyTrue(contains(ME.message, './foo/bar'), ...
+                    'Error message should hint at ./foo/bar');
+            end
+        end
+
+        function testInstall_RelativeDotPathInstallsLocally(testCase)
+            % A path starting with './' should be treated as a local install.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(testCase.SourceDir);
+
+            mip.install('./mypkg');
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                './mypkg should install locally');
+            testCase.verifyTrue(exist(srcDir, 'dir') > 0);
+        end
+
+        function testInstall_EditableRequiresLocalForBareName(testCase)
+            % `-e bare_name` should error since bare names are not local.
+            testCase.verifyError(@() mip.install('-e', 'somepkg'), ...
+                'mip:install:editableRequiresLocal');
+        end
+
+        function testInstall_WindowsDrivePathBackslashTreatedAsLocal(testCase)
+            % A Windows drive-letter path like 'C:\nonexistent' must be
+            % categorized as a local path, not a bare name. On non-Windows
+            % platforms it will fail with notADirectory rather than be
+            % parsed as a package spec.
+            testCase.verifyError(@() mip.install('C:\nonexistent_mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_WindowsDrivePathForwardSlashTreatedAsLocal(testCase)
+            % Forward-slash form of a Windows drive path is also accepted.
+            % Without the drive-letter rule, 'C:/foo/bar' would have 3
+            % slash-separated parts and look like a (malformed) FQN.
+            testCase.verifyError(@() mip.install('D:/nonexistent/mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_WindowsDrivePathRespectsEditableFlag(testCase)
+            % `-e C:\path` should be accepted as an editable local install
+            % attempt (and fail at the directory check, not the
+            % editableRequiresLocal check).
+            testCase.verifyError(@() mip.install('-e', 'C:\nonexistent_mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
     end
 end
