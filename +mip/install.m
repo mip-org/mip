@@ -21,10 +21,10 @@ function install(varargin)
 %   --no-compile        Skip compilation (editable installs only)
 %
 % Local packages:
-%   To install a local directory, the path must start with '~', '.', or
-%   '/' (e.g. './mypkg', '/abs/path/mypkg'). The directory must contain
-%   a mip.yaml file. In editable mode, changes to the source directory
-%   are reflected immediately without reinstalling.
+%   To install a local directory, the path must start with '~', '.', '/',
+%   or a Windows drive letter (e.g. 'C:\path\mypkg', 'C:/path/mypkg').
+%   The directory must contain a mip.yaml file. In editable mode, changes
+%   to the source directory are reflected immediately without reinstalling.
 %
 %   Bare names like 'chebfun' are always resolved against channels, even
 %   if a directory of the same name exists in the current folder. Use
@@ -65,7 +65,8 @@ function install(varargin)
 
     % Categorize each argument by how it should be installed:
     %   - mhl source   (.mhl file or http(s) URL)
-    %   - local path   (starts with ~, ., or /)
+    %   - local path   (starts with ~, ., /, or a Windows drive letter
+    %                   like C:\ or C:/)
     %   - repo package (bare name or org/channel/package FQN)
     % Anything else (e.g. 'foo/bar', 'a/b/c/d') is rejected with a hint
     % about prefixing with './' for local installs.
@@ -76,7 +77,7 @@ function install(varargin)
         pkg = char(args{i});
         if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
             mhlSources{end+1} = pkg; %#ok<*AGROW>
-        elseif startsWith(pkg, '~') || startsWith(pkg, '.') || startsWith(pkg, '/')
+        elseif isLocalPathArg(pkg)
             localPaths{end+1} = pkg;
         else
             parts = strsplit(pkg, '/');
@@ -546,6 +547,27 @@ function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChann
         unavailablePackages(chUnavailKeys{j}) = chUnavail(chUnavailKeys{j});
     end
     fetchedChannels(ch) = true;
+end
+
+function tf = isLocalPathArg(pkg)
+% Return true if pkg should be treated as a local directory path.
+% Recognizes:
+%   - POSIX-style paths starting with '~', '.', or '/'
+%   - Windows drive-letter paths like 'C:\foo' or 'C:/foo' (any letter)
+    tf = false;
+    if isempty(pkg)
+        return
+    end
+    if startsWith(pkg, '~') || startsWith(pkg, '.') || startsWith(pkg, '/')
+        tf = true;
+        return
+    end
+    % Windows drive-letter absolute path: <letter>:[\/]...
+    if length(pkg) >= 3 && isstrprop(pkg(1), 'alpha') && pkg(2) == ':' ...
+            && (pkg(3) == '\' || pkg(3) == '/')
+        tf = true;
+        return
+    end
 end
 
 function hint = buildLocalDirHint(repoPackages)

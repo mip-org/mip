@@ -262,5 +262,30 @@ classdef TestInstallLocal < matlab.unittest.TestCase
                 'mip:install:editableRequiresLocal');
         end
 
+        function testInstall_WindowsDrivePathBackslashTreatedAsLocal(testCase)
+            % A Windows drive-letter path like 'C:\nonexistent' must be
+            % categorized as a local path, not a bare name. On non-Windows
+            % platforms it will fail with notADirectory rather than be
+            % parsed as a package spec.
+            testCase.verifyError(@() mip.install('C:\nonexistent_mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_WindowsDrivePathForwardSlashTreatedAsLocal(testCase)
+            % Forward-slash form of a Windows drive path is also accepted.
+            % Without the drive-letter rule, 'C:/foo/bar' would have 3
+            % slash-separated parts and look like a (malformed) FQN.
+            testCase.verifyError(@() mip.install('D:/nonexistent/mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_WindowsDrivePathRespectsEditableFlag(testCase)
+            % `-e C:\path` should be accepted as an editable local install
+            % attempt (and fail at the directory check, not the
+            % editableRequiresLocal check).
+            testCase.verifyError(@() mip.install('-e', 'C:\nonexistent_mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
     end
 end
