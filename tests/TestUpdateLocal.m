@@ -98,6 +98,45 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
         end
 
+        function testUpdateLocalPackage_EditableRerunsCompileScript(testCase)
+            % Editable update should re-run the compile_script (issue #103).
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'compile_script', 'compile.m');
+            mip.install('-e', srcDir);
+
+            % Compile script writes a .compiled marker into the source dir
+            markerPath = fullfile(srcDir, '.compiled');
+            testCase.verifyTrue(exist(markerPath, 'file') > 0, ...
+                'compile_script should run on initial install');
+
+            % Delete the marker, then update
+            delete(markerPath);
+            testCase.verifyFalse(exist(markerPath, 'file') > 0);
+
+            mip.update('local/local/mypkg');
+
+            testCase.verifyTrue(exist(markerPath, 'file') > 0, ...
+                'compile_script should run again on update');
+        end
+
+        function testUpdateLocalPackage_NoCompileFlagNotPreserved(testCase)
+            % `mip install -e --no-compile` followed by `mip update` should
+            % run the compile_script -- the original --no-compile flag is
+            % not preserved across updates (issue #103).
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'compile_script', 'compile.m');
+            mip.install('-e', srcDir, '--no-compile');
+
+            markerPath = fullfile(srcDir, '.compiled');
+            testCase.verifyFalse(exist(markerPath, 'file') > 0, ...
+                'compile_script should NOT run with --no-compile');
+
+            mip.update('local/local/mypkg');
+
+            testCase.verifyTrue(exist(markerPath, 'file') > 0, ...
+                'compile_script should run on update even though original install used --no-compile');
+        end
+
         %% --- Load state preserved across update ---
 
         function testUpdateLocalPackage_PreservesLoadState(testCase)

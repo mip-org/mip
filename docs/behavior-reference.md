@@ -495,7 +495,7 @@ Using an FQN bypasses this check entirely.
 5. Reinstall from source (preserving editable/non-editable mode).
 6. Reload if it was previously loaded.
 
-Local updates **always** reinstall (no up-to-date check). Timestamps change on every update.
+Local updates **always** reinstall (no up-to-date check). Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. See [§14.16](#1416-mip-update-on-local-package-always-reinstalls).
 
 ### 7.3 Force Update (`--force`)
 
@@ -881,9 +881,12 @@ The following behaviors are specified in this document but not fully covered by 
 
 ### 14.16 `mip update` on Local Package Always Reinstalls
 
-**Current behavior**: `mip update local/local/pkg` always deletes and reinstalls from source, even if nothing changed. This is because there's no way to compare local state efficiently.
+**Current behavior**: `mip update local/local/pkg` always deletes and reinstalls from source, even if nothing changed (see [§7.2](#72-local-package-update)). For editable installs the `compile_script` runs again on every update.
 
-**Question**: Should there be a source hash comparison to skip unnecessary reinstalls?
+This behavior is intentional and was confirmed in [#103](https://github.com/mip-org/mip/issues/103):
+- Unconditional uninstall + reinstall is the expected semantics for `mip update` on a local package — `mip update` is the user's "rebuild from source" hammer.
+- For editable installs, recompiling is wanted: the user almost certainly edited source that needs rebuilding.
+- A future `mip update --all` should **not** include local packages.
 
 ### 14.17 `load_package.m` Error Handling
 
