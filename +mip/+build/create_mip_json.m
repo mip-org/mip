@@ -53,10 +53,6 @@ end
 
 mipData.architecture = architecture;
 
-if isfield(opts, 'cpu_level') && ~isempty(opts.cpu_level)
-    mipData.cpu_level = opts.cpu_level;
-end
-
 if isfield(opts, 'install_type')
     mipData.install_type = opts.install_type;
 else
