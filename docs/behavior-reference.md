@@ -638,7 +638,7 @@ This tracking is critical for dependency pruning: only directly installed packag
 ## 11. Filesystem Layout
 
 ```
-~/.mip/                                    # MIP_ROOT (overridable via env var)
+<mip-root>/                                # See §11.5 for resolution rules
   packages/
     directly_installed.txt                 # Persistent tracking of directly installed packages
     mip-org/
@@ -728,6 +728,15 @@ After removing a package, empty channel and org directories are cleaned up:
 - If `<org>/<channel>/` is empty after removal, remove it.
 - If `<org>/` is empty after that, remove it.
 
+### 11.5 `MIP_ROOT` Environment Variable
+
+The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.root()`](../+mip/root.m) according to these rules:
+
+- **Unset**: `mip.root()` falls back to path-based detection (navigating up from the installed `+mip/root.m` location).
+- **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.root()` makes no attempt to distinguish them.
+- **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
+- **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
+
 ---
 
 ## 12. Architecture Detection
@@ -754,6 +763,7 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | Error ID | Trigger |
 |---|---|
 | `mip:invalidPackageSpec` | Invalid package argument format or characters |
+| `mip:rootInvalid` | `MIP_ROOT` is set but path doesn't exist, isn't a directory, or has no `packages/` subdir |
 | `mip:invalidChannel` | Invalid channel spec (not `org/channel` format) |
 | `mip:missingChannelValue` | `--channel` flag without a value |
 | `mip:packageNotFound` | Package not found (not installed, or not in index) |
@@ -877,9 +887,9 @@ A potential middle ground: at install time, resolve bare-name deps using same-ch
 - The rollback prune sweep also removes any *pre-existing* orphans (packages that were already on disk but not in `directly_installed.txt`). In practice this is fine -- those should have been pruned already -- but it's a minor side effect to be aware of.
 - If `mip.utils.prune_unused_packages` itself fails, a `mip:rollbackFailed` warning is printed and the original install error is still re-raised.
 
-### 14.12 Empty `MIP_ROOT` Environment Variable
+### 14.12 `MIP_ROOT` Environment Variable Validation
 
-**Current behavior**: `MIP_ROOT` environment variable overrides the default `~/.mip` root. If it's set to an empty string, the behavior should be clarified.
+**Resolved in [#101](https://github.com/mip-org/mip/issues/101)**: See [§11.5](#115-mip_root-environment-variable) for the rules. In short: empty string is treated as unset; nonexistent paths and directories missing a `packages/` subdirectory raise `mip:rootInvalid`; `mip.root()` never auto-creates `packages/`.
 
 ### 14.13 Multiple Versions of the Same Package
 
@@ -906,7 +916,6 @@ The following behaviors are specified in this document but not fully covered by 
 - Concurrent session file state consistency
 - `mip update` with loaded dependencies
 - `mip info` with `--channel` for remote-only packages
-- Behavior when `MIP_ROOT` points to non-existent directory
 - `mip install` from URL (https://...)
 - Broken dependency warnings after prune
 
