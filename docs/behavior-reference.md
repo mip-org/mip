@@ -26,11 +26,13 @@ Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`
 
 ### 1.4 The `@version` Suffix
 
-Any package argument (bare or FQN) can include `@version` to pin a specific version:
+Any package argument passed to a `mip` command (bare or FQN) can include `@version` to pin a specific version:
 - `chebfun@1.2.0`
 - `mip-org/core/mip@main`
 
 The `@` is parsed from the last occurrence in the string. The version suffix is stripped before resolving the package identity.
+
+The `@version` suffix applies **only** to command-line package arguments. It is not supported inside the `dependencies` field of `mip.yaml` -- dependency entries are plain package names (bare or FQN) with no version or version-constraint grammar. See [§14.2](#142-no-version-constraints-on-dependencies).
 
 ### 1.5 Channels
 
@@ -493,38 +495,40 @@ Using an FQN bypasses this check entirely.
 
 ## 7. Updating
 
-### 7.1 Remote Package Update (`mip update <package>`)
+`mip update X Y Z` is, for the packages that actually need updating, equivalent to `mip uninstall X Y Z` followed by `mip install X Y Z`, with the set of previously-loaded packages reloaded at the end. This means each updated package's dependency graph is re-resolved against the current channel index, so dependencies are effectively updated as a side-effect of updating the packages that depend on them. Packages that do **not** need updating are left entirely alone (their dependencies are **not** revisited) unless `--force` is specified.
 
-1. Resolve to FQN (bare name uses `resolve_bare_name`).
-2. Check the package is installed. If not, raises `mip:update:notInstalled`.
-3. Fetch the channel index.
-4. Compare installed version + commit hash with latest in index:
-   - Same version **and** same commit hash (or no hash available): "already up to date", return.
-   - Same version but different commit hash: update (content changed within the same version).
-   - Different version: update.
-5. If updating:
-   - Note whether the package is currently loaded.
-   - Unload if loaded.
-   - Delete the old package directory.
-   - Remove from `directly_installed.txt`.
-   - Clean up empty parent directories.
-   - Reinstall via `mip install <fqn>`.
-   - Reload if it was previously loaded.
+### 7.1 Update Flow (`mip update X Y Z`)
+
+1. Parse `--force` flag.
+2. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
+   - Not installed → `mip:update:notInstalled`.
+   - Local package without `source_path` in `mip.json` → `mip:update:noSourcePath`.
+   - Local package whose source directory is missing → `mip:update:sourceNotFound`.
+3. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.4](#74-self-update-mip-update-mip)) and remove it from the batch.
+4. For each remaining package, decide whether it needs updating:
+   - `--force`: always yes.
+   - Local package: always yes (no up-to-date check).
+   - Remote package: fetch the channel index and compare installed version + commit hash with latest:
+     - Same version **and** same commit hash (or no hash available): "already up to date", skip.
+     - Same version but different commit hash: update (content changed within the same version).
+     - Different version: update.
+5. If no packages need updating, return. Otherwise:
+   - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
+   - **Local packages** are updated in-place: unload if loaded, `rmdir` the old directory, `remove_directly_installed`, then `mip.utils.install_local(sourcePath, editable)`. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
+   - **Remote packages** go through `mip.uninstall(fqn1, fqn2, ...)` which unloads them, removes them from disk, removes them from `directly_installed.txt`, and prunes any orphaned transitive dependencies. Then `mip.install(remoteFqn1, remoteFqn2, ...)` reinstalls them with freshly-resolved dependency graphs.
+   - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
+   - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
 
 ### 7.2 Local Package Update
 
-1. Read `source_path` from `mip.json`. If absent, raises `mip:update:noSourcePath`.
-2. Check the source directory still exists. If not, raises `mip:update:sourceNotFound`.
-3. Note whether loaded.
-4. Remove old package directory.
-5. Reinstall from source (preserving editable/non-editable mode).
-6. Reload if it was previously loaded.
+Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is removed directly and `mip.utils.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
 
-Local updates **always** reinstall (no up-to-date check). Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. See [§14.16](#1416-mip-update-on-local-package-always-reinstalls).
+- The up-to-date check is skipped -- local packages are always reinstalled.
+- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. See [§14.16](#1416-mip-update-on-local-package-always-reinstalls).
 
 ### 7.3 Force Update (`--force`)
 
-Skips the up-to-date check. For remote packages, this causes a full re-download and reinstall even when version and commit hash match.
+Skips the up-to-date check. For remote packages, this forces the full `mip.uninstall` + `mip.install` cycle even when version and commit hash match, causing a fresh dependency resolution against the channel index. This is the way to "update the dependencies" of a package that is itself already up to date (see [§7.6](#76-dependency-updates)). Local packages are always reinstalled regardless of `--force`.
 
 ### 7.4 Self-Update (`mip update mip`)
 
@@ -534,16 +538,22 @@ Special flow for `mip-org/core/mip`:
 3. Replace the installed package in-place.
 4. Re-run `load_package.m` to reload.
 
-Does not go through the normal unload/reinstall flow since mip cannot be unloaded.
+Does not go through the normal uninstall/reinstall flow since mip cannot be uninstalled. Self-update runs before the batch uninstall/install so it is safe to pass `mip` in the same call as other packages.
 
 ### 7.5 Load State Preservation
 
-- If the package was loaded before update, it is unloaded, updated, then reloaded.
-- If it was not loaded, it stays unloaded after update.
+- Packages that were loaded before the update are reloaded afterward, including transitive dependencies that got pruned as unused during the uninstall step and then brought back by the reinstall.
+- Packages that were not loaded before the update remain unloaded afterward.
+- The directly-vs-transitively loaded distinction is preserved: a package that was only transitively loaded before the update is not promoted to directly loaded, even if it needed an explicit `mip.load` call during the reload pass.
+- If a previously-loaded package ends up uninstalled after the update (e.g. it was a transitive dep of the old version but not the new one), it is skipped with a warning; its entry is effectively dropped from the loaded set.
 
-### 7.6 Directly Installed Tracking
+### 7.6 Dependency Updates
 
-The `directly_installed.txt` status is preserved across updates. The package is removed during cleanup and re-added during reinstall.
+Dependencies are updated only as a side-effect of updating a package that depends on them. `mip update foo` does **not** check whether `foo`'s dependencies have newer versions in the channel index. If `foo` itself is up to date, nothing happens; its dependencies are left alone. If `foo` needs an update, the uninstall+install cycle re-resolves the full dependency graph and pulls in whatever the channel currently has. `mip update --force foo` forces the uninstall+install cycle even when `foo` is up to date, which is the way to refresh `foo`'s dependencies from the channel index.
+
+### 7.7 Directly Installed Tracking
+
+The `directly_installed.txt` entry for each updated package is preserved across the update: `mip.uninstall` removes it and `mip.install` adds it back. Packages that were only transitive dependencies (not directly installed) before the update remain transitive dependencies after the update.
 
 ---
 
@@ -683,7 +693,7 @@ This tracking is critical for dependency pruning: only directly installed packag
   "version": "1.0.0",
   "description": "...",
   "architecture": "linux_x86_64",
-  "dependencies": ["dep1", "org/chan/dep2"],
+  "dependencies": ["dep1", "org/chan/dep2"],   // bare or FQN names only; no @version or constraints
   "editable": false,
   "source_path": "/path/to/source",
   "compile_script": "do_compile.m",
@@ -704,7 +714,7 @@ description: "..."              # Optional
 license: MIT                    # Optional
 homepage: "https://..."         # Optional
 repository: "https://..."       # Optional
-dependencies: [dep1, dep2]      # Optional (defaults to [])
+dependencies: [dep1, dep2]      # Optional (defaults to []); bare or FQN names only, no @version or constraints
 addpaths:                       # Optional (defaults to [])
   - path: "src"
   - path: "lib"
@@ -816,14 +826,13 @@ This means a package could be installed with dependencies resolved one way, but 
 
 A potential middle ground: at install time, resolve bare-name deps using same-channel-first logic and **store the resolved FQN** in `mip.json`. Then at load time, always use the resolved FQN. This would make behavior consistent and explicit.
 
-### 14.2 No Version Constraint System
+### 14.2 No Version Constraints on Dependencies
 
-**Current behavior**: Dependencies are by name only, with no version constraints. `mip install` always gets the latest version. There's no way to say "depends on chebfun >= 2.0".
+**Current behavior**: Dependencies in `mip.yaml` are by name only (bare or FQN). Entries have no version field, no `@version` suffix, and no constraint grammar (`>=`, `~`, ranges). `mip install` always picks the version chosen by `select_best_version` ([§3.1.3](#313-version-selection-select_best_version)). If a dependency is already installed at any version, it is treated as satisfied -- no version comparison, no upgrade, no warning.
 
-**Questions**:
-- Should there be a minimum version constraint system?
-- What happens if a dependency is already installed at an older version? Currently it's just skipped (already installed).
-- Should `mip install` warn if a dependency is installed but at a potentially incompatible version?
+**Resolved in [#95](https://github.com/mip-org/mip/issues/95)**: dependency version constraints are **out of scope**. A constraint system would add significant implementation and UX complexity (resolution, conflict reporting, already-installed reconciliation, lock-file interaction) that is not justified for current use cases. Packages pinning an explicit dependency version should do so by listing the FQN of a version-locked package in an appropriate channel, not via a constraint in `mip.yaml`.
+
+This decision may be revisited if a concrete need arises. Related: lock files ([§14.5](#145-no-lock-file-or-dependency-snapshot), [#96](https://github.com/mip-org/mip/issues/96)).
 
 ### 14.3 Local Install Dependency Check Is Incomplete
 
@@ -874,11 +883,11 @@ A potential middle ground: at install time, resolve bare-name deps using same-ch
 - Can concurrent sessions corrupt `directly_installed.txt` (no file locking)?
 - Should `mip list` or `mip info` warn if file state and memory state are inconsistent?
 
-### 14.10 Update Doesn't Update Dependencies
+### 14.10 Update Doesn't Explicitly Check Dependencies
 
-**Current behavior**: `mip update <pkg>` only updates the specified package. It does not check whether dependencies also have newer versions available.
+**Current behavior**: `mip update <pkg>` only checks whether `<pkg>` itself needs updating. If it does, the uninstall+install cycle ([§7.1](#71-update-flow-mip-update-x-y-z)) re-resolves the full dependency graph and effectively updates the deps as a side-effect. If `<pkg>` is already up to date, its dependencies are **not** revisited -- use `mip update --force <pkg>` to force the uninstall+install cycle and pick up fresh deps.
 
-**Question**: Should there be a `mip update --recursive` or `mip update --all` that updates a package and all its dependencies?
+**Resolved in [#99](https://github.com/mip-org/mip/issues/99)**: there is no `mip update --recursive` or `mip update --all`. The user-facing semantics are deliberately "`mip update X Y Z` ≡ `mip uninstall X Y Z` + `mip install X Y Z` + reload previously-loaded packages" -- anything that wants broader dep refresh should pass the right package list or use `--force`.
 
 ### 14.11 Rollback on Failed Install
 
@@ -929,7 +938,7 @@ The following behaviors are specified in this document but not fully covered by 
 This behavior is intentional and was confirmed in [#103](https://github.com/mip-org/mip/issues/103):
 - Unconditional uninstall + reinstall is the expected semantics for `mip update` on a local package — `mip update` is the user's "rebuild from source" hammer.
 - For editable installs, recompiling is wanted: the user almost certainly edited source that needs rebuilding.
-- A future `mip update --all` should **not** include local packages.
+- There is no `mip update --all`; see [§14.10](#1410-update-doesnt-explicitly-check-dependencies).
 
 ### 14.17 `load_package.m` Error Handling
 

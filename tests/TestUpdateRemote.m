@@ -129,5 +129,54 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
                 'Should be upgraded to latest version');
         end
 
+        %% --- Dependency re-resolution ---
+
+        function testUpdate_ForceReresolveDeps(testCase)
+            % Install gamma (depends on alpha). Force-update gamma.
+            % The uninstall+install cycle should prune alpha (orphaned)
+            % and re-install it alongside gamma.
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+
+            gammaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'gamma');
+            alphaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'alpha');
+
+            testCase.verifyTrue(exist(gammaDir, 'dir') > 0);
+            testCase.verifyTrue(exist(alphaDir, 'dir') > 0);
+
+            % Drop a marker in alpha to prove it was reinstalled
+            marker = fullfile(alphaDir, '.test_marker');
+            fid = fopen(marker, 'w'); fclose(fid);
+            testCase.verifyTrue(exist(marker, 'file') > 0);
+
+            mip.update('--force', 'mip-org/test-channel1/gamma');
+
+            testCase.verifyTrue(exist(gammaDir, 'dir') > 0, ...
+                'gamma should be reinstalled');
+            testCase.verifyTrue(exist(alphaDir, 'dir') > 0, ...
+                'alpha should be re-installed as dependency of gamma');
+            testCase.verifyFalse(exist(marker, 'file') > 0, ...
+                'alpha marker should be gone (dep was pruned and re-installed)');
+        end
+
+        function testUpdate_ForcePreservesLoadedDeps(testCase)
+            % Install gamma (depends on alpha), load gamma, force-update.
+            % Both gamma and alpha should be reloaded afterward.
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+            mip.load('mip-org/test-channel1/gamma');
+
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/gamma'));
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+                'alpha should be transitively loaded');
+
+            mip.update('--force', 'mip-org/test-channel1/gamma');
+
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/gamma'), ...
+                'gamma should be reloaded after force update');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+                'alpha should be reloaded as transitive dependency');
+        end
+
     end
 end

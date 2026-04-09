@@ -225,5 +225,92 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'Package should still be directly installed after update');
         end
 
+        %% --- Dependency + load state preservation ---
+
+        function testUpdate_ReloadsDependencyAfterUpdate(testCase)
+            % Install a dependency (fake installed package), then a local
+            % source package that depends on it. Load the main package
+            % (which transitively loads the dep). Update the main package
+            % and verify both are still loaded afterward.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            mip.utils.add_directly_installed('mip-org/core/depA');
+
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depA'});
+            mip.install(srcDir);
+
+            mip.load('local/local/mypkg');
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'));
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'), ...
+                'depA should be transitively loaded');
+
+            mip.update('local/local/mypkg');
+
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'), ...
+                'Main package should be reloaded after update');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'), ...
+                'Dependency should still be loaded after update');
+        end
+
+        function testUpdate_PreservesDirectlyLoadedDistinction(testCase)
+            % A package loaded only as a transitive dep should not be
+            % promoted to directly loaded after update.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            mip.utils.add_directly_installed('mip-org/core/depA');
+
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depA'});
+            mip.install(srcDir);
+
+            mip.load('local/local/mypkg');
+
+            % depA should be transitively loaded (not directly loaded)
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
+            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/depA'), ...
+                'depA should only be transitively loaded before update');
+
+            mip.update('local/local/mypkg');
+
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
+            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/depA'), ...
+                'depA should remain transitively loaded (not promoted to directly loaded)');
+            testCase.verifyTrue(mip.utils.is_directly_loaded('local/local/mypkg'), ...
+                'Main package should remain directly loaded');
+        end
+
+        function testUpdate_MultiplePackages(testCase)
+            % Updating multiple local packages at once should work.
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            mip.install(srcA);
+            mip.install(srcB);
+
+            mip.load('local/local/pkgA');
+            mip.load('local/local/pkgB');
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgA'));
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgB'));
+
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgA');
+            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgB');
+            infoA1 = mip.utils.read_package_json(pkgDirA);
+            infoB1 = mip.utils.read_package_json(pkgDirB);
+
+            pause(1.1);
+
+            mip.update('local/local/pkgA', 'local/local/pkgB');
+
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgA'), ...
+                'pkgA should be reloaded');
+            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgB'), ...
+                'pkgB should be reloaded');
+
+            infoA2 = mip.utils.read_package_json(pkgDirA);
+            infoB2 = mip.utils.read_package_json(pkgDirB);
+            testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
+                'pkgA should have been reinstalled');
+            testCase.verifyFalse(strcmp(infoB2.timestamp, infoB1.timestamp), ...
+                'pkgB should have been reinstalled');
+        end
+
     end
 end

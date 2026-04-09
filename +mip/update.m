@@ -11,12 +11,23 @@ function update(varargin)
 % Options:
 %   --force           Force update even if already up to date
 %
-% For remote packages, checks whether the installed version (and commit
-% hash) matches the latest in the channel index. If already up to date,
-% does nothing (unless --force is used).
+% For each requested package, checks whether an update is needed. For
+% remote packages, the installed version (and commit hash) is compared
+% against the latest in the channel index. Local packages are always
+% considered to need an update. If a package does not need updating,
+% nothing happens for that package (unless --force is specified).
 %
-% For local packages (installed from a local directory), always reinstalls
-% from the original source directory.
+% For the remote packages that need updating, `mip update X Y Z` is
+% equivalent to `mip uninstall X Y Z` followed by `mip install X Y Z`.
+% This re-resolves each package's dependency graph against the current
+% channel index, so dependencies are effectively updated as well.
+%
+% Local packages are reinstalled directly from their source path without
+% going through uninstall (since install_local cannot re-fetch deps from
+% a channel).
+%
+% Any packages that were loaded before the update are reloaded afterward,
+% even if they were pruned as unused during the uninstall step.
 %
 % Accepts both bare package names and fully qualified names.
 
@@ -40,14 +51,110 @@ function update(varargin)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
 
+    % Resolve and validate each argument. Any error here (not installed,
+    % missing source_path, missing source dir) is raised before we touch
+    % anything on disk.
+    toProcess = cell(1, length(args));
     for i = 1:length(args)
-        updateSinglePackage(args{i}, force);
+        toProcess{i} = resolvePackage(args{i});
     end
+
+    % Handle self-update (`mip-org/core/mip`) separately and remove it
+    % from the batch. mip cannot be uninstalled through the normal flow.
+    keepMask = true(1, length(toProcess));
+    for i = 1:length(toProcess)
+        if strcmp(toProcess{i}.fqn, 'mip-org/core/mip')
+            updateSelf(toProcess{i}, force);
+            keepMask(i) = false;
+        end
+    end
+    toProcess = toProcess(keepMask);
+    if isempty(toProcess)
+        return
+    end
+
+    % Determine which of the remaining packages actually need updating.
+    needsUpdate = false(1, length(toProcess));
+    for i = 1:length(toProcess)
+        p = toProcess{i};
+        if force
+            fprintf('Force updating "%s" (%s)\n', p.fqn, p.pkgInfo.version);
+            needsUpdate(i) = true;
+        elseif p.isLocal
+            % Local packages are always reinstalled from source.
+            needsUpdate(i) = true;
+        else
+            needsUpdate(i) = checkRemoteNeedsUpdate(p);
+        end
+    end
+    toProcess = toProcess(needsUpdate);
+
+    if isempty(toProcess)
+        return
+    end
+
+    % Split into local and remote sets
+    localPkgs = {};
+    remotePkgs = {};
+    for i = 1:length(toProcess)
+        if toProcess{i}.isLocal
+            localPkgs{end+1} = toProcess{i}; %#ok<AGROW>
+        else
+            remotePkgs{end+1} = toProcess{i}; %#ok<AGROW>
+        end
+    end
+
+    % Snapshot currently-loaded state so we can restore it after the
+    % update cycle. We remember both the full loaded list (so transitive
+    % deps that get pruned can be re-loaded) and the directly-loaded
+    % list (so we can preserve the direct-vs-transitive distinction).
+    loadedBefore = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+    directlyLoadedBefore = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+
+    % --- Local packages: rmdir + install_local (no mip.uninstall) ---
+    % Local packages cannot go through mip.uninstall because that prunes
+    % orphaned deps, and install_local cannot re-fetch them from a channel.
+    for i = 1:length(localPkgs)
+        p = localPkgs{i};
+        fprintf('Updating local package "%s"...\n', p.fqn);
+
+        if mip.utils.is_loaded(p.fqn)
+            fprintf('Unloading "%s" before update...\n', p.fqn);
+            mip.unload(p.fqn);
+        end
+
+        rmdir(p.pkgDir, 's');
+        mip.utils.remove_directly_installed(p.fqn);
+        packagesDir = mip.utils.get_packages_dir();
+        cleanupEmptyDirs(fullfile(packagesDir, 'local', 'local'));
+        cleanupEmptyDirs(fullfile(packagesDir, 'local'));
+
+        fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
+        mip.utils.install_local(p.sourcePath, p.editable);
+    end
+
+    % --- Remote packages: mip.uninstall + mip.install ---
+    % The uninstall prunes orphaned deps; the install re-resolves the
+    % full dependency graph from the current channel index.
+    if ~isempty(remotePkgs)
+        remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
+        fprintf('\nUninstalling %d remote package(s) to update: %s\n', ...
+                length(remoteFqns), strjoin(remoteFqns, ', '));
+        mip.uninstall(remoteFqns{:});
+
+        fprintf('\nReinstalling remote package(s): %s\n', strjoin(remoteFqns, ', '));
+        mip.install(remoteFqns{:});
+    end
+
+    % Reload anything that was loaded before update but isn't now.
+    reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore);
 end
 
-function updateSinglePackage(packageArg, force)
+function p = resolvePackage(packageArg)
+% Resolve a package argument to a struct with everything needed to
+% update it. Validates that the package is installed and, for local
+% packages, that the original source directory is still available.
 
-    % Resolve the package to its FQN
     result = mip.utils.parse_package_arg(packageArg);
 
     if result.is_fqn
@@ -56,7 +163,6 @@ function updateSinglePackage(packageArg, force)
         packageName = result.name;
         fqn = packageArg;
     else
-        % Bare name: find it among installed packages
         fqn = mip.utils.resolve_bare_name(result.name);
         if isempty(fqn)
             error('mip:update:notInstalled', ...
@@ -70,161 +176,155 @@ function updateSinglePackage(packageArg, force)
     end
 
     pkgDir = mip.utils.get_package_dir(org, channelName, packageName);
-
-    % Check if package is installed
     if ~exist(pkgDir, 'dir')
         error('mip:update:notInstalled', ...
               'Package "%s" is not installed. Run "mip install %s" first.', ...
               fqn, fqn);
     end
 
-    % Read installed package info
     try
         pkgInfo = mip.utils.read_package_json(pkgDir);
     catch
         pkgInfo = struct('version', 'unknown', 'name', packageName);
     end
 
-    % Determine if this is a local package
     isLocal = strcmp(org, 'local') && strcmp(channelName, 'local');
-
-    % Self-update: keep special handling (cannot uninstall mip)
-    if strcmp(fqn, 'mip-org/core/mip')
-        updateSelf(fqn, pkgDir, pkgInfo, force);
-        return
-    end
-
+    sourcePath = '';
+    editable = false;
     if isLocal
-        updateLocalPackage(fqn, pkgDir, pkgInfo);
-    else
-        updateRemotePackage(fqn, org, channelName, packageName, pkgDir, pkgInfo, force);
+        % Validate local requirements up front so we fail before any
+        % destructive action.
+        if ~isfield(pkgInfo, 'source_path')
+            error('mip:update:noSourcePath', ...
+                  'Local package "%s" does not have a source_path in mip.json. Cannot update.', fqn);
+        end
+        sourcePath = pkgInfo.source_path;
+        if ~isfolder(sourcePath)
+            error('mip:update:sourceNotFound', ...
+                  'Source directory "%s" for package "%s" no longer exists.', sourcePath, fqn);
+        end
+        editable = isfield(pkgInfo, 'editable') && pkgInfo.editable;
     end
+
+    p = struct( ...
+        'fqn', fqn, ...
+        'org', org, ...
+        'channel', channelName, ...
+        'name', packageName, ...
+        'pkgDir', pkgDir, ...
+        'pkgInfo', pkgInfo, ...
+        'isLocal', isLocal, ...
+        'sourcePath', sourcePath, ...
+        'editable', editable ...
+    );
 end
 
-function updateRemotePackage(fqn, org, channelName, packageName, pkgDir, pkgInfo, force)
-    installedVersion = pkgInfo.version;
-    channelStr = [org '/' channelName];
+function tf = checkRemoteNeedsUpdate(p)
+% Fetch the channel index and decide whether p needs updating.
+
+    fqn = p.fqn;
+    installedVersion = p.pkgInfo.version;
+    channelStr = [p.org '/' p.channel];
 
     fprintf('Checking for updates to "%s" (installed: %s, channel: %s)...\n', ...
             fqn, installedVersion, channelStr);
 
-    % Fetch the index
     index = mip.utils.fetch_index(channelStr);
-    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, org, channelName);
+    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, p.org, p.channel);
 
-    % Find the package in the index
     currentArch = mip.arch();
     if ~packageInfoMap.isKey(fqn)
         if unavailablePackages.isKey(fqn)
             archs = unavailablePackages(fqn);
             error('mip:update:unavailable', ...
                   'Package "%s" is not available for architecture "%s". Available: %s', ...
-                  packageName, currentArch, strjoin(archs, ', '));
+                  p.name, currentArch, strjoin(archs, ', '));
         else
             error('mip:update:notInIndex', ...
                   'Package "%s" not found in the %s channel index.', ...
-                  packageName, channelStr);
+                  p.name, channelStr);
         end
     end
 
     latestInfo = packageInfoMap(fqn);
     latestVersion = latestInfo.version;
 
-    % Check if up to date (version + commit hash)
-    if ~force
-        if strcmp(installedVersion, latestVersion)
-            installedHash = '';
-            if isfield(pkgInfo, 'commit_hash')
-                installedHash = pkgInfo.commit_hash;
-            end
-            latestHash = '';
-            if isfield(latestInfo, 'commit_hash')
-                latestHash = latestInfo.commit_hash;
-            end
-
-            if isempty(latestHash) || strcmp(installedHash, latestHash)
-                fprintf('Package "%s" is already up to date (%s)\n', fqn, installedVersion);
-                return
-            end
-
-            fprintf('Version is "%s" but commit hash has changed (%s -> %s)\n', ...
-                    installedVersion, installedHash, latestHash);
+    if strcmp(installedVersion, latestVersion)
+        installedHash = '';
+        if isfield(p.pkgInfo, 'commit_hash')
+            installedHash = p.pkgInfo.commit_hash;
         end
-    else
-        fprintf('Force updating "%s" (%s)\n', fqn, installedVersion);
+        latestHash = '';
+        if isfield(latestInfo, 'commit_hash')
+            latestHash = latestInfo.commit_hash;
+        end
+
+        if isempty(latestHash) || strcmp(installedHash, latestHash)
+            fprintf('Package "%s" is already up to date (%s)\n', fqn, installedVersion);
+            tf = false;
+            return
+        end
+
+        fprintf('Version is "%s" but commit hash has changed (%s -> %s)\n', ...
+                installedVersion, installedHash, latestHash);
     end
 
     fprintf('Updating "%s": %s -> %s\n', fqn, installedVersion, latestVersion);
-
-    % Note if loaded, then unload
-    wasLoaded = mip.utils.is_loaded(fqn);
-    if wasLoaded
-        fprintf('Unloading "%s" before update...\n', fqn);
-        mip.unload(fqn);
-    end
-
-    % Remove old package
-    rmdir(pkgDir, 's');
-    mip.utils.remove_directly_installed(fqn);
-    cleanupEmptyDirs(fullfile(mip.utils.get_packages_dir(), org, channelName));
-    cleanupEmptyDirs(fullfile(mip.utils.get_packages_dir(), org));
-
-    % Install fresh
-    fprintf('Reinstalling "%s"...\n', fqn);
-    mip.install(fqn);
-
-    % Reload if was loaded
-    if wasLoaded
-        fprintf('Reloading "%s"...\n', fqn);
-        mip.load(fqn);
-    end
+    tf = true;
 end
 
-function updateLocalPackage(fqn, pkgDir, pkgInfo)
-    % Local packages always reinstall from source
-    fprintf('Updating local package "%s"...\n', fqn);
+function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
+% Reload any packages that were loaded before the update but are no
+% longer loaded. Preserves the direct-vs-transitive loaded distinction
+% by resetting MIP_DIRECTLY_LOADED_PACKAGES to the pre-update snapshot
+% at the end (filtered to entries that are actually loaded now).
 
-    % Get source path and editable flag from mip.json
-    if ~isfield(pkgInfo, 'source_path')
-        error('mip:update:noSourcePath', ...
-              'Local package "%s" does not have a source_path in mip.json. Cannot update.', fqn);
-    end
-    sourcePath = pkgInfo.source_path;
-    isEditable = isfield(pkgInfo, 'editable') && pkgInfo.editable;
-
-    % Check source directory still exists
-    if ~isfolder(sourcePath)
-        error('mip:update:sourceNotFound', ...
-              'Source directory "%s" for package "%s" no longer exists.', sourcePath, fqn);
+    if isempty(loadedBefore)
+        return
     end
 
-    % Note if loaded, then unload
-    wasLoaded = mip.utils.is_loaded(fqn);
-    if wasLoaded
-        fprintf('Unloading "%s" before update...\n', fqn);
-        mip.unload(fqn);
+    for i = 1:length(loadedBefore)
+        pkg = loadedBefore{i};
+        if mip.utils.is_loaded(pkg)
+            continue
+        end
+        r = mip.utils.parse_package_arg(pkg);
+        if ~r.is_fqn
+            continue
+        end
+        pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+        if ~exist(pkgDir, 'dir')
+            fprintf('Warning: "%s" was loaded before update but is no longer installed; skipping reload.\n', pkg);
+            continue
+        end
+        fprintf('Reloading "%s"...\n', pkg);
+        mip.load(pkg);
     end
 
-    % Remove old package
-    rmdir(pkgDir, 's');
-    mip.utils.remove_directly_installed(fqn);
-    packagesDir = mip.utils.get_packages_dir();
-    cleanupEmptyDirs(fullfile(packagesDir, 'local', 'local'));
-    cleanupEmptyDirs(fullfile(packagesDir, 'local'));
-
-    % Reinstall from source
-    mip.utils.install_local(sourcePath, isEditable);
-
-    % Reload if was loaded
-    if wasLoaded
-        fprintf('Reloading "%s"...\n', fqn);
-        mip.load(fqn);
+    % Restore the directly-loaded snapshot. The bulk reload above may
+    % have marked formerly-transitively-loaded packages as directly
+    % loaded (since mip.load is always a direct call). Reset the state
+    % so only the packages that were directly loaded before -- and that
+    % are still loaded now -- are marked as directly loaded.
+    currentlyLoaded = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+    desiredDirectly = {};
+    for i = 1:length(directlyLoadedBefore)
+        pkg = directlyLoadedBefore{i};
+        if ismember(pkg, currentlyLoaded)
+            desiredDirectly{end+1} = pkg; %#ok<AGROW>
+        end
     end
+    mip.utils.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', desiredDirectly);
 end
 
-function updateSelf(fqn, pkgDir, pkgInfo, force)
-    % Self-update for mip-org/core/mip
-    % Special handling: download and swap in place, then reload.
+function updateSelf(p, force)
+% Self-update for mip-org/core/mip. mip cannot be uninstalled through
+% the normal flow, so we download and swap in place.
+
+    fqn = p.fqn;
+    pkgDir = p.pkgDir;
+    pkgInfo = p.pkgInfo;
+
     installedVersion = pkgInfo.version;
     channelStr = 'mip-org/core';
 
@@ -240,7 +340,6 @@ function updateSelf(fqn, pkgDir, pkgInfo, force)
     latestInfo = packageInfoMap(fqn);
     latestVersion = latestInfo.version;
 
-    % Check if up to date
     if ~force
         if strcmp(installedVersion, latestVersion)
             installedHash = '';
