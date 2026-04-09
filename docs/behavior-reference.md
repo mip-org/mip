@@ -341,7 +341,7 @@ After installation, a hint is printed showing how to load the package:
    - If `--sticky` is specified, add to sticky packages.
    - Return early.
 6. Read `mip.json` and load dependencies first (recursively, as non-direct loads).
-7. Execute `load_package.m` in the package directory (changes `pwd` temporarily).
+7. Execute `load_package.m` in the package directory (changes `pwd` temporarily). If it errors, raise `mip:loadError` and stop -- the package is **not** marked as loaded (see [§4.7](#47-load_packagem-execution)).
 8. Add to `MIP_LOADED_PACKAGES`.
 9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES`.
 10. If `--sticky`, add to `MIP_STICKY_PACKAGES`.
@@ -377,7 +377,7 @@ A loading stack tracks the current dependency chain. If a package appears in its
 
 ### 4.6 Multiple Packages
 
-`mip load pkg1 pkg2 --sticky` loads all listed packages. Each is marked as directly loaded. The `--sticky` flag applies to all of them.
+`mip load pkg1 pkg2 --sticky` loads all listed packages. Each is marked as directly loaded. The `--sticky` flag applies to all of them. Packages are loaded in argument order; if any package errors, loading stops and remaining packages on the command line are not attempted.
 
 ### 4.7 `load_package.m` Execution
 
@@ -386,6 +386,8 @@ The load script is executed by `cd`-ing to the package directory and calling `ru
 - **Editable installs**: paths are absolute, pointing to the source directory.
 
 If `load_package.m` doesn't exist, raises `mip:loadNotFound`.
+
+If `load_package.m` throws during execution, the working directory is restored and `mip:loadError` is raised (with the original error attached as a cause). The package is **not** added to `MIP_LOADED_PACKAGES` or `MIP_DIRECTLY_LOADED_PACKAGES`, so the user can fix the issue and retry without first having to run `mip unload`. The error propagates up through dependency recursion, so a parent package whose dependency failed to load is also not marked as loaded. mip does **not** attempt to undo whatever the partially-executed `load_package.m` did to the path -- recovering arbitrary path or workspace mutations is not generally possible. Users should treat a `mip:loadError` as a signal that the path may be in a partial state and restart MATLAB if anything looks wrong.
 
 ---
 
@@ -763,6 +765,7 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:dependencyNotFound` | A dependency is not installed |
 | `mip:cannotUnloadMip` | Attempt to unload `mip-org/core/mip` |
 | `mip:loadNotFound` | `load_package.m` missing |
+| `mip:loadError` | `load_package.m` threw an error during execution |
 | `mip:mipYamlNotFound` | `mip.yaml` missing in source directory |
 | `mip:invalidMipYaml` | `mip.yaml` missing required `name` field |
 | `mip:mipJsonNotFound` | `mip.json` missing in package directory |
@@ -921,9 +924,7 @@ This behavior is intentional and was confirmed in [#103](https://github.com/mip-
 
 ### 14.17 `load_package.m` Error Handling
 
-**Current behavior**: If `load_package.m` throws an error during execution, a warning is printed (`mip:loadError`) but the package is still marked as loaded. This could leave the system in an inconsistent state where a package is "loaded" but its paths aren't actually on the MATLAB path.
-
-**Suggestion**: If `load_package.m` fails, the package should **not** be marked as loaded. Or at minimum, the error should be surfaced more prominently.
+**Resolved in [#104](https://github.com/mip-org/mip/issues/104)**: A failing `load_package.m` now raises `mip:loadError` and the package is **not** marked as loaded, so the user can fix the script and retry. See [§4.7](#47-load_packagem-execution) for the full semantics. mip does not attempt to roll back any path mutations the partial run may have made -- recovering them in general is not feasible. The original error is attached as a cause on the `mip:loadError` MException.
 
 ### 14.18 `--channel` Flag Interaction with FQN
 

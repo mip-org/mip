@@ -121,38 +121,41 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
         return
     end
 
-    % Check for mip.json and process dependencies
+    % Check for mip.json and process dependencies. Only the parse step is
+    % wrapped in try/catch so that recursive dependency-load errors propagate
+    % instead of being silently downgraded to a warning.
     mipJsonPath = fullfile(packageDir, 'mip.json');
+    mipConfig = [];
     if exist(mipJsonPath, 'file')
         try
             fid = fopen(mipJsonPath, 'r');
             jsonText = fread(fid, '*char')';
             fclose(fid);
             mipConfig = jsondecode(jsonText);
-
-            % Load dependencies first
-            if isfield(mipConfig, 'dependencies') && ~isempty(mipConfig.dependencies)
-                deps = mipConfig.dependencies;
-                if ~iscell(deps)
-                    deps = {deps};
-                end
-                fprintf('Loading dependencies for "%s": %s\n', ...
-                        fqn, strjoin(deps, ', '));
-                for i = 1:length(deps)
-                    dep = deps{i};
-                    % Resolve dependency: same channel first, then core
-                    depFqn = resolveDependency(dep, result.org, result.channel);
-                    if ~mip.utils.is_loaded(depFqn)
-                        loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
-                    else
-                        fprintf('  Dependency "%s" is already loaded\n', depFqn);
-                    end
-                end
-            end
         catch ME
             warning('mip:jsonParseError', ...
                     'Could not parse mip.json for package "%s": %s', ...
                     fqn, ME.message);
+            mipConfig = [];
+        end
+    end
+
+    if ~isempty(mipConfig) && isfield(mipConfig, 'dependencies') && ~isempty(mipConfig.dependencies)
+        deps = mipConfig.dependencies;
+        if ~iscell(deps)
+            deps = {deps};
+        end
+        fprintf('Loading dependencies for "%s": %s\n', ...
+                fqn, strjoin(deps, ', '));
+        for i = 1:length(deps)
+            dep = deps{i};
+            % Resolve dependency: same channel first, then core
+            depFqn = resolveDependency(dep, result.org, result.channel);
+            if ~mip.utils.is_loaded(depFqn)
+                loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
+            else
+                fprintf('  Dependency "%s" is already loaded\n', depFqn);
+            end
         end
     end
 
@@ -163,18 +166,24 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
               'Package "%s" does not have a load_package.m file', fqn);
     end
 
-    % Execute the load_package.m file
+    % Execute the load_package.m file. If it errors, the package is NOT
+    % marked as loaded, so the user can fix the issue and retry. We do not
+    % attempt to roll back any path or state changes that load_package.m
+    % may have made before failing -- doing so reliably is not possible.
     originalDir = pwd;
+    restoreDir = onCleanup(@() cd(originalDir));
     cd(packageDir);
     try
         run(loadFile);
-        fprintf('Loaded package "%s"\n', fqn);
     catch ME
-        warning('mip:loadError', ...
-                'Error executing load_package.m for package "%s": %s', ...
-                fqn, ME.message);
+        loadErr = MException('mip:loadError', ...
+            'Error executing load_package.m for package "%s": %s', ...
+            fqn, ME.message);
+        loadErr = addCause(loadErr, ME);
+        throw(loadErr);
     end
-    cd(originalDir);
+    clear restoreDir;
+    fprintf('Loaded package "%s"\n', fqn);
 
     % Mark package as loaded
     mip.utils.key_value_append('MIP_LOADED_PACKAGES', fqn);

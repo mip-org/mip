@@ -169,5 +169,79 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/pkgB'));
         end
 
+        function testLoadPackage_LoadScriptError_Throws(testCase)
+            % If load_package.m errors, mip.load should throw mip:loadError.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'badpkg');
+            writeFailingLoadScript(fullfile(pkgDir, 'load_package.m'));
+            testCase.verifyError(@() mip.load('mip-org/core/badpkg'), 'mip:loadError');
+        end
+
+        function testLoadPackage_LoadScriptError_NotMarkedLoaded(testCase)
+            % After a failed load, the package must not be marked as loaded.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'badpkg');
+            writeFailingLoadScript(fullfile(pkgDir, 'load_package.m'));
+            try
+                mip.load('mip-org/core/badpkg');
+            catch
+                % expected
+            end
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/badpkg'));
+            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/badpkg'));
+        end
+
+        function testLoadPackage_LoadScriptError_CanRetry(testCase)
+            % After a failed load, fixing the script and reloading should work.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'badpkg');
+            loadScript = fullfile(pkgDir, 'load_package.m');
+            writeFailingLoadScript(loadScript);
+            try
+                mip.load('mip-org/core/badpkg');
+            catch
+                % expected
+            end
+            % Replace with a working load_package.m and retry
+            fid = fopen(loadScript, 'w');
+            fprintf(fid, 'function load_package()\n');
+            fprintf(fid, '    pkg_dir = fileparts(mfilename(''fullpath''));\n');
+            fprintf(fid, '    addpath(pkg_dir);\n');
+            fprintf(fid, 'end\n');
+            fclose(fid);
+            mip.load('mip-org/core/badpkg');
+            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/badpkg'));
+        end
+
+        function testLoadPackage_LoadScriptError_RestoresWorkingDir(testCase)
+            % A failing load_package.m must not leave pwd inside the package dir.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'badpkg');
+            writeFailingLoadScript(fullfile(pkgDir, 'load_package.m'));
+            origDir = pwd;
+            try
+                mip.load('mip-org/core/badpkg');
+            catch
+                % expected
+            end
+            testCase.verifyEqual(pwd, origDir);
+        end
+
+        function testLoadPackage_DependencyLoadError_ParentNotLoaded(testCase)
+            % If a dependency fails to load, the parent must also not be marked loaded.
+            depDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'baddep');
+            writeFailingLoadScript(fullfile(depDir, 'load_package.m'));
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
+                'dependencies', {'baddep'});
+            testCase.verifyError(@() mip.load('mip-org/core/mainpkg'), 'mip:loadError');
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/baddep'));
+        end
+
     end
+end
+
+function writeFailingLoadScript(scriptPath)
+%WRITEFAILINGLOADSCRIPT   Overwrite a load_package.m so that it errors.
+    fid = fopen(scriptPath, 'w');
+    fprintf(fid, 'function load_package()\n');
+    fprintf(fid, '    error(''test:loadFailed'', ''intentional load failure'');\n');
+    fprintf(fid, 'end\n');
+    fclose(fid);
 end
