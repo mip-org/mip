@@ -21,9 +21,14 @@ function install(varargin)
 %   --no-compile        Skip compilation (editable installs only)
 %
 % Local packages:
-%   If the argument is a directory path containing a mip.yaml file,
-%   the package is installed locally. In editable mode, changes to
-%   the source directory are reflected immediately without reinstalling.
+%   To install a local directory, the path must start with '~', '.', or
+%   '/' (e.g. './mypkg', '/abs/path/mypkg'). The directory must contain
+%   a mip.yaml file. In editable mode, changes to the source directory
+%   are reflected immediately without reinstalling.
+%
+%   Bare names like 'chebfun' are always resolved against channels, even
+%   if a directory of the same name exists in the current folder. Use
+%   './chebfun' to force a local install.
 %
 % Packages can be specified by bare name or fully qualified name
 % (org/channel/package). Fully qualified names override the --channel flag.
@@ -58,28 +63,59 @@ function install(varargin)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
 
-    % Check if any argument is a local directory with mip.yaml
+    % Categorize each argument by how it should be installed:
+    %   - mhl source   (.mhl file or http(s) URL)
+    %   - local path   (starts with ~, ., or /)
+    %   - repo package (bare name or org/channel/package FQN)
+    % Anything else (e.g. 'foo/bar', 'a/b/c/d') is rejected with a hint
+    % about prefixing with './' for local installs.
+    mhlSources = {};
+    localPaths = {};
+    repoPackages = {};
     for i = 1:length(args)
-        pkg = args{i};
-        % Resolve '.' and relative paths
-        if isfolder(pkg)
-            mipYamlPath = fullfile(pkg, 'mip.yaml');
-            if isfile(mipYamlPath)
-                mip.utils.install_local(pkg, editable, noCompile);
-                return;
-            else
-                error('mip:install:noMipYaml', ...
-                      'Directory "%s" does not contain a mip.yaml file.', pkg);
+        pkg = char(args{i});
+        if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
+            mhlSources{end+1} = pkg; %#ok<*AGROW>
+        elseif startsWith(pkg, '~') || startsWith(pkg, '.') || startsWith(pkg, '/')
+            localPaths{end+1} = pkg;
+        else
+            parts = strsplit(pkg, '/');
+            if length(parts) ~= 1 && length(parts) ~= 3
+                error('mip:install:invalidPackageSpec', ...
+                      ['Invalid package specifier "%s".\n' ...
+                       'Use "package" for a bare name or "org/channel/package" for a fully qualified name.\n' ...
+                       'To install a local package, prefix the path with "./":\n' ...
+                       '  mip install ./%s'], pkg, pkg);
             end
+            repoPackages{end+1} = pkg;
         end
     end
 
-    if editable
+    if editable && isempty(localPaths)
         error('mip:install:editableRequiresLocal', ...
               '--editable can only be used with local directory packages.');
     end
 
-    packageNames = args;
+    % Process local directory installs first
+    for i = 1:length(localPaths)
+        localPath = localPaths{i};
+        if ~isfolder(localPath)
+            error('mip:install:notADirectory', ...
+                  '"%s" is not a directory.', localPath);
+        end
+        mipYamlPath = fullfile(localPath, 'mip.yaml');
+        if ~isfile(mipYamlPath)
+            error('mip:install:noMipYaml', ...
+                  'Directory "%s" does not contain a mip.yaml file.', localPath);
+        end
+        mip.utils.install_local(localPath, editable, noCompile);
+    end
+
+    % If only local installs were requested, we're done
+    if isempty(repoPackages) && isempty(mhlSources)
+        return;
+    end
+
     packagesDir = mip.utils.get_packages_dir();
 
     % Create packages directory if it doesn't exist
@@ -87,24 +123,23 @@ function install(varargin)
         mkdir(packagesDir);
     end
 
-    % Separate packages by type
-    repoPackages = {};
-    mhlSources = {};
-
-    for i = 1:length(packageNames)
-        pkg = packageNames{i};
-        if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
-            mhlSources = [mhlSources, {pkg}]; %#ok<*AGROW>
-        else
-            repoPackages = [repoPackages, {pkg}];
-        end
-    end
-
     % Handle repository packages
     installedFqns = {};
 
     if ~isempty(repoPackages)
-        installedFqns = [installedFqns, installFromRepository(repoPackages, packagesDir, channel)];
+        try
+            installedFqns = [installedFqns, installFromRepository(repoPackages, packagesDir, channel)];
+        catch ME
+            % If a repo install failed and one of the requested names also
+            % exists as a relative directory in the current folder, augment
+            % the error with a hint about prefixing with './'.
+            hint = buildLocalDirHint(repoPackages);
+            if ~isempty(hint)
+                wrapped = MException(ME.identifier, '%s\n\n%s', ME.message, hint);
+                throw(wrapped);
+            end
+            rethrow(ME);
+        end
     end
 
     % Handle .mhl file installations
@@ -511,4 +546,20 @@ function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChann
         unavailablePackages(chUnavailKeys{j}) = chUnavail(chUnavailKeys{j});
     end
     fetchedChannels(ch) = true;
+end
+
+function hint = buildLocalDirHint(repoPackages)
+% If any of the repo-style args also exists as a relative directory in
+% the current folder, build a hint suggesting the './' form.
+    lines = {};
+    for i = 1:length(repoPackages)
+        pkg = repoPackages{i};
+        if isfolder(pkg)
+            lines{end+1} = sprintf( ...
+                ['Note: a local directory "%s" exists in the current folder.\n' ...
+                 'To install it as a local package instead, run:\n' ...
+                 '  mip install ./%s'], pkg, pkg);
+        end
+    end
+    hint = strjoin(lines, sprintf('\n\n'));
 end
