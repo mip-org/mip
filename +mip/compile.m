@@ -17,88 +17,32 @@ if nargin < 1
 end
 
 packageArg = varargin{1};
-if isstring(packageArg)
-    packageArg = char(packageArg);
-end
 
-% Resolve to FQN
-result = mip.utils.parse_package_arg(packageArg);
-
-if result.is_fqn
-    fqn = packageArg;
-    org = result.org;
-    channelName = result.channel;
-    packageName = result.name;
-else
-    fqn = mip.utils.resolve_bare_name(result.name);
-    if isempty(fqn)
-        error('mip:compile:notInstalled', ...
-              'Package "%s" is not installed.', result.name);
-    end
-    r = mip.utils.parse_package_arg(fqn);
-    org = r.org;
-    channelName = r.channel;
-    packageName = r.name;
-end
-
-pkgDir = mip.utils.get_package_dir(org, channelName, packageName);
-
-if ~exist(pkgDir, 'dir')
+% Resolve to installed FQN
+r = mip.utils.resolve_to_installed(packageArg);
+if isempty(r)
     error('mip:compile:notInstalled', ...
-          'Package "%s" is not installed.', fqn);
+          'Package "%s" is not installed.', packageArg);
 end
 
-% Read mip.json
-pkgInfo = mip.utils.read_package_json(pkgDir);
-
-% Determine compile script and working directory
-compileScript = '';
-compileDir = '';
-
-isEditable = isfield(pkgInfo, 'editable') && pkgInfo.editable;
-
-if isfield(pkgInfo, 'compile_script') && ~isempty(pkgInfo.compile_script)
-    compileScript = pkgInfo.compile_script;
-else
-    % Try reading compile_script from mip.yaml in source or package dir
-    yamlSearchDir = pkgDir;
-    if isfield(pkgInfo, 'source_path') && ~isempty(pkgInfo.source_path) ...
-            && isfolder(pkgInfo.source_path)
-        yamlSearchDir = pkgInfo.source_path;
-    end
-
-    mipYamlPath = fullfile(yamlSearchDir, 'mip.yaml');
-    if isfile(mipYamlPath)
-        mipConfig = mip.utils.read_mip_yaml(yamlSearchDir);
-        [buildEntry, ~] = mip.build.match_build(mipConfig);
-        resolvedConfig = mip.build.resolve_build_config(mipConfig, buildEntry);
-        if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
-            compileScript = resolvedConfig.compile_script;
-        end
-    end
-end
-
-% Editable installs compile in the source directory;
-% non-editable installs compile in the package subdirectory
-if isEditable && isfield(pkgInfo, 'source_path') && ~isempty(pkgInfo.source_path)
-    compileDir = pkgInfo.source_path;
-elseif isEditable
-    compileDir = pkgDir;
-else
-    compileDir = fullfile(pkgDir, pkgInfo.name);
-end
+% Read mip.json and find compile script
+pkgInfo = mip.utils.read_package_json(r.pkg_dir);
+compileScript = mip.utils.get_build_field(pkgInfo, r.pkg_dir, 'compile_script');
 
 if isempty(compileScript)
     error('mip:compile:noCompileScript', ...
-          'Package "%s" does not have a compile script defined.', fqn);
+          'Package "%s" does not have a compile script defined.', r.fqn);
 end
+
+% Determine compile directory
+compileDir = mip.utils.get_source_dir(r.pkg_dir, pkgInfo);
 
 if ~isfolder(compileDir)
     error('mip:compile:sourceMissing', ...
           'Compile directory "%s" does not exist.', compileDir);
 end
 
-fprintf('Compiling "%s"...\n', fqn);
+fprintf('Compiling "%s"...\n', r.fqn);
 mip.build.run_compile(compileDir, compileScript);
 
 end

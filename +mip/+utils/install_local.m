@@ -67,22 +67,8 @@ end
 % Mark as directly installed
 mip.utils.add_directly_installed(fqn);
 fprintf('Successfully installed "%s"\n', fqn);
-% Use bare name unless another package with the same name is installed
-allInstalled = mip.utils.list_installed_packages();
-sameNameCount = 0;
-for i = 1:length(allInstalled)
-    r = mip.utils.parse_package_arg(allInstalled{i});
-    if strcmp(r.name, packageName)
-        sameNameCount = sameNameCount + 1;
-    end
-end
-if sameNameCount > 1
-    loadName = fqn;
-else
-    loadName = packageName;
-end
 fprintf('\nTo use this package, run:\n');
-fprintf('  mip load %s\n', loadName);
+fprintf('  mip load %s\n', mip.utils.load_hint_name(fqn));
 
 % Warn if package exists in multiple channels
 allInstalled = mip.utils.find_all_installed_by_name(packageName);
@@ -177,8 +163,7 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
 
     % Generate load/unload scripts with absolute paths
     scriptOpts = struct('absolute', true);
-    mip.build.create_load_script(pkgDir, absolutePaths, scriptOpts);
-    mip.build.create_unload_script(pkgDir, absolutePaths, scriptOpts);
+    mip.build.create_path_scripts(pkgDir, absolutePaths, scriptOpts);
 
     % Determine compile_script
     compileScript = '';

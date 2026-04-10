@@ -175,12 +175,7 @@ end
 function index = fetchRemoteIndex(channelStr)
 % Fetch the remote index for a channel. Returns [] on failure.
     try
-        indexUrl = mip.index(channelStr);
-        tempFile = [tempname, '.json'];
-        websave(tempFile, indexUrl, weboptions('Timeout', 60));
-        indexJson = fileread(tempFile);
-        delete(tempFile);
-        index = jsondecode(indexJson);
+        index = mip.utils.fetch_index(channelStr);
     catch
         index = [];
     end
