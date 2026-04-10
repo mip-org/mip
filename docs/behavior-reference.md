@@ -32,7 +32,7 @@ Any package argument passed to a `mip` command (bare or FQN) can include `@versi
 
 The `@` is parsed from the last occurrence in the string. The version suffix is stripped before resolving the package identity.
 
-The `@version` suffix applies **only** to command-line package arguments. It is not supported inside the `dependencies` field of `mip.yaml` -- dependency entries are plain package names (bare or FQN) with no version or version-constraint grammar. See [§14.2](#142-no-version-constraints-on-dependencies).
+The `@version` suffix applies **only** to command-line package arguments. It is not supported inside the `dependencies` field of `mip.yaml` -- dependency entries are plain package names (bare or FQN) with no version or version-constraint grammar.
 
 ### 1.5 Channels
 
@@ -188,7 +188,7 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 
 1. If `--channel` is provided, use it as the primary channel for any bare-name arguments. Otherwise default to `mip-org/core`.
 2. FQN arguments use the org/channel encoded in the name; `--channel` does not apply to them.
-3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch). See [§14.18](#1418--channel-flag-interaction-with-fqn).
+3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch).
 
 #### 3.1.2 Index Fetching
 
@@ -238,13 +238,13 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
 3. Print a summary with load hints.
 
-If any package in step 1 fails (download error, extraction failure, etc.), the install loop aborts and `mip install` runs the same prune logic that `mip uninstall` uses (`mip.utils.prune_unused_packages`). Because the user-requested packages haven't been added to `directly_installed.txt` yet, any dependencies that did install successfully during this call get pruned as orphans, leaving the package set as it was before the call -- modulo any pre-existing orphans, which the prune sweep will also remove. The original install error is then re-raised. See [§14.11](#1411-no-rollback-on-failed-install).
+If any package in step 1 fails (download error, extraction failure, etc.), the install loop aborts and `mip install` runs the same prune logic that `mip uninstall` uses (`mip.utils.prune_unused_packages`). Because the user-requested packages haven't been added to `directly_installed.txt` yet, any dependencies that did install successfully during this call get pruned as orphans, leaving the package set as it was before the call -- modulo any pre-existing orphans, which the prune sweep will also remove. The original install error is then re-raised.
 
 #### 3.1.7 Already-Installed Behavior
 
 If a package is already installed, `mip install` prints a message and skips it. It does **not** error. It does **not** reinstall or upgrade. Use `mip update` for that.
 
-**Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` silently replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package). The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place. See [§14.13](#1413-multiple-versions-of-the-same-package).
+**Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` silently replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package). The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place.
 
 #### 3.1.8 Multiple Packages
 
@@ -524,7 +524,7 @@ Using an FQN bypasses this check entirely.
 Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is removed directly and `mip.utils.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
 
 - The up-to-date check is skipped -- local packages are always reinstalled.
-- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. See [§14.16](#1416-mip-update-on-local-package-always-reinstalls).
+- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved.
 
 ### 7.3 Force Update (`--force`)
 
@@ -608,6 +608,36 @@ Displays information about a package from two sources:
 ### 9.3 `mip avail`
 
 Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`).
+
+### 9.4 `mip version`
+
+Prints the mip version string, read from `mip.yaml` in the package root.
+
+### 9.5 `mip index`
+
+Prints the channel index URL. Takes an optional channel argument (default: `mip-org/core`). The URL follows the pattern `https://<org>.github.io/mip-<channel>/index.json`.
+
+### 9.6 `mip root`
+
+Prints the mip root directory path. See [§11.5](#115-mip_root-environment-variable) for resolution rules.
+
+### 9.7 `mip reset`
+
+Resets mip to a clean state:
+1. Runs `mip unload --all --force` (unloads everything except `mip-org/core/mip`).
+2. Removes all in-memory key-value stores (`MIP_LOADED_PACKAGES`, `MIP_DIRECTLY_LOADED_PACKAGES`, `MIP_STICKY_PACKAGES`).
+
+### 9.8 `mip bundle <path>`
+
+Builds a `.mhl` archive from a local package directory containing `mip.yaml`. Options:
+- `--output <dir>` -- output directory (default: current directory)
+- `--arch <arch>` -- override architecture (default: auto-detect)
+
+Output filename: `<name>-<version>-<architecture>.mhl`. See [§11.3](#113-mhl-file-format) for the archive format.
+
+### 9.9 `mip test <package>`
+
+Loads the package (if not already loaded) and runs its `test_script` (defined in `mip.yaml`). If no test script is defined, prints a message and returns.
 
 ---
 
@@ -697,6 +727,7 @@ This tracking is critical for dependency pruning: only directly installed packag
   "editable": false,
   "source_path": "/path/to/source",
   "compile_script": "do_compile.m",
+  "test_script": "run_tests.m",
   "commit_hash": "abc123...",
   "source_hash": "def456...",
   "timestamp": "2026-04-06T12:00:00"
@@ -721,6 +752,7 @@ addpaths:                       # Optional (defaults to [])
 builds:                         # Optional
   - architectures: [any]
     compile_script: "compile.m" # Optional
+    test_script: "run_tests.m"  # Optional
 ```
 
 ### 11.3 `.mhl` File Format
@@ -803,149 +835,66 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 
 ---
 
-## 14. Open Questions, Edge Cases, and Discussion
+## 14. Open Questions and Gaps
 
-This section collects behaviors that are ambiguous, inconsistently implemented, untested, or potentially surprising. Each item is a candidate for clarification and potential changes.
+This section collects unresolved design questions and untested behaviors. Items that were previously open but have since been resolved are documented in the relevant sections above (see issues [#95](https://github.com/mip-org/mip/issues/95), [#99](https://github.com/mip-org/mip/issues/99)--[#105](https://github.com/mip-org/mip/issues/105)).
 
 ### 14.1 Inconsistent Bare-Name Dependency Resolution
 
-**Problem**: Bare-name dependencies are resolved differently in different contexts:
+Bare-name dependencies are resolved differently depending on context:
 
-- **During `install` (graph building)**: bare name -> always `mip-org/core/<name>` (section 2.4.5)
-- **During `load` (runtime)**: bare name -> same channel first, then `mip-org/core`, then general resolution (section 2.4.4)
-- **During `prune` (after unload/uninstall)**: bare name -> same channel first, then general resolution (section 2.4.6)
+- **Install** ([§2.4.5](#245-resolving-a-dependency-during-remote-install-build_dependency_graph)): always `mip-org/core/<name>`
+- **Load** ([§2.4.4](#244-resolving-a-dependency-during-load-resolvedependency-in-loadm)): same channel first, then `mip-org/core`
+- **Prune** ([§2.4.6](#246-resolving-a-dependency-during-prune-getalldependencies-in-unloadm-and-uninstallm)): same channel first, then general resolution
 
-This means a package could be installed with dependencies resolved one way, but loaded with those same dependencies resolved differently. For example:
-- Package `mip-org/test-channel1/gamma` depends on `alpha` (bare name).
-- During install, `alpha` is resolved to `mip-org/core/alpha`.
-- During load, if `mip-org/test-channel1/alpha` is also installed, it would be preferred over `mip-org/core/alpha`.
+This means a package's dependencies could be installed from one channel but loaded from another. Additionally, `mip.json` stores dependency names as-is from `mip.yaml` (which may be bare names), so the resolution happens fresh at load time and prune time rather than being fixed at install time.
 
-**Suggestion**: Consider unifying this behavior. Two options:
-1. Always resolve bare-name deps to `mip-org/core` everywhere (simpler, more predictable).
-2. Always try same-channel first everywhere (more intuitive for channel authors who expect their dependencies to stay within the channel).
+A possible fix: resolve bare-name dependencies to FQNs at install time and store the resolved FQNs in `mip.json`.
 
-A potential middle ground: at install time, resolve bare-name deps using same-channel-first logic and **store the resolved FQN** in `mip.json`. Then at load time, always use the resolved FQN. This would make behavior consistent and explicit.
+**Untested.**
 
-### 14.2 No Version Constraints on Dependencies
+### 14.2 Local Install Dependency Check Is Incomplete
 
-**Current behavior**: Dependencies in `mip.yaml` are by name only (bare or FQN). Entries have no version field, no `@version` suffix, and no constraint grammar (`>=`, `~`, ranges). `mip install` always picks the version chosen by `select_best_version` ([§3.1.3](#313-version-selection-select_best_version)). If a dependency is already installed at any version, it is treated as satisfied -- no version comparison, no upgrade, no warning.
+Local install ([§3.2.4](#324-dependency-validation-for-local-install)) resolves bare-name dependencies only to `mip-org/core/<name>`. A dependency installed on a different channel (e.g., `mylab/custom/dep`) would be missed even though it is present. Should use `resolve_bare_name` instead.
 
-**Resolved in [#95](https://github.com/mip-org/mip/issues/95)**: dependency version constraints are **out of scope**. A constraint system would add significant implementation and UX complexity (resolution, conflict reporting, already-installed reconciliation, lock-file interaction) that is not justified for current use cases. Packages pinning an explicit dependency version should do so by listing the FQN of a version-locked package in an appropriate channel, not via a constraint in `mip.yaml`.
+**Untested.**
 
-This decision may be revisited if a concrete need arises. Related: lock files ([§14.5](#145-no-lock-file-or-dependency-snapshot), [#96](https://github.com/mip-org/mip/issues/96)).
+### 14.3 Pruning May Disagree With Install About Dependency Channels
 
-### 14.3 Local Install Dependency Check Is Incomplete
+Pruning uses same-channel-first resolution for bare-name dependencies ([§2.4.6](#246-resolving-a-dependency-during-prune-getalldependencies-in-unloadm-and-uninstallm)), but install always resolves to `mip-org/core` ([§2.4.5](#245-resolving-a-dependency-during-remote-install-build_dependency_graph)). If you later install the same-named package on another channel, pruning might resolve to the new one and incorrectly orphan the original. Related to [§14.1](#141-inconsistent-bare-name-dependency-resolution).
 
-**Current behavior** (section 3.2.4): Local install checks that each dependency's directory exists, but bare-name dependencies are always resolved to `mip-org/core/<name>`. If the dependency is installed on a different channel (e.g., `mylab/custom/depA`), the check fails even though the dependency is present.
+**Untested.**
 
-**Suggestion**: Use `resolve_bare_name` for the dependency check in local installs, consistent with other resolution contexts.
+### 14.4 No Lock File
 
-### 14.4 `mip uninstall` Doesn't Track Dependency-Only Packages Across Channels
+There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk is the only record. See [#96](https://github.com/mip-org/mip/issues/96).
 
-**Current behavior**: `directly_installed.txt` tracks which packages the user explicitly installed. Pruning removes packages not in this set and not transitively needed. But the pruning uses same-channel-first resolution for bare-name dependencies, which could differ from the original install-time resolution.
+### 14.5 Ambiguous Unload Uses Load Order
 
-**Edge case**: If you install `A` which depends on `B` (bare name), the install resolves `B` to `mip-org/core/B`. But if you later install `myorg/chan/B`, pruning might now resolve `A`'s dependency on `B` to `myorg/chan/B` (same-channel first), potentially leaving `mip-org/core/B` eligible for pruning even though `A` was actually using it.
+When multiple loaded packages share a bare name, `mip unload <bare>` unloads the most recently loaded one ([§5.2](#52-bare-name-disambiguation-for-unload)). This differs from `mip uninstall`, which refuses and requires FQN disambiguation ([§6.3](#63-bare-name-ambiguity)). Should these be consistent?
 
-### 14.5 No Lock File or Dependency Snapshot
+### 14.6 `mip load --install` Channel Handling
 
-**Current behavior**: There is no lock file recording exactly which versions/commits of all dependencies were installed. The installed state is the only record.
+`mip load --install chebfun` installs from the default channel (or `--channel`) if not installed. There is no disambiguation check when the package name exists on multiple channels. Should this error like `mip uninstall` does?
 
-**Questions**:
-- Should there be a lock file for reproducibility?
-- Should `mip install` record exact commit hashes of all dependencies?
+**Untested.**
 
-### 14.6 Ambiguous Unload Behavior (Load-Order Based)
+### 14.7 Concurrent MATLAB Sessions
 
-**Current behavior** (section 5.2): When multiple loaded packages share a bare name, `mip unload <bare>` unloads the **most recently loaded** one.
+In-memory state (`setappdata`) is per-session. File state (`directly_installed.txt`) is shared with no file locking. Concurrent sessions could corrupt the file.
 
-**Questions**:
-- Is load-order-based disambiguation intuitive enough?
-- Should this instead error and require FQN disambiguation (consistent with how uninstall handles it)?
-- Should there be a warning that multiple packages match?
+**Untested.**
 
-### 14.7 `mip load --install` Doesn't Resolve Through Channels
+### 14.8 Missing Test Coverage
 
-**Current behavior**: `mip load --install chebfun` will try `mip install chebfun` if not installed. But if the package name is ambiguous across channels (e.g., exists in both core and a custom channel), the install will use the default channel (or `--channel` if provided).
+Behaviors specified in this document but not covered by tests:
 
-**Question**: Should `--install` error if the bare name could resolve to multiple channels, similar to how uninstall handles ambiguity?
-
-### 14.8 Promotion from Dependency to Direct Load
-
-**Current behavior** (section 4.1, step 5): If a package is already loaded as a dependency and you do `mip load <package>`, it gets promoted to "directly loaded". This affects pruning: it won't be pruned when the original parent is unloaded.
-
-**Question**: Should promotion also work in reverse? If you directly load a package and then another package loads it as a dependency, should unloading the direct reference demote it back to dependency status? Currently, yes -- unloading removes it from `MIP_DIRECTLY_LOADED_PACKAGES`, and if it's still needed as a dependency, the prune step won't remove it.
-
-### 14.9 Concurrent MATLAB Sessions
-
-**Current behavior**: In-memory state (`setappdata`) is per-session. File-based state (`directly_installed.txt`) is shared. Two MATLAB sessions can see different loaded packages but share the installed state.
-
-**Questions**:
-- Can concurrent sessions corrupt `directly_installed.txt` (no file locking)?
-- Should `mip list` or `mip info` warn if file state and memory state are inconsistent?
-
-### 14.10 Update Doesn't Explicitly Check Dependencies
-
-**Current behavior**: `mip update <pkg>` only checks whether `<pkg>` itself needs updating. If it does, the uninstall+install cycle ([§7.1](#71-update-flow-mip-update-x-y-z)) re-resolves the full dependency graph and effectively updates the deps as a side-effect. If `<pkg>` is already up to date, its dependencies are **not** revisited -- use `mip update --force <pkg>` to force the uninstall+install cycle and pick up fresh deps.
-
-**Resolved in [#99](https://github.com/mip-org/mip/issues/99)**: there is no `mip update --recursive` or `mip update --all`. The user-facing semantics are deliberately "`mip update X Y Z` ≡ `mip uninstall X Y Z` + `mip install X Y Z` + reload previously-loaded packages" -- anything that wants broader dep refresh should pass the right package list or use `--force`.
-
-### 14.11 Rollback on Failed Install
-
-**Current behavior**: If an install fails mid-way (e.g., download error), `downloadAndInstall` removes its own partial directory and `mip install` then runs `mip.utils.prune_unused_packages` to roll back any dependencies that were installed during the same call. The user-requested packages haven't been added to `directly_installed.txt` yet, so anything installed by this call that isn't already a directly-installed package or one of its needed dependencies is pruned as an orphan. The original install error is re-raised.
-
-**Resolved in [#100](https://github.com/mip-org/mip/issues/100)** by extracting `mip.utils.prune_unused_packages` (formerly a private helper inside `mip uninstall`) and reusing it from the install failure path.
-
-**Caveats**:
-- The rollback prune sweep also removes any *pre-existing* orphans (packages that were already on disk but not in `directly_installed.txt`). In practice this is fine -- those should have been pruned already -- but it's a minor side effect to be aware of.
-- If `mip.utils.prune_unused_packages` itself fails, a `mip:rollbackFailed` warning is printed and the original install error is still re-raised.
-
-### 14.12 `MIP_ROOT` Environment Variable Validation
-
-**Resolved in [#101](https://github.com/mip-org/mip/issues/101)**: See [§11.5](#115-mip_root-environment-variable) for the rules. In short: empty string is treated as unset; nonexistent paths and directories missing a `packages/` subdirectory raise `mip:rootInvalid`; `mip.root()` never auto-creates `packages/`.
-
-### 14.13 Multiple Versions of the Same Package
-
-**Current behavior**: Only one version of a package can be installed per FQN. The same package name can exist at different versions on different channels (e.g., `mip-org/core/pkg` at v1 and `mylab/custom/pkg` at v2) -- those are independent installs.
-
-**Resolved in [#102](https://github.com/mip-org/mip/issues/102)**: `mip install pkg@2.0` when a different version of `pkg` is already installed silently replaces it (uninstall + install). See [§3.1.7](#317-already-installed-behavior). This only applies when the user passed an explicit `@version`; without `@version`, the existing "already installed" behavior is unchanged. `@version` is honored regardless of whether the request is bare-name or a FQN to any channel.
-
-Lock files (#96) and dependency version constraints (#95) are out of scope for now.
-
-### 14.14 `mip.json` Dependencies Store Bare Names
-
-**Current behavior**: The `dependencies` field in `mip.json` stores whatever was in `mip.yaml` -- which may be bare names or FQNs. This means the resolution happens at load time and prune time, which can produce different results.
-
-**Suggestion**: Normalize dependencies to FQNs at install time and store the resolved FQNs in `mip.json`. This would eliminate the resolution inconsistency described in 14.1.
-
-### 14.15 Missing Test Coverage
-
-The following behaviors are specified in this document but not fully covered by tests:
-
-- Cross-channel bare-name dependency resolution inconsistency between install and load
-- `mip install` with multiple packages and shared dependencies
-- Pruning behavior after uninstall with complex dependency graphs
-- `mip load --install` with `--channel`
-- Concurrent session file state consistency
-- `mip update` with loaded dependencies
-- `mip info` with `--channel` for remote-only packages
-- `mip install` from URL (https://...)
-- Broken dependency warnings after prune
-
-### 14.16 `mip update` on Local Package Always Reinstalls
-
-**Current behavior**: `mip update local/local/pkg` always deletes and reinstalls from source, even if nothing changed (see [§7.2](#72-local-package-update)). For editable installs the `compile_script` runs again on every update.
-
-This behavior is intentional and was confirmed in [#103](https://github.com/mip-org/mip/issues/103):
-- Unconditional uninstall + reinstall is the expected semantics for `mip update` on a local package — `mip update` is the user's "rebuild from source" hammer.
-- For editable installs, recompiling is wanted: the user almost certainly edited source that needs rebuilding.
-- There is no `mip update --all`; see [§14.10](#1410-update-doesnt-explicitly-check-dependencies).
-
-### 14.17 `load_package.m` Error Handling
-
-**Resolved in [#104](https://github.com/mip-org/mip/issues/104)**: A failing `load_package.m` now raises `mip:loadError` and the package is **not** marked as loaded, so the user can fix the script and retry. See [§4.7](#47-load_packagem-execution) for the full semantics. mip does not attempt to roll back any path mutations the partial run may have made -- recovering them in general is not feasible. The original error is attached as a cause on the `mip:loadError` MException.
-
-### 14.18 `--channel` Flag Interaction with FQN
-
-**Current behavior**: When using `mip install org/chan/pkg --channel other/chan`, the FQN takes precedence and `--channel` is silently ignored for that package -- no warning, no error. If every package argument is a FQN, `--channel` is ignored entirely: its index is not fetched and the "Using channel" line is not printed. In a mixed call (`mip install <fqn> <bare> --channel <other>`), `--channel` applies only to the bare-name argument.
-
-This behavior is intentional and was confirmed in [#105](https://github.com/mip-org/mip/issues/105). Bare-name dependencies in `mip.json` are always resolved to `mip-org/core` (see [§3.1.5](#315-dependency-resolution)) and are unaffected by `--channel`.
+- Bare-name dependency resolution inconsistency between install, load, and prune ([§14.1](#141-inconsistent-bare-name-dependency-resolution))
+- Local install dependency check for non-core channels ([§14.2](#142-local-install-dependency-check-is-incomplete))
+- Pruning disagreement with install about dependency channels ([§14.3](#143-pruning-may-disagree-with-install-about-dependency-channels))
+- `mip load --install` with `--channel` ([§14.6](#146-mip-load---install-channel-handling))
+- `mip install` from URL (`https://...`)
+- Broken dependency warnings after prune ([§5.9](#59-broken-dependency-warning))
+- `select_best_version` ([§3.1.3](#313-version-selection-select_best_version)) and `select_best_variant` ([§3.1.4](#314-architecture-selection-select_best_variant)) -- no unit tests
+- `mip avail` ([§9.3](#93-mip-avail)), `mip list` ([§9.1](#91-mip-list)), `mip info` remote-only display with `--channel`
+- `mip bundle` ([§9.8](#98-mip-bundle-path)), `mip test` ([§9.9](#99-mip-test-package)), `mip index` ([§9.5](#95-mip-index))
