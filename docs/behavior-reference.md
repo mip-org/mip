@@ -894,7 +894,4 @@ Behaviors specified in this document but not covered by tests:
 - Pruning disagreement with install about dependency channels ([§14.3](#143-pruning-may-disagree-with-install-about-dependency-channels))
 - `mip load --install` with `--channel` ([§14.6](#146-mip-load---install-channel-handling))
 - `mip install` from URL (`https://...`)
-- Broken dependency warnings after prune ([§5.9](#59-broken-dependency-warning))
-- `select_best_version` ([§3.1.3](#313-version-selection-select_best_version)) and `select_best_variant` ([§3.1.4](#314-architecture-selection-select_best_variant)) -- no unit tests
-- `mip avail` ([§9.3](#93-mip-avail)), `mip list` ([§9.1](#91-mip-list)), `mip info` remote-only display with `--channel`
-- `mip bundle` ([§9.8](#98-mip-bundle-path)), `mip test` ([§9.9](#99-mip-test-package)), `mip index` ([§9.5](#95-mip-index))
+- `mip avail` ([§9.3](#93-mip-avail)), `mip info` remote-only display with `--channel`
