@@ -867,7 +867,7 @@ Pruning uses same-channel-first resolution for bare-name dependencies ([§2.4.6]
 
 ### 14.4 No Lock File
 
-There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk is the only record. See [#96](https://github.com/mip-org/mip/issues/96).
+There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk (`~/.mip/packages/` and `directly_installed.txt`) is the only record, so installs are not reproducible across machines or over time. Lock file support is **not planned for the first release**.
 
 ### 14.5 Ambiguous Unload Uses Load Order
 
