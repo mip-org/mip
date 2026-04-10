@@ -7,7 +7,7 @@ function pkgDir = get_package_dir(org, channelName, packageName)
 %   packageName - Package name (e.g. 'chebfun')
 %
 % Returns:
-%   pkgDir - Full path: ~/.mip/packages/<org>/<channel>/<package>/
+%   pkgDir - Full path: <root>/packages/<org>/<channel>/<package>/
 
 packagesDir = mip.paths.get_packages_dir();
 pkgDir = fullfile(packagesDir, org, channelName, packageName);
