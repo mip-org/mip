@@ -28,6 +28,7 @@ function bundle(varargin)
     sourceDir = '';
     outputDir = pwd;
     architecture = '';
+    cpuLevel = '';
 
     i = 1;
     while i <= length(varargin)
@@ -43,6 +44,12 @@ function bundle(varargin)
                 error('mip:bundle:missingArch', '--arch requires an architecture argument');
             end
             architecture = varargin{i + 1};
+            i = i + 2;
+        elseif ischar(arg) && strcmp(arg, '--cpu-level')
+            if i + 1 > length(varargin)
+                error('mip:bundle:missingCpuLevel', '--cpu-level requires a level argument');
+            end
+            cpuLevel = varargin{i + 1};
             i = i + 2;
         elseif isempty(sourceDir)
             sourceDir = arg;
@@ -100,9 +107,23 @@ function bundle(varargin)
         mipJson = jsondecode(mipJsonText);
         effectiveArch = mipJson.architecture;
 
-        % Build output filename
-        mhlFilename = sprintf('%s-%s-%s.mhl', ...
-            mipConfig.name, num2str(mipConfig.version), effectiveArch);
+        % Write cpu_level into mip.json if provided
+        if ~isempty(cpuLevel)
+            mipJson.cpu_level = cpuLevel;
+            mipJsonText = jsonencode(mipJson);
+            fid = fopen(mipJsonPath, 'w');
+            fwrite(fid, mipJsonText);
+            fclose(fid);
+        end
+
+        % Build output filename (with optional cpu_level suffix)
+        if ~isempty(cpuLevel)
+            mhlFilename = sprintf('%s-%s-%s-%s.mhl', ...
+                mipConfig.name, num2str(mipConfig.version), effectiveArch, cpuLevel);
+        else
+            mhlFilename = sprintf('%s-%s-%s.mhl', ...
+                mipConfig.name, num2str(mipConfig.version), effectiveArch);
+        end
         mhlPath = fullfile(outputDir, mhlFilename);
 
         % Create .mhl (zip) from staging directory contents
