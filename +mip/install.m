@@ -159,7 +159,7 @@ function install(varargin)
         fprintf('\nSuccessfully installed %d package(s).\n', installedCount);
         fprintf('\nTo use installed packages, run:\n');
         for i = 1:length(installedFqns)
-            fprintf('  mip load %s\n', loadHintName(installedFqns{i}));
+            fprintf('  mip load %s\n', mip.utils.load_hint_name(installedFqns{i}));
         end
     end
 end
@@ -507,24 +507,6 @@ function installedFqn = installFromMhl(mhlSource, packagesDir, channel)
     % Clean up temp directory
     if exist(tempDir, 'dir')
         rmdir(tempDir, 's');
-    end
-end
-
-function name = loadHintName(fqn)
-% Return bare name if unique across installed packages, otherwise FQN.
-    result = mip.utils.parse_package_arg(fqn);
-    allInstalled = mip.utils.list_installed_packages();
-    count = 0;
-    for i = 1:length(allInstalled)
-        r = mip.utils.parse_package_arg(allInstalled{i});
-        if strcmp(r.name, result.name)
-            count = count + 1;
-        end
-    end
-    if count > 1
-        name = fqn;
-    else
-        name = result.name;
     end
 end
 

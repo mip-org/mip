@@ -76,8 +76,7 @@ end
 
 % Generate load/unload scripts in stagingDir
 fprintf('Generating load_package.m and unload_package.m...\n');
-mip.build.create_load_script(stagingDir, prefixedPaths);
-mip.build.create_unload_script(stagingDir, prefixedPaths);
+mip.build.create_path_scripts(stagingDir, prefixedPaths);
 
 % Run compilation if specified
 if isfield(resolvedConfig, 'compile_script') && ...

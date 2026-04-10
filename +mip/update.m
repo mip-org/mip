@@ -155,63 +155,41 @@ function p = resolvePackage(packageArg)
 % update it. Validates that the package is installed and, for local
 % packages, that the original source directory is still available.
 
-    result = mip.utils.parse_package_arg(packageArg);
-
-    if result.is_fqn
-        org = result.org;
-        channelName = result.channel;
-        packageName = result.name;
-        fqn = packageArg;
-    else
-        fqn = mip.utils.resolve_bare_name(result.name);
-        if isempty(fqn)
-            error('mip:update:notInstalled', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  result.name, result.name);
-        end
-        r = mip.utils.parse_package_arg(fqn);
-        org = r.org;
-        channelName = r.channel;
-        packageName = r.name;
-    end
-
-    pkgDir = mip.utils.get_package_dir(org, channelName, packageName);
-    if ~exist(pkgDir, 'dir')
+    r = mip.utils.resolve_to_installed(packageArg);
+    if isempty(r)
         error('mip:update:notInstalled', ...
               'Package "%s" is not installed. Run "mip install %s" first.', ...
-              fqn, fqn);
+              packageArg, packageArg);
     end
 
     try
-        pkgInfo = mip.utils.read_package_json(pkgDir);
+        pkgInfo = mip.utils.read_package_json(r.pkg_dir);
     catch
-        pkgInfo = struct('version', 'unknown', 'name', packageName);
+        pkgInfo = struct('version', 'unknown', 'name', r.name);
     end
 
-    isLocal = strcmp(org, 'local') && strcmp(channelName, 'local');
+    isLocal = strcmp(r.org, 'local') && strcmp(r.channel, 'local');
     sourcePath = '';
     editable = false;
     if isLocal
-        % Validate local requirements up front so we fail before any
-        % destructive action.
         if ~isfield(pkgInfo, 'source_path')
             error('mip:update:noSourcePath', ...
-                  'Local package "%s" does not have a source_path in mip.json. Cannot update.', fqn);
+                  'Local package "%s" does not have a source_path in mip.json. Cannot update.', r.fqn);
         end
         sourcePath = pkgInfo.source_path;
         if ~isfolder(sourcePath)
             error('mip:update:sourceNotFound', ...
-                  'Source directory "%s" for package "%s" no longer exists.', sourcePath, fqn);
+                  'Source directory "%s" for package "%s" no longer exists.', sourcePath, r.fqn);
         end
         editable = isfield(pkgInfo, 'editable') && pkgInfo.editable;
     end
 
     p = struct( ...
-        'fqn', fqn, ...
-        'org', org, ...
-        'channel', channelName, ...
-        'name', packageName, ...
-        'pkgDir', pkgDir, ...
+        'fqn', r.fqn, ...
+        'org', r.org, ...
+        'channel', r.channel, ...
+        'name', r.name, ...
+        'pkgDir', r.pkg_dir, ...
         'pkgInfo', pkgInfo, ...
         'isLocal', isLocal, ...
         'sourcePath', sourcePath, ...
