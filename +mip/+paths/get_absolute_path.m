@@ -9,9 +9,10 @@ function absPath = get_absolute_path(relPath)
 %
 % Errors if the file or directory does not exist.
 
-absPath = matlab.io.internal.filesystem.resolveRelativeLocation(relPath);
-if isempty(char(absPath)) || ~exist(absPath, 'file')
+[status, info] = fileattrib(relPath);
+if ~status
     error('mip:notAFileOrDirectory', '"%s" is not a file or directory.', relPath);
 end
+absPath = info.Name;
 
 end
