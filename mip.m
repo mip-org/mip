@@ -8,6 +8,8 @@ function varargout = mip(command, varargin)
 %   mip install owner/chan/package           - Install using fully qualified name
 %   mip update <package> [...]               - Update one or more packages
 %   mip update --force <package>             - Force update even if up to date
+%   mip update --deps <package>              - Update package and its dependencies
+%   mip update --all                         - Update all installed packages
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip list                                 - List installed packages (reverse load order)

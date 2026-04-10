@@ -38,6 +38,8 @@ Pin a version with `@`: `chebfun@1.2.0`, `mip-org/core/chebfun@main`
 | `mip install -e ./path` | Install from local directory (editable -- source changes take effect immediately) |
 | `mip uninstall <pkg>` | Remove package and prune orphaned deps |
 | `mip update <pkg>` | Reinstall latest version, preserve load state |
+| `mip update --deps <pkg>` | Update package and its dependencies |
+| `mip update --all` | Update all installed packages |
 | `mip load <pkg>` | Add package (+ deps) to MATLAB path |
 | `mip unload <pkg>` | Remove package from path, prune unused deps |
 | `mip list` | List installed packages |
@@ -97,10 +99,12 @@ Dependencies are loaded automatically but tracked separately -- they get pruned 
 ```
 mip update chebfun            % update if newer version available
 mip update --force chebfun    % force reinstall even if up to date
+mip update --deps chebfun     % update chebfun and its dependencies
+mip update --all              % update all installed packages
 mip update ./mypackage        % local packages always reinstall
 ```
 
-Only the named packages are updated -- existing dependencies are left as-is. New dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
+Only the named packages are updated -- existing dependencies are left as-is unless `--deps` is specified. New dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
 
 ---
 

@@ -6,10 +6,14 @@ function update(varargin)
 %   mip.update('org/channel/packageName')
 %   mip.update('package1', 'package2')
 %   mip.update('--force', 'packageName')
+%   mip.update('--deps', 'packageName')
+%   mip.update('--all')
 %   mip.update('mip')
 %
 % Options:
 %   --force           Force update even if already up to date
+%   --all             Update all installed packages
+%   --deps            Also update the dependencies of the named packages
 %
 % For each requested package, checks whether an update is needed. For
 % remote packages, the installed version (and commit hash) is compared
@@ -18,10 +22,11 @@ function update(varargin)
 % nothing happens for that package (unless --force is specified).
 %
 % Remote packages are updated in place: the old directory is removed and
-% the new version is downloaded. Existing dependencies are not updated.
-% After the update, any new dependencies that the updated package requires
-% are installed, and any orphaned packages (old dependencies no longer
-% needed by any directly installed package) are pruned.
+% the new version is downloaded. Existing dependencies are not updated
+% (unless --deps is specified). After the update, any new dependencies
+% that the updated package requires are installed, and any orphaned
+% packages (old dependencies no longer needed by any directly installed
+% package) are pruned.
 %
 % Local packages are reinstalled directly from their source path without
 % going through uninstall (since install_local cannot re-fetch deps from
@@ -35,20 +40,45 @@ function update(varargin)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
 
-    % Check for --force flag
+    % Check for --force, --all, and --deps flags
     force = false;
+    updateAll = false;
+    updateDeps = false;
     args = {};
     for i = 1:length(varargin)
         arg = varargin{i};
         if ischar(arg) && strcmp(arg, '--force')
             force = true;
+        elseif ischar(arg) && strcmp(arg, '--all')
+            updateAll = true;
+        elseif ischar(arg) && strcmp(arg, '--deps')
+            updateDeps = true;
         else
             args{end+1} = arg; %#ok<AGROW>
         end
     end
 
+    % --all: update all installed packages
+    if updateAll
+        if ~isempty(args)
+            error('mip:update:allWithPackages', ...
+                  'Cannot specify package names with --all.');
+        end
+        allInstalled = mip.state.list_installed_packages();
+        if isempty(allInstalled)
+            fprintf('No packages installed.\n');
+            return
+        end
+        args = allInstalled;
+    end
+
     if isempty(args)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
+    end
+
+    % --deps: expand the argument list with each package's dependencies
+    if updateDeps
+        args = expandWithDeps(args);
     end
 
     % Resolve and validate each argument. Any error here (not installed,
@@ -421,5 +451,60 @@ function updateSelf(p, force)
         run(loadScript);
     end
     fprintf('\nmip has been updated to %s.\n', latestVersion);
+end
+
+function expanded = expandWithDeps(args)
+% Expand a list of package arguments to include their installed
+% dependencies (recursively). The original packages come first, followed
+% by any dependencies not already in the list.
+
+    expanded = args;
+    queue = args;
+    seen = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+
+    while ~isempty(queue)
+        current = queue{1};
+        queue(1) = [];
+
+        % Resolve to installed FQN
+        r = mip.resolve.resolve_to_installed(current);
+        if isempty(r)
+            % Not installed — will error later in resolvePackage; skip here
+            continue
+        end
+        fqn = r.fqn;
+        if seen.isKey(fqn)
+            continue
+        end
+        seen(fqn) = true;
+
+        % Read dependencies
+        try
+            pkgInfo = mip.config.read_package_json(r.pkg_dir);
+        catch
+            continue
+        end
+        deps = pkgInfo.dependencies;
+        if isempty(deps) || (isnumeric(deps) && isempty(deps))
+            continue
+        end
+        if ~iscell(deps)
+            deps = {deps};
+        end
+        for j = 1:length(deps)
+            depFqn = mip.resolve.resolve_dependency(deps{j});
+            if ~seen.isKey(depFqn)
+                % Only add if installed
+                depR = mip.parse.parse_package_arg(depFqn);
+                depDir = mip.paths.get_package_dir(depR.org, depR.channel, depR.name);
+                if exist(depDir, 'dir')
+                    if ~any(strcmp(expanded, depFqn))
+                        expanded{end+1} = depFqn; %#ok<AGROW>
+                    end
+                    queue{end+1} = depFqn; %#ok<AGROW>
+                end
+            end
+        end
+    end
 end
 
