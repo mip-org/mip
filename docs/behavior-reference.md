@@ -483,7 +483,7 @@ Using an FQN bypasses this check entirely.
 
 ## 7. Updating
 
-`mip update X Y Z` is, for the packages that actually need updating, equivalent to `mip uninstall X Y Z` followed by `mip install X Y Z`, with the set of previously-loaded packages reloaded at the end. This means each updated package's dependency graph is re-resolved against the current channel index, so dependencies are effectively updated as a side-effect of updating the packages that depend on them. Packages that do **not** need updating are left entirely alone (their dependencies are **not** revisited) unless `--force` is specified.
+`mip update X Y Z` updates only the named packages. Existing dependencies are **not** updated. After replacing each package with the latest version from its channel, any new dependencies that the updated packages require are installed and any orphaned packages (old dependencies no longer needed by any directly installed package) are pruned. Packages that do **not** need updating are left entirely alone unless `--force` is specified.
 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
@@ -503,7 +503,7 @@ Using an FQN bypasses this check entirely.
 5. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
    - **Local packages** are updated in-place: unload if loaded, `rmdir` the old directory, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable)`. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
-   - **Remote packages** go through `mip.uninstall(fqn1, fqn2, ...)` which unloads them, removes them from disk, removes them from `directly_installed.txt`, and prunes any orphaned transitive dependencies. Then `mip.install(remoteFqn1, remoteFqn2, ...)` reinstalls them with freshly-resolved dependency graphs.
+   - **Remote packages** are updated in place: unload if loaded, `rmdir` the old directory, download and extract the new version from the channel. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any new dependencies that the updated packages require but are not yet installed, and prune any orphaned packages.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
    - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
 
@@ -516,7 +516,7 @@ Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, t
 
 ### 7.3 Force Update (`--force`)
 
-Skips the up-to-date check. For remote packages, this forces the full `mip.uninstall` + `mip.install` cycle even when version and commit hash match, causing a fresh dependency resolution against the channel index. This is the way to "update the dependencies" of a package that is itself already up to date (see [§7.6](#76-dependency-updates)). Local packages are always reinstalled regardless of `--force`.
+Skips the up-to-date check. The named package is replaced with the latest version from the channel even when version and commit hash match. Dependencies are still not updated — only the named packages are replaced. To update a dependency, name it explicitly: `mip update dep`.
 
 ### 7.4 Self-Update (`mip update mip`)
 
@@ -526,22 +526,28 @@ Special flow for `mip-org/core/mip`:
 3. Replace the installed package in-place.
 4. Re-run `load_package.m` to reload.
 
-Does not go through the normal uninstall/reinstall flow since mip cannot be uninstalled. Self-update runs before the batch uninstall/install so it is safe to pass `mip` in the same call as other packages.
+Does not go through the normal update flow since mip cannot be uninstalled. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages.
 
 ### 7.5 Load State Preservation
 
-- Packages that were loaded before the update are reloaded afterward, including transitive dependencies that got pruned as unused during the uninstall step and then brought back by the reinstall.
+- Packages that were loaded before the update are reloaded afterward.
 - Packages that were not loaded before the update remain unloaded afterward.
 - The directly-vs-transitively loaded distinction is preserved: a package that was only transitively loaded before the update is not promoted to directly loaded, even if it needed an explicit `mip.load` call during the reload pass.
-- If a previously-loaded package ends up uninstalled after the update (e.g. it was a transitive dep of the old version but not the new one), it is skipped with a warning; its entry is effectively dropped from the loaded set.
+- If a previously-loaded package ends up uninstalled after the update (e.g. it was a transitive dep of the old version but not the new one, and was pruned), it is skipped with a warning; its entry is effectively dropped from the loaded set.
 
-### 7.6 Dependency Updates
+### 7.6 Dependency Handling
 
-Dependencies are updated only as a side-effect of updating a package that depends on them. `mip update foo` does **not** check whether `foo`'s dependencies have newer versions in the channel index. If `foo` itself is up to date, nothing happens; its dependencies are left alone. If `foo` needs an update, the uninstall+install cycle re-resolves the full dependency graph and pulls in whatever the channel currently has. `mip update --force foo` forces the uninstall+install cycle even when `foo` is up to date, which is the way to refresh `foo`'s dependencies from the channel index.
+`mip update foo` does **not** check whether `foo`'s dependencies have newer versions in the channel index. Only the named packages are updated. After the update:
+
+- **New dependencies**: if the new version of `foo` depends on a package that is not installed, it is installed automatically.
+- **Removed dependencies**: if the old version of `foo` depended on a package that is no longer needed by any directly installed package, it is pruned.
+- **Existing dependencies**: dependencies that are already installed are left as-is, even if newer versions exist in the channel.
+
+To update a dependency, name it explicitly: `mip update dep`.
 
 ### 7.7 Directly Installed Tracking
 
-The `directly_installed.txt` entry for each updated package is preserved across the update: `mip.uninstall` removes it and `mip.install` adds it back. Packages that were only transitive dependencies (not directly installed) before the update remain transitive dependencies after the update.
+The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). New dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 
 ---
 

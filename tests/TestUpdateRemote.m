@@ -131,10 +131,10 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
 
         %% --- Dependency re-resolution ---
 
-        function testUpdate_ForceReresolveDeps(testCase)
+        function testUpdate_ForceDoesNotReinstallDeps(testCase)
             % Install gamma (depends on alpha). Force-update gamma.
-            % The uninstall+install cycle should prune alpha (orphaned)
-            % and re-install it alongside gamma.
+            % Alpha should NOT be reinstalled — only the named package
+            % is updated.
             mip.install('--channel', 'mip-org/test-channel1', 'gamma');
 
             gammaDir = fullfile(testCase.TestRoot, 'packages', ...
@@ -145,7 +145,7 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             testCase.verifyTrue(exist(gammaDir, 'dir') > 0);
             testCase.verifyTrue(exist(alphaDir, 'dir') > 0);
 
-            % Drop a marker in alpha to prove it was reinstalled
+            % Drop a marker in alpha to prove it was NOT reinstalled
             marker = fullfile(alphaDir, '.test_marker');
             fid = fopen(marker, 'w'); fclose(fid);
             testCase.verifyTrue(exist(marker, 'file') > 0);
@@ -155,9 +155,9 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             testCase.verifyTrue(exist(gammaDir, 'dir') > 0, ...
                 'gamma should be reinstalled');
             testCase.verifyTrue(exist(alphaDir, 'dir') > 0, ...
-                'alpha should be re-installed as dependency of gamma');
-            testCase.verifyFalse(exist(marker, 'file') > 0, ...
-                'alpha marker should be gone (dep was pruned and re-installed)');
+                'alpha should still be installed');
+            testCase.verifyTrue(exist(marker, 'file') > 0, ...
+                'alpha marker should still be there (dep was not reinstalled)');
         end
 
         function testUpdate_ForcePreservesLoadedDeps(testCase)

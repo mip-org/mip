@@ -17,17 +17,17 @@ function update(varargin)
 % considered to need an update. If a package does not need updating,
 % nothing happens for that package (unless --force is specified).
 %
-% For the remote packages that need updating, `mip update X Y Z` is
-% equivalent to `mip uninstall X Y Z` followed by `mip install X Y Z`.
-% This re-resolves each package's dependency graph against the current
-% channel index, so dependencies are effectively updated as well.
+% Remote packages are updated in place: the old directory is removed and
+% the new version is downloaded. Existing dependencies are not updated.
+% After the update, any new dependencies that the updated package requires
+% are installed, and any orphaned packages (old dependencies no longer
+% needed by any directly installed package) are pruned.
 %
 % Local packages are reinstalled directly from their source path without
 % going through uninstall (since install_local cannot re-fetch deps from
 % a channel).
 %
-% Any packages that were loaded before the update are reloaded afterward,
-% even if they were pruned as unused during the uninstall step.
+% Any packages that were loaded before the update are reloaded afterward.
 %
 % Accepts both bare package names and fully qualified names.
 
@@ -74,17 +74,17 @@ function update(varargin)
     end
 
     % Determine which of the remaining packages actually need updating.
+    % For remote packages, also fetch the latest channel info (needed for
+    % downloading the new version).
     needsUpdate = false(1, length(toProcess));
     for i = 1:length(toProcess)
         p = toProcess{i};
-        if force
-            fprintf('Force updating "%s" (%s)\n', p.fqn, p.pkgInfo.version);
-            needsUpdate(i) = true;
-        elseif p.isLocal
+        if p.isLocal
             % Local packages are always reinstalled from source.
             needsUpdate(i) = true;
         else
-            needsUpdate(i) = checkRemoteNeedsUpdate(p);
+            [needsUpdate(i), latestInfo] = checkRemoteNeedsUpdate(p, force);
+            toProcess{i}.latestInfo = latestInfo;
         end
     end
     toProcess = toProcess(needsUpdate);
@@ -131,17 +131,27 @@ function update(varargin)
         mip.build.install_local(p.sourcePath, p.editable);
     end
 
-    % --- Remote packages: mip.uninstall + mip.install ---
-    % The uninstall prunes orphaned deps; the install re-resolves the
-    % full dependency graph from the current channel index.
+    % --- Remote packages: update in place, install new deps, prune ---
+    % Each package is replaced on disk with the latest version from the
+    % channel. Existing dependencies are left alone. After all packages are
+    % updated, any new dependencies are installed and orphaned packages are
+    % pruned.
     if ~isempty(remotePkgs)
-        remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
-        fprintf('\nUninstalling %d remote package(s) to update: %s\n', ...
-                length(remoteFqns), strjoin(remoteFqns, ', '));
-        mip.uninstall(remoteFqns{:});
+        for i = 1:length(remotePkgs)
+            p = remotePkgs{i};
+            if mip.state.is_loaded(p.fqn)
+                fprintf('Unloading "%s" before update...\n', p.fqn);
+                mip.unload(p.fqn);
+            end
+            downloadAndReplace(p);
+        end
 
-        fprintf('\nReinstalling remote package(s): %s\n', strjoin(remoteFqns, ', '));
-        mip.install(remoteFqns{:});
+        % Install any new dependencies that the updated packages require
+        remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
+        installMissingDeps(remoteFqns);
+
+        % Prune packages that are no longer needed
+        mip.state.prune_unused_packages();
     end
 
     % Reload anything that was loaded before update but isn't now.
@@ -195,8 +205,9 @@ function p = resolvePackage(packageArg)
     );
 end
 
-function tf = checkRemoteNeedsUpdate(p)
+function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
 % Fetch the channel index and decide whether p needs updating.
+% Also returns the latestInfo struct (needed for downloading).
 
     fqn = p.fqn;
     installedVersion = p.pkgInfo.version;
@@ -224,6 +235,12 @@ function tf = checkRemoteNeedsUpdate(p)
 
     latestInfo = packageInfoMap(fqn);
 
+    if force
+        fprintf('Force updating "%s" (%s)\n', fqn, installedVersion);
+        tf = true;
+        return
+    end
+
     if ~mip.state.check_needs_update(p.pkgInfo, latestInfo)
         fprintf('Package "%s" is already up to date (%s)\n', fqn, installedVersion);
         tf = false;
@@ -232,6 +249,87 @@ function tf = checkRemoteNeedsUpdate(p)
 
     fprintf('Updating "%s": %s -> %s\n', fqn, installedVersion, latestInfo.version);
     tf = true;
+end
+
+function downloadAndReplace(p)
+% Remove the old package directory and download the new version.
+
+    fprintf('Downloading %s %s...\n', p.fqn, p.latestInfo.version);
+
+    rmdir(p.pkgDir, 's');
+
+    tempDir = tempname;
+    mkdir(tempDir);
+    try
+        mhlPath = mip.channel.download_mhl(p.latestInfo.mhl_url, tempDir);
+        parentDir = fileparts(p.pkgDir);
+        if ~exist(parentDir, 'dir')
+            mkdir(parentDir);
+        end
+        mip.channel.extract_mhl(mhlPath, p.pkgDir);
+        fprintf('Successfully updated "%s" to %s\n', p.fqn, p.latestInfo.version);
+    catch ME
+        if exist(tempDir, 'dir')
+            rmdir(tempDir, 's');
+        end
+        rethrow(ME);
+    end
+    if exist(tempDir, 'dir')
+        rmdir(tempDir, 's');
+    end
+end
+
+function installMissingDeps(remoteFqns)
+% Check the updated packages' dependencies and install any that are missing.
+
+    missingDeps = {};
+    for i = 1:length(remoteFqns)
+        fqn = remoteFqns{i};
+        r = mip.parse.parse_package_arg(fqn);
+        pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
+        if ~exist(pkgDir, 'dir')
+            continue
+        end
+        try
+            pkgInfo = mip.config.read_package_json(pkgDir);
+        catch
+            continue
+        end
+        deps = pkgInfo.dependencies;
+        if isempty(deps) || (isnumeric(deps) && isempty(deps))
+            continue
+        end
+        if ~iscell(deps)
+            deps = {deps};
+        end
+        for j = 1:length(deps)
+            depFqn = mip.resolve.resolve_dependency(deps{j});
+            depR = mip.parse.parse_package_arg(depFqn);
+            depDir = mip.paths.get_package_dir(depR.org, depR.channel, depR.name);
+            if ~exist(depDir, 'dir')
+                missingDeps{end+1} = deps{j}; %#ok<AGROW>
+            end
+        end
+    end
+    missingDeps = unique(missingDeps, 'stable');
+
+    if isempty(missingDeps)
+        return
+    end
+
+    fprintf('\nInstalling new dependencies: %s\n', strjoin(missingDeps, ', '));
+
+    % Record which packages are directly installed before calling mip.install
+    % so we can undo any additions (new deps should not be directly installed).
+    directBefore = mip.state.get_directly_installed();
+
+    mip.install(missingDeps{:});
+
+    directAfter = mip.state.get_directly_installed();
+    newlyDirect = setdiff(directAfter, directBefore);
+    for i = 1:length(newlyDirect)
+        mip.state.remove_directly_installed(newlyDirect{i});
+    end
 end
 
 function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)

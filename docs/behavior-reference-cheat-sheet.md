@@ -96,11 +96,11 @@ Dependencies are loaded automatically but tracked separately -- they get pruned 
 
 ```
 mip update chebfun            % update if newer version available
-mip update --force chebfun    % force reinstall + refresh deps
+mip update --force chebfun    % force reinstall even if up to date
 mip update ./mypackage        % local packages always reinstall
 ```
 
-Update = uninstall + reinstall. Load state is preserved across the update.
+Only the named packages are updated -- existing dependencies are left as-is. New dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
 
 ---
 
