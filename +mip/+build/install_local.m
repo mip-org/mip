@@ -14,11 +14,7 @@ if nargin < 3
 end
 
 % Resolve to absolute path
-w = what(sourceDir);
-if isempty(w)
-    error('mip:install:notADirectory', '"%s" is not a directory.', sourceDir);
-end
-sourceDir = w.path;
+sourceDir = mip.paths.get_absolute_path(sourceDir);
 
 % Read mip.yaml to get package name
 mipConfig = mip.config.read_mip_yaml(sourceDir);

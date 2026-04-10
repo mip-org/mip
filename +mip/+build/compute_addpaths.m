@@ -84,16 +84,8 @@ end
 
 function rel = getRelativePath(targetDir, baseDir)
 % Get relative path from baseDir to targetDir.
-    w = what(targetDir);
-    if isempty(w)
-        error('mip:build:notADirectory', '"%s" is not a directory.', targetDir);
-    end
-    targetDir = w.path;
-    w = what(baseDir);
-    if isempty(w)
-        error('mip:build:notADirectory', '"%s" is not a directory.', baseDir);
-    end
-    baseDir = w.path;
+    targetDir = mip.paths.get_absolute_path(targetDir);
+    baseDir   = mip.paths.get_absolute_path(baseDir);
     if strcmp(targetDir, baseDir)
         rel = '.';
     elseif startsWith(targetDir, [baseDir filesep])
