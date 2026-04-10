@@ -234,23 +234,39 @@ function installedFqns = installFromRepository(repoPackages, channel)
     % If a cross-channel FQN dep is not in the map, fetch its channel and retry.
     allRequiredFqns = {};
     for attempt = 1:10
-        try
-            allRequiredFqns = {};
-            for i = 1:length(resolvedPackages)
-                installOrder = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
-                allRequiredFqns = [allRequiredFqns, installOrder]; %#ok<AGROW>
+        allRequiredFqns = {};
+        allMissing = {};
+        for i = 1:length(resolvedPackages)
+            [installOrder, missing] = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
+            allRequiredFqns = [allRequiredFqns, installOrder]; %#ok<AGROW>
+            allMissing = [allMissing, missing]; %#ok<AGROW>
+        end
+        allMissing = unique(allMissing, 'stable');
+
+        if isempty(allMissing)
+            break
+        end
+
+        % Fetch channels for missing cross-channel dependencies
+        fetchedNew = false;
+        for i = 1:length(allMissing)
+            parsed = mip.parse.parse_package_arg(allMissing{i});
+            if ~parsed.is_fqn
+                error('mip:packageNotFound', 'Package "%s" not found in repository', allMissing{i});
             end
-            break  % success
-        catch ME
-            if ~strcmp(ME.identifier, 'mip:packageNotFound'), rethrow(ME); end
-            tokens = regexp(ME.message, '"([^"]+)"', 'tokens');
-            if isempty(tokens), rethrow(ME); end
-            parsed = mip.parse.parse_package_arg(tokens{1}{1});
-            if ~parsed.is_fqn, rethrow(ME); end
             missingChannel = [parsed.org '/' parsed.channel];
-            if fetchedChannels.isKey(missingChannel), rethrow(ME); end
+            if fetchedChannels.isKey(missingChannel)
+                continue
+            end
             fprintf('Fetching %s index for cross-channel dependency...\n', missingChannel);
             fetchChannelIndex(missingChannel, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
+            fetchedNew = true;
+        end
+
+        if ~fetchedNew
+            % All channels already fetched but packages still missing
+            error('mip:packageNotFound', ...
+                  'Package(s) not found in repository: %s', strjoin(allMissing, ', '));
         end
     end
     allRequiredFqns = unique(allRequiredFqns, 'stable');

@@ -1,4 +1,4 @@
-function depList = build_dependency_graph(packageFqn, packageInfoMap, visited, path)
+function [depList, missingFqns] = build_dependency_graph(packageFqn, packageInfoMap, visited, path)
 %BUILD_DEPENDENCY_GRAPH   Recursively build dependency graph for a package.
 %
 % Args:
@@ -8,12 +8,15 @@ function depList = build_dependency_graph(packageFqn, packageInfoMap, visited, p
 %   path           - (Optional) Cell array representing current dependency path
 %
 % Returns:
-%   depList - Cell array of FQNs in dependency order (dependencies first)
+%   depList     - Cell array of FQNs in dependency order (dependencies first)
+%   missingFqns - Cell array of FQNs that were not found in packageInfoMap.
+%                 When non-empty, depList is incomplete. The caller should
+%                 fetch the channels for the missing packages and retry.
 %
 % Bare-name dependencies are always resolved to mip-org/core/<name>.
 %
 % Example:
-%   deps = mip.dependency.build_dependency_graph('mip-org/core/mypackage', pkgMap);
+%   [deps, missing] = mip.dependency.build_dependency_graph('mip-org/core/mypackage', pkgMap);
 
 if nargin < 3
     visited = {};
@@ -21,6 +24,8 @@ end
 if nargin < 4
     path = {};
 end
+
+missingFqns = {};
 
 % Check for circular dependency
 if ismember(packageFqn, path)
@@ -37,8 +42,9 @@ end
 
 % Find package info
 if ~isKey(packageInfoMap, packageFqn)
-    error('mip:packageNotFound', ...
-          'Package "%s" not found in repository', packageFqn);
+    depList = {};
+    missingFqns = {packageFqn};
+    return
 end
 pkgInfo = packageInfoMap(packageFqn);
 
@@ -65,8 +71,9 @@ for i = 1:length(dependencies)
         depFqn = mip.parse.make_fqn('mip-org', 'core', depResult.name);
     end
 
-    subDeps = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
+    [subDeps, subMissing] = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
     depList = [depList, subDeps]; %#ok<*AGROW>
+    missingFqns = [missingFqns, subMissing];
 end
 
 % Then add this package
