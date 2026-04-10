@@ -126,8 +126,8 @@ function update(varargin)
         rmdir(p.pkgDir, 's');
         mip.utils.remove_directly_installed(p.fqn);
         packagesDir = mip.utils.get_packages_dir();
-        cleanupEmptyDirs(fullfile(packagesDir, 'local', 'local'));
-        cleanupEmptyDirs(fullfile(packagesDir, 'local'));
+        mip.utils.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
+        mip.utils.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
 
         fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
         mip.utils.install_local(p.sourcePath, p.editable);
@@ -389,13 +389,3 @@ function updateSelf(p, force)
     fprintf('\nmip has been updated to %s.\n', latestVersion);
 end
 
-function cleanupEmptyDirs(dirPath)
-    if ~exist(dirPath, 'dir')
-        return
-    end
-    contents = dir(dirPath);
-    contents = contents(~ismember({contents.name}, {'.', '..'}));
-    if isempty(contents)
-        rmdir(dirPath);
-    end
-end

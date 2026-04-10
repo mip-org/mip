@@ -121,36 +121,32 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
         return
     end
 
-    % Check for mip.json and process dependencies. Only the parse step is
+    % Load dependencies listed in mip.json. Only the parse step is
     % wrapped in try/catch so that recursive dependency-load errors propagate
     % instead of being silently downgraded to a warning.
     mipJsonPath = fullfile(packageDir, 'mip.json');
-    mipConfig = [];
+    deps = {};
     if exist(mipJsonPath, 'file')
         try
-            fid = fopen(mipJsonPath, 'r');
-            jsonText = fread(fid, '*char')';
-            fclose(fid);
-            mipConfig = jsondecode(jsonText);
+            mipConfig = mip.utils.read_package_json(packageDir);
+            deps = mipConfig.dependencies;
+            if ~iscell(deps)
+                deps = {deps};
+            end
         catch ME
             warning('mip:jsonParseError', ...
                     'Could not parse mip.json for package "%s": %s', ...
                     fqn, ME.message);
-            mipConfig = [];
         end
     end
 
-    if ~isempty(mipConfig) && isfield(mipConfig, 'dependencies') && ~isempty(mipConfig.dependencies)
-        deps = mipConfig.dependencies;
-        if ~iscell(deps)
-            deps = {deps};
-        end
+    if ~isempty(deps)
         fprintf('Loading dependencies for "%s": %s\n', ...
                 fqn, strjoin(deps, ', '));
         for i = 1:length(deps)
             dep = deps{i};
             % Resolve dependency: same channel first, then core
-            depFqn = resolveDependency(dep, result.org, result.channel);
+            depFqn = mip.utils.resolve_dependency(dep, result.org, result.channel);
             if ~mip.utils.is_loaded(depFqn)
                 loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
             else
@@ -219,35 +215,3 @@ function fqn = resolveToFqn(packageArg)
     end
 end
 
-function depFqn = resolveDependency(depName, contextOrg, contextChannel)
-% Resolve a dependency name. If it's a FQN, use as-is.
-% If bare, try same channel first, then mip-org/core.
-
-    result = mip.utils.parse_package_arg(depName);
-
-    if result.is_fqn
-        depFqn = depName;
-        return
-    end
-
-    % Try same channel first
-    sameChannelDir = mip.utils.get_package_dir(contextOrg, contextChannel, result.name);
-    if exist(sameChannelDir, 'dir')
-        depFqn = mip.utils.make_fqn(contextOrg, contextChannel, result.name);
-        return
-    end
-
-    % Try mip-org/core
-    coreDir = mip.utils.get_package_dir('mip-org', 'core', result.name);
-    if exist(coreDir, 'dir')
-        depFqn = mip.utils.make_fqn('mip-org', 'core', result.name);
-        return
-    end
-
-    % Fall back to general resolution
-    depFqn = mip.utils.resolve_bare_name(result.name);
-    if isempty(depFqn)
-        error('mip:dependencyNotFound', ...
-              'Dependency "%s" is not installed.', result.name);
-    end
-end

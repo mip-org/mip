@@ -154,7 +154,7 @@ function pruneUnusedPackages()
     neededPackages = {};
     for i = 1:length(MIP_DIRECTLY_LOADED_PACKAGES)
         directPkg = MIP_DIRECTLY_LOADED_PACKAGES{i};
-        neededPackages = [neededPackages, getAllDependencies(directPkg)]; %#ok<*AGROW>
+        neededPackages = [neededPackages, mip.utils.get_all_dependencies(directPkg)]; %#ok<*AGROW>
     end
 
     % Add directly loaded packages themselves
@@ -189,123 +189,7 @@ function pruneUnusedPackages()
     end
 
     % After pruning, check for broken dependencies
-    checkForBrokenDependencies();
-end
-
-function deps = getAllDependencies(fqn)
-    deps = {};
-
-    result = mip.utils.parse_package_arg(fqn);
-    if ~result.is_fqn
-        return
-    end
-
-    packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
-    mipJsonPath = fullfile(packageDir, 'mip.json');
-
-    if ~exist(mipJsonPath, 'file')
-        return
-    end
-
-    try
-        fid = fopen(mipJsonPath, 'r');
-        jsonText = fread(fid, '*char')';
-        fclose(fid);
-        mipConfig = jsondecode(jsonText);
-
-        if isfield(mipConfig, 'dependencies') && ~isempty(mipConfig.dependencies)
-            depNames = mipConfig.dependencies;
-            if ~iscell(depNames)
-                depNames = {depNames};
-            end
-            for i = 1:length(depNames)
-                dep = depNames{i};
-                % Resolve bare dependency to FQN (same channel first, then core)
-                depResult = mip.utils.parse_package_arg(dep);
-                if depResult.is_fqn
-                    depFqn = dep;
-                else
-                    % Try same channel first
-                    sameDir = mip.utils.get_package_dir(result.org, result.channel, dep);
-                    if exist(sameDir, 'dir')
-                        depFqn = mip.utils.make_fqn(result.org, result.channel, dep);
-                    else
-                        depFqn = mip.utils.resolve_bare_name(dep);
-                        if isempty(depFqn)
-                            continue
-                        end
-                    end
-                end
-                if ~ismember(depFqn, deps)
-                    deps{end+1} = depFqn;
-                    transitiveDeps = getAllDependencies(depFqn);
-                    deps = unique([deps, transitiveDeps]);
-                end
-            end
-        end
-    catch ME
-        warning('mip:jsonParseError', ...
-                'Could not parse mip.json for package "%s": %s', ...
-                fqn, ME.message);
-    end
-end
-
-function checkForBrokenDependencies()
-    MIP_LOADED_PACKAGES = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
-
-    if isempty(MIP_LOADED_PACKAGES)
-        return
-    end
-
-    brokenDeps = {};
-    for i = 1:length(MIP_LOADED_PACKAGES)
-        pkg = MIP_LOADED_PACKAGES{i};
-        r = mip.utils.parse_package_arg(pkg);
-        if ~r.is_fqn
-            continue
-        end
-
-        packageDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
-        mipJsonPath = fullfile(packageDir, 'mip.json');
-
-        if ~exist(mipJsonPath, 'file')
-            continue
-        end
-
-        try
-            fid = fopen(mipJsonPath, 'r');
-            jsonText = fread(fid, '*char')';
-            fclose(fid);
-            mipConfig = jsondecode(jsonText);
-
-            if isfield(mipConfig, 'dependencies') && ~isempty(mipConfig.dependencies)
-                depNames = mipConfig.dependencies;
-                if ~iscell(depNames)
-                    depNames = {depNames};
-                end
-                for j = 1:length(depNames)
-                    dep = depNames{j};
-                    depResult = mip.utils.parse_package_arg(dep);
-                    if depResult.is_fqn
-                        depFqn = dep;
-                    else
-                        depFqn = mip.utils.resolve_bare_name(dep);
-                    end
-                    if isempty(depFqn) || ~mip.utils.is_loaded(depFqn)
-                        brokenDeps{end+1} = sprintf('Package "%s" depends on "%s" which is no longer loaded', pkg, dep); %#ok<AGROW>
-                    end
-                end
-            end
-        catch
-            % Silently ignore parse errors
-        end
-    end
-
-    if ~isempty(brokenDeps)
-        warning('mip:brokenDependencies', ...
-                'Warning: Some loaded packages have missing dependencies:\n  %s', ...
-                strjoin(brokenDeps, '\n  '));
-    end
+    mip.utils.check_broken_dependencies('loaded');
 end
 
 function unloadAll(forceUnload)
@@ -383,5 +267,5 @@ function unloadAll(forceUnload)
     mip.utils.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', MIP_DIRECTLY_LOADED_PACKAGES);
     mip.utils.key_value_set('MIP_STICKY_PACKAGES', MIP_STICKY_PACKAGES);
 
-    checkForBrokenDependencies();
+    mip.utils.check_broken_dependencies('loaded');
 end
