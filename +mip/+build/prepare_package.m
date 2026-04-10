@@ -25,7 +25,7 @@ if nargin < 3
 end
 
 % Read mip.yaml
-mipConfig = mip.utils.read_mip_yaml(sourceDir);
+mipConfig = mip.config.read_mip_yaml(sourceDir);
 packageName = mipConfig.name;
 
 fprintf('Preparing package "%s" (version %s)\n', packageName, ...

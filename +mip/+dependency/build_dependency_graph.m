@@ -58,11 +58,11 @@ end
 
 for i = 1:length(dependencies)
     dep = dependencies{i};
-    depResult = mip.utils.parse_package_arg(dep);
+    depResult = mip.parse.parse_package_arg(dep);
     if depResult.is_fqn
         depFqn = dep;
     else
-        depFqn = mip.utils.make_fqn('mip-org', 'core', depResult.name);
+        depFqn = mip.parse.make_fqn('mip-org', 'core', depResult.name);
     end
 
     subDeps = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);

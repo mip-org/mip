@@ -8,8 +8,13 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
 - `+mip/` — MATLAB package namespace containing all functionality
   - Core commands: `install.m`, `update.m`, `uninstall.m`, `load.m`, `unload.m`, `list.m`, `info.m`, `avail.m`, `bundle.m`
   - `+build/` — Package preparation, compilation, script generation
+  - `+channel/` — Network operations (downloading .mhl archives, fetching channel indexes)
+  - `+config/` — Config file reading (mip.yaml, mip.json, build fields, local install setup)
   - `+dependency/` — Dependency graph resolution and topological sorting
-  - `+utils/` — Utility functions (parsing, storage, discovery, downloads)
+  - `+parse/` — Input parsing (package args, channel specs, YAML, FQN construction)
+  - `+paths/` — Directory and path management (package dirs, source dirs, cleanup)
+  - `+resolve/` — Package discovery and resolution (name resolution, version selection, dependency traversal)
+  - `+state/` — Persistent state management and queries (key-value store, load/install status, pruning)
 - `tests/` — Unit tests using MATLAB's `matlab.unittest` framework
 
 ## Key Concepts

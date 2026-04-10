@@ -8,7 +8,7 @@ if ~exist(mipYamlPath, 'file')
     error('mip:version:noMipYaml', ...
           'mip.yaml not found at %s. Is mip installed correctly?', pkgRoot);
 end
-mipConfig = mip.utils.read_mip_yaml(pkgRoot);
+mipConfig = mip.config.read_mip_yaml(pkgRoot);
 v = mipConfig.version;
 if isnumeric(v)
     v = num2str(v);

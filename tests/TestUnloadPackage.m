@@ -33,10 +33,10 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
         function testUnloadPackage_Basic(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
 
             mip.unload('mip-org/core/testpkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testUnloadPackage_RemovesFromPath(testCase)
@@ -51,14 +51,14 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
         function testUnloadPackage_RemovesFromAllLists(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg', '--sticky');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
-            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/testpkg'));
-            testCase.verifyTrue(mip.utils.is_sticky('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_sticky('mip-org/core/testpkg'));
 
             mip.unload('mip-org/core/testpkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
-            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/testpkg'));
-            testCase.verifyFalse(mip.utils.is_sticky('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_sticky('mip-org/core/testpkg'));
         end
 
         function testUnloadPackage_NotLoaded(testCase)
@@ -81,8 +81,8 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
 
             mip.unload('--all');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/stickypkg'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/normalpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/stickypkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/normalpkg'));
         end
 
         function testUnloadAll_Force(testCase)
@@ -94,14 +94,14 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
 
             mip.unload('--all', '--force');
 
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/stickypkg'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/normalpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/stickypkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/normalpkg'));
         end
 
         function testUnloadAll_NeverUnloadsMipItself(testCase)
             % Set up mip as loaded and sticky (as mip.m does)
-            mip.utils.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
-            mip.utils.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
+            mip.state.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
+            mip.state.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
 
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
@@ -109,8 +109,8 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             mip.unload('--all', '--force');
 
             % mip should still be loaded
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mip'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mip'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testUnloadPackage_PrunesUnusedDependencies(testCase)
@@ -120,12 +120,12 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
                 'dependencies', {'depA'});
 
             mip.load('mip-org/core/mainpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
 
             % Unloading mainpkg should also prune depA
             mip.unload('mip-org/core/mainpkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/mainpkg'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/depA'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/depA'));
         end
 
         function testUnloadPackage_DoesNotPruneSharedDeps(testCase)
@@ -141,15 +141,15 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
 
             % Unloading mainpkg1 should NOT prune depA (still needed by mainpkg2)
             mip.unload('mip-org/core/mainpkg1');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mainpkg2'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mainpkg2'));
         end
 
         function testUnloadPackage_BareName(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
             mip.unload('testpkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testUnloadBareName_AmbiguousUnloadsMostRecent(testCase)
@@ -162,14 +162,14 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             mip.load('mip-org/core/duppkg');
             mip.load('other-org/extras/duppkg');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/duppkg'));
-            testCase.verifyTrue(mip.utils.is_loaded('other-org/extras/duppkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/duppkg'));
+            testCase.verifyTrue(mip.state.is_loaded('other-org/extras/duppkg'));
 
             % Unloading bare name should unload the most recently loaded one
             mip.unload('duppkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/duppkg'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/duppkg'), ...
                 'Earlier loaded package should remain');
-            testCase.verifyFalse(mip.utils.is_loaded('other-org/extras/duppkg'), ...
+            testCase.verifyFalse(mip.state.is_loaded('other-org/extras/duppkg'), ...
                 'Most recently loaded package should be unloaded');
         end
 
@@ -184,9 +184,9 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
 
             % Unloading bare name should unload core (most recent), not extras
             mip.unload('duppkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/duppkg'), ...
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/duppkg'), ...
                 'Most recently loaded (core) should be unloaded');
-            testCase.verifyTrue(mip.utils.is_loaded('other-org/extras/duppkg'), ...
+            testCase.verifyTrue(mip.state.is_loaded('other-org/extras/duppkg'), ...
                 'Earlier loaded (extras) should remain');
         end
 
@@ -197,8 +197,8 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             mip.load('mip-org/core/pkgB');
 
             mip.unload('mip-org/core/pkgA', 'mip-org/core/pkgB');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgB'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgB'));
         end
 
         function testUnloadPackage_MultiplePackagesBareNames(testCase)
@@ -208,8 +208,8 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             mip.load('mip-org/core/pkgB');
 
             mip.unload('pkgA', 'pkgB');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgB'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgB'));
         end
 
         function testUnloadPackage_MultipleWithOneNotLoaded(testCase)
@@ -218,7 +218,7 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
             mip.load('mip-org/core/pkgA');
             % pkgB is not loaded — should print message but not error
             mip.unload('mip-org/core/pkgA', 'mip-org/core/pkgB');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgA'));
         end
 
         function testUnloadPackage_MultiplePrunesDeps(testCase)
@@ -229,11 +229,11 @@ classdef TestUnloadPackage < matlab.unittest.TestCase
                 'dependencies', {'dep'});
             mip.load('mip-org/core/pkgA');
             mip.load('mip-org/core/pkgB');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/dep'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/dep'));
 
             % Unloading both should prune the shared dependency
             mip.unload('pkgA', 'pkgB');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/dep'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/dep'));
         end
 
     end

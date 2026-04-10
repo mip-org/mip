@@ -91,8 +91,8 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     loadingStack = [loadingStack, {fqn}];
 
     % Parse FQN to get package directory
-    result = mip.utils.parse_package_arg(fqn);
-    packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+    result = mip.parse.parse_package_arg(fqn);
+    packageDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
 
     % Check if package exists
     if ~exist(packageDir, 'dir')
@@ -102,19 +102,19 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     end
 
     % Check if package is already loaded
-    if mip.utils.is_loaded(fqn)
+    if mip.state.is_loaded(fqn)
         % If this is a direct load and the package was previously
         % loaded as a dependency, mark it as direct now
-        if isDirect && ~mip.utils.is_directly_loaded(fqn)
-            mip.utils.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+        if isDirect && ~mip.state.is_directly_loaded(fqn)
+            mip.state.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
             fprintf('Package "%s" is already loaded (now marked as direct)\n', fqn);
         else
             fprintf('Package "%s" is already loaded\n', fqn);
         end
         % If --sticky was specified, add to sticky packages
         if stickyPackage
-            if ~mip.utils.is_sticky(fqn)
-                mip.utils.key_value_append('MIP_STICKY_PACKAGES', fqn);
+            if ~mip.state.is_sticky(fqn)
+                mip.state.key_value_append('MIP_STICKY_PACKAGES', fqn);
                 fprintf('Package "%s" is now sticky\n', fqn);
             end
         end
@@ -128,7 +128,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     deps = {};
     if exist(mipJsonPath, 'file')
         try
-            mipConfig = mip.utils.read_package_json(packageDir);
+            mipConfig = mip.config.read_package_json(packageDir);
             deps = mipConfig.dependencies;
             if ~iscell(deps)
                 deps = {deps};
@@ -146,8 +146,8 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
         for i = 1:length(deps)
             dep = deps{i};
             % Resolve dependency: same channel first, then core
-            depFqn = mip.utils.resolve_dependency(dep, result.org, result.channel);
-            if ~mip.utils.is_loaded(depFqn)
+            depFqn = mip.resolve.resolve_dependency(dep, result.org, result.channel);
+            if ~mip.state.is_loaded(depFqn)
                 loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
             else
                 fprintf('  Dependency "%s" is already loaded\n', depFqn);
@@ -182,16 +182,16 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     fprintf('Loaded package "%s"\n', fqn);
 
     % Mark package as loaded
-    mip.utils.key_value_append('MIP_LOADED_PACKAGES', fqn);
+    mip.state.key_value_append('MIP_LOADED_PACKAGES', fqn);
 
     % Track directly loaded packages separately
     if isDirect
-        mip.utils.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+        mip.state.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
     end
 
     % Mark package as sticky if requested
     if stickyPackage
-        mip.utils.key_value_append('MIP_STICKY_PACKAGES', fqn);
+        mip.state.key_value_append('MIP_STICKY_PACKAGES', fqn);
         fprintf('Package "%s" is now sticky\n', fqn);
     end
 end
@@ -200,13 +200,13 @@ function fqn = resolveToFqn(packageArg)
 % Resolve a package argument to a fully qualified name.
 % If already FQN, return as-is. If bare name, look up installed packages.
 
-    result = mip.utils.parse_package_arg(packageArg);
+    result = mip.parse.parse_package_arg(packageArg);
 
     if result.is_fqn
         fqn = packageArg;
     else
         % Resolve bare name to installed FQN
-        fqn = mip.utils.resolve_bare_name(result.name);
+        fqn = mip.resolve.resolve_bare_name(result.name);
         if isempty(fqn)
             error('mip:packageNotFound', ...
                   'Package "%s" is not installed. Run "mip install %s" first.', ...

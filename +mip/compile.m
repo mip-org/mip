@@ -19,15 +19,15 @@ end
 packageArg = varargin{1};
 
 % Resolve to installed FQN
-r = mip.utils.resolve_to_installed(packageArg);
+r = mip.resolve.resolve_to_installed(packageArg);
 if isempty(r)
     error('mip:compile:notInstalled', ...
           'Package "%s" is not installed.', packageArg);
 end
 
 % Read mip.json and find compile script
-pkgInfo = mip.utils.read_package_json(r.pkg_dir);
-compileScript = mip.utils.get_build_field(pkgInfo, r.pkg_dir, 'compile_script');
+pkgInfo = mip.config.read_package_json(r.pkg_dir);
+compileScript = mip.config.get_build_field(pkgInfo, r.pkg_dir, 'compile_script');
 
 if isempty(compileScript)
     error('mip:compile:noCompileScript', ...
@@ -35,7 +35,7 @@ if isempty(compileScript)
 end
 
 % Determine compile directory
-compileDir = mip.utils.get_source_dir(r.pkg_dir, pkgInfo);
+compileDir = mip.paths.get_source_dir(r.pkg_dir, pkgInfo);
 
 if ~isfolder(compileDir)
     error('mip:compile:sourceMissing', ...

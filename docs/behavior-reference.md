@@ -238,7 +238,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
 3. Print a summary with load hints.
 
-If any package in step 1 fails (download error, extraction failure, etc.), the install loop aborts and `mip install` runs the same prune logic that `mip uninstall` uses (`mip.utils.prune_unused_packages`). Because the user-requested packages haven't been added to `directly_installed.txt` yet, any dependencies that did install successfully during this call get pruned as orphans, leaving the package set as it was before the call -- modulo any pre-existing orphans, which the prune sweep will also remove. The original install error is then re-raised.
+If any package in step 1 fails (download error, extraction failure, etc.), the install loop aborts and `mip install` runs the same prune logic that `mip uninstall` uses (`mip.state.prune_unused_packages`). Because the user-requested packages haven't been added to `directly_installed.txt` yet, any dependencies that did install successfully during this call get pruned as orphans, leaving the package set as it was before the call -- modulo any pre-existing orphans, which the prune sweep will also remove. The original install error is then re-raised.
 
 #### 3.1.7 Already-Installed Behavior
 
@@ -514,14 +514,14 @@ Using an FQN bypasses this check entirely.
      - Different version: update.
 5. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
-   - **Local packages** are updated in-place: unload if loaded, `rmdir` the old directory, `remove_directly_installed`, then `mip.utils.install_local(sourcePath, editable)`. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
+   - **Local packages** are updated in-place: unload if loaded, `rmdir` the old directory, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable)`. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
    - **Remote packages** go through `mip.uninstall(fqn1, fqn2, ...)` which unloads them, removes them from disk, removes them from `directly_installed.txt`, and prunes any orphaned transitive dependencies. Then `mip.install(remoteFqn1, remoteFqn2, ...)` reinstalls them with freshly-resolved dependency graphs.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
    - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
 
 ### 7.2 Local Package Update
 
-Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is removed directly and `mip.utils.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
+Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is removed directly and `mip.build.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
 
 - The up-to-date check is skipped -- local packages are always reinstalled.
 - Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved.

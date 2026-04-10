@@ -15,7 +15,7 @@ if nargin < 1 || isempty(channel)
     channel = 'mip-org/core';
 end
 
-[org, channelName] = mip.utils.parse_channel_spec(channel);
+[org, channelName] = mip.parse.parse_channel_spec(channel);
 
 url = sprintf('https://%s.github.io/mip-%s/index.json', org, channelName);
 

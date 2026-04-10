@@ -24,13 +24,13 @@ function uninstall(varargin)
 
     for i = 1:length(packageArgs)
         arg = packageArgs{i};
-        result = mip.utils.parse_package_arg(arg);
+        result = mip.parse.parse_package_arg(arg);
 
         if result.is_fqn
             fqn = arg;
-            pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+            pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
         else
-            allMatches = mip.utils.find_all_installed_by_name(result.name);
+            allMatches = mip.resolve.find_all_installed_by_name(result.name);
             if isempty(allMatches)
                 notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
                 continue
@@ -43,8 +43,8 @@ function uninstall(varargin)
                 continue
             end
             fqn = allMatches{1};
-            r = mip.utils.parse_package_arg(fqn);
-            pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+            r = mip.parse.parse_package_arg(fqn);
+            pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
         end
 
         if ~exist(pkgDir, 'dir')
@@ -75,7 +75,7 @@ function uninstall(varargin)
     % Unload any packages that are currently loaded
     for i = 1:length(resolvedPackages)
         fqn = resolvedPackages{i};
-        if mip.utils.is_loaded(fqn)
+        if mip.state.is_loaded(fqn)
             mip.unload(fqn);
         end
     end
@@ -84,8 +84,8 @@ function uninstall(varargin)
     fprintf('\n');
     for i = 1:length(resolvedPackages)
         fqn = resolvedPackages{i};
-        r = mip.utils.parse_package_arg(fqn);
-        pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+        r = mip.parse.parse_package_arg(fqn);
+        pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
 
         try
             fprintf('Uninstalling "%s"...\n', fqn);
@@ -97,16 +97,16 @@ function uninstall(varargin)
         end
 
         % Remove from directly installed packages
-        mip.utils.remove_directly_installed(fqn);
+        mip.state.remove_directly_installed(fqn);
 
         % Clean up empty parent directories
-        mip.utils.cleanup_empty_dirs(fullfile(mip.utils.get_packages_dir(), r.org, r.channel));
-        mip.utils.cleanup_empty_dirs(fullfile(mip.utils.get_packages_dir(), r.org));
+        mip.paths.cleanup_empty_dirs(fullfile(mip.paths.get_packages_dir(), r.org, r.channel));
+        mip.paths.cleanup_empty_dirs(fullfile(mip.paths.get_packages_dir(), r.org));
     end
 
     % Prune packages that are no longer needed
-    mip.utils.prune_unused_packages();
+    mip.state.prune_unused_packages();
 
     % After pruning, check for broken dependencies
-    mip.utils.check_broken_dependencies('installed');
+    mip.state.check_broken_dependencies('installed');
 end

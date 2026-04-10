@@ -47,26 +47,26 @@ function unload(varargin)
         end
 
         % Check if package is loaded
-        if ~mip.utils.is_loaded(fqn)
+        if ~mip.state.is_loaded(fqn)
             fprintf('Package "%s" is not currently loaded\n', fqn);
             continue
         end
 
         % Get package directory
-        result = mip.utils.parse_package_arg(fqn);
-        packageDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+        result = mip.parse.parse_package_arg(fqn);
+        packageDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
 
         % Execute unload_package.m if it exists
         executeUnload(packageDir, fqn);
 
         % Remove from sticky packages
-        mip.utils.key_value_remove('MIP_STICKY_PACKAGES', fqn);
+        mip.state.key_value_remove('MIP_STICKY_PACKAGES', fqn);
 
         % Remove from directly loaded packages
-        mip.utils.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+        mip.state.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
 
         % Remove from loaded packages
-        mip.utils.key_value_remove('MIP_LOADED_PACKAGES', fqn);
+        mip.state.key_value_remove('MIP_LOADED_PACKAGES', fqn);
 
         fprintf('Unloaded package "%s"\n', fqn);
     end
@@ -78,7 +78,7 @@ end
 function fqn = resolveLoadedFqn(packageArg)
 % Resolve a package argument to its FQN among loaded packages.
 
-    result = mip.utils.parse_package_arg(packageArg);
+    result = mip.parse.parse_package_arg(packageArg);
 
     if result.is_fqn
         fqn = packageArg;
@@ -86,11 +86,11 @@ function fqn = resolveLoadedFqn(packageArg)
     end
 
     % Search loaded packages for a bare name match
-    loadedPackages = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+    loadedPackages = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     matches = {};
     for i = 1:length(loadedPackages)
         loaded = loadedPackages{i};
-        r = mip.utils.parse_package_arg(loaded);
+        r = mip.parse.parse_package_arg(loaded);
         if r.is_fqn && strcmp(r.name, result.name)
             matches{end+1} = loaded; %#ok<AGROW>
         end
@@ -143,8 +143,8 @@ end
 function pruneUnusedPackages()
 % Prune packages that are no longer needed.
 
-    MIP_LOADED_PACKAGES          = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
-    MIP_DIRECTLY_LOADED_PACKAGES = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+    MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+    MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 
     if isempty(MIP_LOADED_PACKAGES)
         return
@@ -154,7 +154,7 @@ function pruneUnusedPackages()
     neededPackages = {};
     for i = 1:length(MIP_DIRECTLY_LOADED_PACKAGES)
         directPkg = MIP_DIRECTLY_LOADED_PACKAGES{i};
-        neededPackages = [neededPackages, mip.utils.get_all_dependencies(directPkg)]; %#ok<*AGROW>
+        neededPackages = [neededPackages, mip.resolve.get_all_dependencies(directPkg)]; %#ok<*AGROW>
     end
 
     % Add directly loaded packages themselves
@@ -175,27 +175,27 @@ function pruneUnusedPackages()
         fprintf('Pruning unnecessary packages: %s\n', strjoin(packagesToPrune, ', '));
         for i = 1:length(packagesToPrune)
             pkg = packagesToPrune{i};
-            r = mip.utils.parse_package_arg(pkg);
+            r = mip.parse.parse_package_arg(pkg);
             if r.is_fqn
-                packageDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+                packageDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
             else
                 continue  % Skip non-FQN entries (shouldn't happen)
             end
 
             executeUnload(packageDir, pkg);
-            mip.utils.key_value_remove('MIP_LOADED_PACKAGES', pkg);
+            mip.state.key_value_remove('MIP_LOADED_PACKAGES', pkg);
             fprintf('  Pruned package "%s"\n', pkg);
         end
     end
 
     % After pruning, check for broken dependencies
-    mip.utils.check_broken_dependencies('loaded');
+    mip.state.check_broken_dependencies('loaded');
 end
 
 function unloadAll(forceUnload)
-    MIP_LOADED_PACKAGES          = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
-    MIP_DIRECTLY_LOADED_PACKAGES = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
-    MIP_STICKY_PACKAGES          = mip.utils.key_value_get('MIP_STICKY_PACKAGES');
+    MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+    MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+    MIP_STICKY_PACKAGES          = mip.state.key_value_get('MIP_STICKY_PACKAGES');
 
     if isempty(MIP_LOADED_PACKAGES)
         fprintf('No packages are currently loaded\n');
@@ -241,11 +241,11 @@ function unloadAll(forceUnload)
     % Unload each package
     for i = 1:length(packagesToUnload)
         pkg = packagesToUnload{i};
-        r = mip.utils.parse_package_arg(pkg);
+        r = mip.parse.parse_package_arg(pkg);
         if r.is_fqn
-            packageDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+            packageDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
         else
-            packageDir = fullfile(mip.utils.get_packages_dir(), pkg);
+            packageDir = fullfile(mip.paths.get_packages_dir(), pkg);
         end
         executeUnload(packageDir, pkg);
         fprintf('  Unloaded package "%s"\n', pkg);
@@ -263,9 +263,9 @@ function unloadAll(forceUnload)
         );
     end
 
-    mip.utils.key_value_set('MIP_LOADED_PACKAGES', MIP_LOADED_PACKAGES);
-    mip.utils.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', MIP_DIRECTLY_LOADED_PACKAGES);
-    mip.utils.key_value_set('MIP_STICKY_PACKAGES', MIP_STICKY_PACKAGES);
+    mip.state.key_value_set('MIP_LOADED_PACKAGES', MIP_LOADED_PACKAGES);
+    mip.state.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', MIP_DIRECTLY_LOADED_PACKAGES);
+    mip.state.key_value_set('MIP_STICKY_PACKAGES', MIP_STICKY_PACKAGES);
 
-    mip.utils.check_broken_dependencies('loaded');
+    mip.state.check_broken_dependencies('loaded');
 end

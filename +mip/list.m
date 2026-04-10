@@ -8,7 +8,7 @@ function list(varargin)
 % Columns: name, fqn, version. Asterisk (*) marks directly loaded packages.
 % Editable packages show their source location.
 
-packagesDir = mip.utils.get_packages_dir();
+packagesDir = mip.paths.get_packages_dir();
 
 if ~exist(packagesDir, 'dir')
     fprintf('No packages installed yet\n');
@@ -24,7 +24,7 @@ for i = 1:length(varargin)
 end
 
 % Get all installed packages as FQNs
-allPackages = mip.utils.list_installed_packages();
+allPackages = mip.state.list_installed_packages();
 
 if isempty(allPackages)
     fprintf('No packages installed yet\n');
@@ -32,9 +32,9 @@ if isempty(allPackages)
 end
 
 % Get loaded and sticky packages
-MIP_LOADED_PACKAGES          = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
-MIP_DIRECTLY_LOADED_PACKAGES = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
-MIP_STICKY_PACKAGES          = mip.utils.key_value_get('MIP_STICKY_PACKAGES');
+MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+MIP_STICKY_PACKAGES          = mip.state.key_value_get('MIP_STICKY_PACKAGES');
 
 % Build info for each package
 n = length(allPackages);
@@ -48,14 +48,14 @@ editable = false(1, n);
 
 for i = 1:n
     fqn = allPackages{i};
-    result = mip.utils.parse_package_arg(fqn);
+    result = mip.parse.parse_package_arg(fqn);
     names{i} = result.name;
-    pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+    pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
 
     versions{i} = 'unknown';
     editablePaths{i} = '';
     try
-        pkgInfo = mip.utils.read_package_json(pkgDir);
+        pkgInfo = mip.config.read_package_json(pkgDir);
         if isfield(pkgInfo, 'version')
             versions{i} = pkgInfo.version;
         end

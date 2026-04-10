@@ -33,13 +33,13 @@ classdef TestLoadPackage < matlab.unittest.TestCase
         function testLoadPackage_Basic(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testLoadPackage_MarkedAsDirectlyLoaded(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
-            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('mip-org/core/testpkg'));
         end
 
         function testLoadPackage_AlreadyLoaded(testCase)
@@ -47,20 +47,20 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             mip.load('mip-org/core/testpkg');
             % Loading again should not error
             mip.load('mip-org/core/testpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testLoadPackage_WithStickyFlag(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg', '--sticky');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
-            testCase.verifyTrue(mip.utils.is_sticky('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_sticky('mip-org/core/testpkg'));
         end
 
         function testLoadPackage_BareName(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('testpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
         function testLoadPackage_NotInstalled(testCase)
@@ -76,8 +76,8 @@ classdef TestLoadPackage < matlab.unittest.TestCase
                 'dependencies', {'depA'});
             mip.load('mip-org/core/mainpkg');
             % Both should be loaded
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mainpkg'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
         end
 
         function testLoadPackage_DependencyNotDirectlyLoaded(testCase)
@@ -86,8 +86,8 @@ classdef TestLoadPackage < matlab.unittest.TestCase
                 'dependencies', {'depA'});
             mip.load('mip-org/core/mainpkg');
             % depA loaded as dependency, not directly
-            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/mainpkg'));
-            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('mip-org/core/mainpkg'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'));
         end
 
         function testLoadPackage_ChainedDependencies(testCase)
@@ -97,9 +97,9 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
                 'dependencies', {'depA'});
             mip.load('mip-org/core/mainpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mainpkg'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depB'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depB'));
         end
 
         function testLoadPackage_MipAlwaysLoaded(testCase)
@@ -111,13 +111,13 @@ classdef TestLoadPackage < matlab.unittest.TestCase
         function testLoadPackage_CustomChannel(testCase)
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mypkg');
             mip.load('mylab/custom/mypkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mylab/custom/mypkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mylab/custom/mypkg'));
         end
 
         function testLoadPackage_LocalPackage(testCase)
             createTestPackage(testCase.TestRoot, 'local', 'local', 'devpkg');
             mip.load('local/local/devpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/devpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/devpkg'));
         end
 
         function testLoadPackage_AddsToPath(testCase)
@@ -132,41 +132,41 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
                 'dependencies', {'depA', 'depB'});
             mip.load('mip-org/core/mainpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depB'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depB'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mainpkg'));
         end
 
         function testLoadPackage_MultiplePackagesAtOnce(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
             mip.load('mip-org/core/pkgA', 'mip-org/core/pkgB');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/pkgA'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/pkgB'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/pkgB'));
         end
 
         function testLoadPackage_MultiplePackagesAllDirectlyLoaded(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
             mip.load('mip-org/core/pkgA', 'mip-org/core/pkgB');
-            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/pkgA'));
-            testCase.verifyTrue(mip.utils.is_directly_loaded('mip-org/core/pkgB'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('mip-org/core/pkgA'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('mip-org/core/pkgB'));
         end
 
         function testLoadPackage_MultiplePackagesWithSticky(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
             mip.load('mip-org/core/pkgA', 'mip-org/core/pkgB', '--sticky');
-            testCase.verifyTrue(mip.utils.is_sticky('mip-org/core/pkgA'));
-            testCase.verifyTrue(mip.utils.is_sticky('mip-org/core/pkgB'));
+            testCase.verifyTrue(mip.state.is_sticky('mip-org/core/pkgA'));
+            testCase.verifyTrue(mip.state.is_sticky('mip-org/core/pkgB'));
         end
 
         function testLoadPackage_MultiplePackagesBareNames(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
             mip.load('pkgA', 'pkgB');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/pkgA'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/pkgB'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/pkgB'));
         end
 
         function testLoadPackage_LoadScriptError_Throws(testCase)
@@ -185,8 +185,8 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             catch
                 % expected
             end
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/badpkg'));
-            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/badpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/badpkg'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/badpkg'));
         end
 
         function testLoadPackage_LoadScriptError_CanRetry(testCase)
@@ -207,7 +207,7 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             fprintf(fid, 'end\n');
             fclose(fid);
             mip.load('mip-org/core/badpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/badpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/badpkg'));
         end
 
         function testLoadPackage_LoadScriptError_RestoresWorkingDir(testCase)
@@ -230,8 +230,8 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
                 'dependencies', {'baddep'});
             testCase.verifyError(@() mip.load('mip-org/core/mainpkg'), 'mip:loadError');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/mainpkg'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/baddep'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/mainpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/baddep'));
         end
 
     end

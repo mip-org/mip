@@ -64,7 +64,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.install(srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
-            info1 = mip.utils.read_package_json(pkgDir);
+            info1 = mip.config.read_package_json(pkgDir);
             timestamp1 = info1.timestamp;
 
             % Small pause to ensure timestamp changes
@@ -73,7 +73,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             % Update — should reinstall even though version hasn't changed
             mip.update('local/local/mypkg');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
                 'Package should still be installed after update');
             testCase.verifyFalse(strcmp(info2.timestamp, timestamp1), ...
@@ -85,14 +85,14 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.install('-e', srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
-            info1 = mip.utils.read_package_json(pkgDir);
+            info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyTrue(info1.editable, 'Should be editable');
 
             pause(1.1);
 
             mip.update('local/local/mypkg');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyTrue(info2.editable, ...
                 'Should still be editable after update');
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
@@ -145,13 +145,13 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
 
             % Load the package
             mip.load('local/local/mypkg');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'));
 
             % Update
             mip.update('local/local/mypkg');
 
             % Should be reloaded
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'), ...
                 'Package should be reloaded after update');
         end
 
@@ -160,11 +160,11 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.install(srcDir);
 
             % Don't load — just update
-            testCase.verifyFalse(mip.utils.is_loaded('local/local/mypkg'));
+            testCase.verifyFalse(mip.state.is_loaded('local/local/mypkg'));
 
             mip.update('local/local/mypkg');
 
-            testCase.verifyFalse(mip.utils.is_loaded('local/local/mypkg'), ...
+            testCase.verifyFalse(mip.state.is_loaded('local/local/mypkg'), ...
                 'Package should remain unloaded if it was not loaded before update');
         end
 
@@ -197,14 +197,14 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.install(srcDir);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
-            info1 = mip.utils.read_package_json(pkgDir);
+            info1 = mip.config.read_package_json(pkgDir);
 
             pause(1.1);
 
             % Update using bare name
             mip.update('mypkg');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyFalse(strcmp(info2.timestamp, info1.timestamp), ...
                 'Bare name update should work and reinstall');
         end
@@ -216,12 +216,12 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.install(srcDir);
 
             testCase.verifyTrue(ismember('local/local/mypkg', ...
-                mip.utils.get_directly_installed()));
+                mip.state.get_directly_installed()));
 
             mip.update('local/local/mypkg');
 
             testCase.verifyTrue(ismember('local/local/mypkg', ...
-                mip.utils.get_directly_installed()), ...
+                mip.state.get_directly_installed()), ...
                 'Package should still be directly installed after update');
         end
 
@@ -233,22 +233,22 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             % (which transitively loads the dep). Update the main package
             % and verify both are still loaded afterward.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
-            mip.utils.add_directly_installed('mip-org/core/depA');
+            mip.state.add_directly_installed('mip-org/core/depA');
 
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'depA'});
             mip.install(srcDir);
 
             mip.load('local/local/mypkg');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'), ...
                 'depA should be transitively loaded');
 
             mip.update('local/local/mypkg');
 
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/mypkg'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'), ...
                 'Main package should be reloaded after update');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'), ...
                 'Dependency should still be loaded after update');
         end
 
@@ -256,7 +256,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             % A package loaded only as a transitive dep should not be
             % promoted to directly loaded after update.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
-            mip.utils.add_directly_installed('mip-org/core/depA');
+            mip.state.add_directly_installed('mip-org/core/depA');
 
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'depA'});
@@ -265,16 +265,16 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             mip.load('local/local/mypkg');
 
             % depA should be transitively loaded (not directly loaded)
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
-            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'), ...
                 'depA should only be transitively loaded before update');
 
             mip.update('local/local/mypkg');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/depA'));
-            testCase.verifyFalse(mip.utils.is_directly_loaded('mip-org/core/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'), ...
                 'depA should remain transitively loaded (not promoted to directly loaded)');
-            testCase.verifyTrue(mip.utils.is_directly_loaded('local/local/mypkg'), ...
+            testCase.verifyTrue(mip.state.is_directly_loaded('local/local/mypkg'), ...
                 'Main package should remain directly loaded');
         end
 
@@ -287,25 +287,25 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
 
             mip.load('local/local/pkgA');
             mip.load('local/local/pkgB');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgA'));
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgB'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgB'));
 
             pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgA');
             pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgB');
-            infoA1 = mip.utils.read_package_json(pkgDirA);
-            infoB1 = mip.utils.read_package_json(pkgDirB);
+            infoA1 = mip.config.read_package_json(pkgDirA);
+            infoB1 = mip.config.read_package_json(pkgDirB);
 
             pause(1.1);
 
             mip.update('local/local/pkgA', 'local/local/pkgB');
 
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'), ...
                 'pkgA should be reloaded');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/pkgB'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgB'), ...
                 'pkgB should be reloaded');
 
-            infoA2 = mip.utils.read_package_json(pkgDirA);
-            infoB2 = mip.utils.read_package_json(pkgDirB);
+            infoA2 = mip.config.read_package_json(pkgDirA);
+            infoB2 = mip.config.read_package_json(pkgDirB);
             testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
                 'pkgA should have been reinstalled');
             testCase.verifyFalse(strcmp(infoB2.timestamp, infoB1.timestamp), ...

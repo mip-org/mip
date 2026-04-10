@@ -22,11 +22,11 @@ visited = [visited, {packageName}];
 reverseDeps = {};
 
 % Get bare name for dependency matching
-result = mip.utils.parse_package_arg(packageName);
+result = mip.parse.parse_package_arg(packageName);
 bareName = result.name;
 
 % Scan all installed packages
-allPackages = mip.utils.list_installed_packages();
+allPackages = mip.state.list_installed_packages();
 
 for i = 1:length(allPackages)
     fqn = allPackages{i};
@@ -36,11 +36,11 @@ for i = 1:length(allPackages)
         continue
     end
 
-    r = mip.utils.parse_package_arg(fqn);
-    pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+    r = mip.parse.parse_package_arg(fqn);
+    pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
 
     try
-        pkgInfo = mip.utils.read_package_json(pkgDir);
+        pkgInfo = mip.config.read_package_json(pkgDir);
         dependencies = pkgInfo.dependencies;
 
         if ~iscell(dependencies)

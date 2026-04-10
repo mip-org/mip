@@ -13,13 +13,13 @@ function avail(varargin)
 % Displays an alphabetical list of all available packages in the online
 % repository for the current architecture, shown with fully qualified names.
 
-[channel, ~] = mip.utils.parse_channel_flag(varargin);
+[channel, ~] = mip.parse.parse_channel_flag(varargin);
 
 if isempty(channel)
     channel = 'mip-org/core';
 end
 
-[org, channelName] = mip.utils.parse_channel_spec(channel);
+[org, channelName] = mip.parse.parse_channel_spec(channel);
 
 try
     indexUrl = mip.index(channel);
@@ -54,7 +54,7 @@ try
 
             canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
             if strcmp(arch, currentArch) || strcmp(arch, 'any') || (canFallbackToWasm && strcmp(arch, 'numbl_wasm'))
-                fqn = mip.utils.make_fqn(org, channelName, pkg.name);
+                fqn = mip.parse.make_fqn(org, channelName, pkg.name);
                 if ~ismember(fqn, availablePackages)
                     availablePackages = [availablePackages, {fqn}]; %#ok<AGROW>
                 end

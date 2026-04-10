@@ -57,7 +57,7 @@ function install(varargin)
               '--no-compile can only be used with --editable local installs.');
     end
 
-    [channel, args] = mip.utils.parse_channel_flag(filteredArgs);
+    [channel, args] = mip.parse.parse_channel_flag(filteredArgs);
 
     if isempty(args)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
@@ -109,7 +109,7 @@ function install(varargin)
             error('mip:install:noMipYaml', ...
                   'Directory "%s" does not contain a mip.yaml file.', localPath);
         end
-        mip.utils.install_local(localPath, editable, noCompile);
+        mip.build.install_local(localPath, editable, noCompile);
     end
 
     % If only local installs were requested, we're done
@@ -117,7 +117,7 @@ function install(varargin)
         return;
     end
 
-    packagesDir = mip.utils.get_packages_dir();
+    packagesDir = mip.paths.get_packages_dir();
 
     % Create packages directory if it doesn't exist
     if ~exist(packagesDir, 'dir')
@@ -159,7 +159,7 @@ function install(varargin)
         fprintf('\nSuccessfully installed %d package(s).\n', installedCount);
         fprintf('\nTo use installed packages, run:\n');
         for i = 1:length(installedFqns)
-            fprintf('  mip load %s\n', mip.utils.load_hint_name(installedFqns{i}));
+            fprintf('  mip load %s\n', mip.resolve.load_hint_name(installedFqns{i}));
         end
     end
 end
@@ -174,7 +174,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         channel = 'mip-org/core';
     end
 
-    [defaultOrg, defaultChan] = mip.utils.parse_channel_spec(channel);
+    [defaultOrg, defaultChan] = mip.parse.parse_channel_spec(channel);
 
     % Resolve each package argument to org/channel/name (with optional version).
     % FQN arguments use the org/channel encoded in the name; the --channel flag
@@ -187,12 +187,12 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
     hasBareName = false;
     for i = 1:length(repoPackages)
         pkg = repoPackages{i};
-        parsed = mip.utils.parse_package_arg(pkg);
+        parsed = mip.parse.parse_package_arg(pkg);
         if ~parsed.is_fqn
             hasBareName = true;
         end
-        [org, ch, name, version] = mip.utils.resolve_package_name(pkg, channel);
-        fqn = mip.utils.make_fqn(org, ch, name);
+        [org, ch, name, version] = mip.resolve.resolve_package_name(pkg, channel);
+        fqn = mip.parse.make_fqn(org, ch, name);
         s = struct('org', org, 'channel', ch, 'name', name, ...
                    'fqn', fqn, ...
                    'requested_version', version);
@@ -284,7 +284,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
                 rethrow(ME);
             end
             missingFqn = tokens{1}{1};
-            missingResult = mip.utils.parse_package_arg(missingFqn);
+            missingResult = mip.parse.parse_package_arg(missingFqn);
             if ~missingResult.is_fqn
                 rethrow(ME);
             end
@@ -315,11 +315,11 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         if isempty(s.requested_version)
             continue;
         end
-        pkgDir = mip.utils.get_package_dir(s.org, s.channel, s.name);
+        pkgDir = mip.paths.get_package_dir(s.org, s.channel, s.name);
         if ~exist(pkgDir, 'dir')
             continue;
         end
-        installedInfo = mip.utils.read_package_json(pkgDir);
+        installedInfo = mip.config.read_package_json(pkgDir);
         if strcmp(installedInfo.version, s.requested_version)
             continue;  % Already at requested version
         end
@@ -329,12 +329,12 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         end
         fprintf('Replacing "%s" %s with requested version %s...\n', ...
                 s.fqn, installedInfo.version, s.requested_version);
-        if mip.utils.is_loaded(s.fqn)
+        if mip.state.is_loaded(s.fqn)
             mip.unload(s.fqn);
             reloadAfterInstall{end+1} = s.fqn;
         end
         rmdir(pkgDir, 's');
-        mip.utils.remove_directly_installed(s.fqn);
+        mip.state.remove_directly_installed(s.fqn);
     end
 
     % Determine which packages need installing vs already installed
@@ -343,8 +343,8 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
 
     for i = 1:length(allPackagesToInstall)
         fqn = allPackagesToInstall{i};
-        result = mip.utils.parse_package_arg(fqn);
-        pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+        result = mip.parse.parse_package_arg(fqn);
+        pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
 
         if exist(pkgDir, 'dir')
             alreadyInstalled{end+1} = fqn;
@@ -381,14 +381,14 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
             for i = 1:length(toInstallFqns)
                 fqn = toInstallFqns{i};
                 pkgInfo = packageInfoMap(fqn);
-                result = mip.utils.parse_package_arg(fqn);
-                pkgDir = mip.utils.get_package_dir(result.org, result.channel, result.name);
+                result = mip.parse.parse_package_arg(fqn);
+                pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
                 downloadAndInstall(fqn, pkgInfo, pkgDir);
             end
         catch ME
             fprintf('\nInstall failed; rolling back any orphaned dependencies...\n');
             try
-                mip.utils.prune_unused_packages();
+                mip.state.prune_unused_packages();
             catch pruneErr
                 warning('mip:rollbackFailed', ...
                         'Rollback prune failed: %s', pruneErr.message);
@@ -399,7 +399,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
         % Mark requested packages as directly installed and collect their FQNs
         for i = 1:length(resolvedPackages)
             s = resolvedPackages{i};
-            mip.utils.add_directly_installed(s.fqn);
+            mip.state.add_directly_installed(s.fqn);
             if ismember(s.fqn, toInstallFqns)
                 installedFqns{end+1} = s.fqn;
             end
@@ -416,7 +416,7 @@ function installedFqns = installFromRepository(repoPackages, ~, channel)
     % Warn if any installed package name exists in multiple channels
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
-        allInstalled = mip.utils.find_all_installed_by_name(s.name);
+        allInstalled = mip.resolve.find_all_installed_by_name(s.name);
         if length(allInstalled) > 1
             fprintf('\nWarning: Package "%s" is installed from multiple channels:\n', s.name);
             for k = 1:length(allInstalled)
@@ -437,23 +437,23 @@ function installedFqn = installFromMhl(mhlSource, packagesDir, channel)
     if isempty(channel)
         channel = 'mip-org/core';
     end
-    [org, channelName] = mip.utils.parse_channel_spec(channel);
+    [org, channelName] = mip.parse.parse_channel_spec(channel);
 
     try
         % Download or copy the .mhl file
-        mhlPath = mip.utils.download_mhl(mhlSource, tempDir);
+        mhlPath = mip.channel.download_mhl(mhlSource, tempDir);
 
         % Extract the .mhl file
         extractDir = fullfile(tempDir, 'extracted');
-        mip.utils.extract_mhl(mhlPath, extractDir);
+        mip.channel.extract_mhl(mhlPath, extractDir);
 
         % Read mip.json to get package name and dependencies
-        pkgInfo = mip.utils.read_package_json(extractDir);
+        pkgInfo = mip.config.read_package_json(extractDir);
         packageName = pkgInfo.name;
-        fqn = mip.utils.make_fqn(org, channelName, packageName);
+        fqn = mip.parse.make_fqn(org, channelName, packageName);
 
         % Check if package is already installed
-        pkgDir = mip.utils.get_package_dir(org, channelName, packageName);
+        pkgDir = mip.paths.get_package_dir(org, channelName, packageName);
         if exist(pkgDir, 'dir')
             fprintf('Package "%s" is already installed\n', fqn);
             return
@@ -482,7 +482,7 @@ function installedFqn = installFromMhl(mhlSource, packagesDir, channel)
         fprintf('Successfully installed "%s"\n', fqn);
 
         % Mark as directly installed
-        mip.utils.add_directly_installed(fqn);
+        mip.state.add_directly_installed(fqn);
 
         installedFqn = fqn;
 
@@ -496,7 +496,7 @@ function installedFqn = installFromMhl(mhlSource, packagesDir, channel)
         % that were left behind.
         fprintf('\nInstall failed; rolling back any orphaned dependencies...\n');
         try
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
         catch pruneErr
             warning('mip:rollbackFailed', ...
                     'Rollback prune failed: %s', pruneErr.message);
@@ -521,7 +521,7 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
 
     try
         % Download .mhl file
-        mhlPath = mip.utils.download_mhl(mhlUrl, tempDir);
+        mhlPath = mip.channel.download_mhl(mhlUrl, tempDir);
 
         % Create parent directories if needed
         parentDir = fileparts(pkgDir);
@@ -530,7 +530,7 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
         end
 
         % Extract to package directory
-        mip.utils.extract_mhl(mhlPath, pkgDir);
+        mip.channel.extract_mhl(mhlPath, pkgDir);
 
         fprintf('Successfully installed "%s"\n', fqn);
 
@@ -557,20 +557,20 @@ function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChann
         return
     end
     fprintf('Fetching package index for %s...\n', ch);
-    [chOrg, chName] = mip.utils.parse_channel_spec(ch);
-    chIndex = mip.utils.fetch_index(ch);
+    [chOrg, chName] = mip.parse.parse_channel_spec(ch);
+    chIndex = mip.channel.fetch_index(ch);
     % Project the FQN-keyed requestedVersions down to a name-keyed map
     % containing only entries that target this channel. build_package_info_map
     % expects bare-name keys.
     chRequestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     fqnKeys = keys(requestedVersions);
     for j = 1:length(fqnKeys)
-        parsed = mip.utils.parse_package_arg(fqnKeys{j});
+        parsed = mip.parse.parse_package_arg(fqnKeys{j});
         if strcmp(parsed.org, chOrg) && strcmp(parsed.channel, chName)
             chRequestedVersions(parsed.name) = requestedVersions(fqnKeys{j});
         end
     end
-    [chMap, chUnavail] = mip.utils.build_package_info_map(chIndex, chOrg, chName, chRequestedVersions);
+    [chMap, chUnavail] = mip.resolve.build_package_info_map(chIndex, chOrg, chName, chRequestedVersions);
     chKeys = keys(chMap);
     for j = 1:length(chKeys)
         packageInfoMap(chKeys{j}) = chMap(chKeys{j});

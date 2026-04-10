@@ -47,8 +47,8 @@ if nargin < 1
 end
 
 % Ensure mip itself is always tracked as a loaded sticky package
-mip.utils.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
-mip.utils.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
+mip.state.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
+mip.state.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
 
 % Normalize command to lowercase
 command = lower(command);
@@ -122,7 +122,7 @@ switch command
         mip.avail(varargin{:});
 
     case 'index'
-        [ch, ~] = mip.utils.parse_channel_flag(varargin);
+        [ch, ~] = mip.parse.parse_channel_flag(varargin);
         fprintf('%s\n', mip.index(ch));
 
     case 'root'

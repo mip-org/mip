@@ -44,24 +44,24 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
 
         function testUninstallRemovesFromDirectlyInstalled(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
-            mip.utils.add_directly_installed('mip-org/core/testpkg');
+            mip.state.add_directly_installed('mip-org/core/testpkg');
 
             testCase.verifyTrue(ismember('mip-org/core/testpkg', ...
-                mip.utils.get_directly_installed()));
+                mip.state.get_directly_installed()));
 
-            mip.utils.remove_directly_installed('mip-org/core/testpkg');
+            mip.state.remove_directly_installed('mip-org/core/testpkg');
             testCase.verifyFalse(ismember('mip-org/core/testpkg', ...
-                mip.utils.get_directly_installed()));
+                mip.state.get_directly_installed()));
         end
 
         function testUnloadBeforeUninstall(testCase)
             % Simulate what uninstall does: unload first, then remove
             pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
 
             mip.unload('mip-org/core/testpkg');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/testpkg'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/testpkg'));
 
             rmdir(pkgDir, 's');
             testCase.verifyFalse(exist(pkgDir, 'dir') > 0);
@@ -69,19 +69,19 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
 
         function testPackageNoLongerDiscoverableAfterRemoval(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
-            fqn = mip.utils.resolve_bare_name('testpkg');
+            fqn = mip.resolve.resolve_bare_name('testpkg');
             testCase.verifyEqual(fqn, 'mip-org/core/testpkg');
 
-            pkgDir = mip.utils.get_package_dir('mip-org', 'core', 'testpkg');
+            pkgDir = mip.paths.get_package_dir('mip-org', 'core', 'testpkg');
             rmdir(pkgDir, 's');
 
-            fqn = mip.utils.resolve_bare_name('testpkg');
+            fqn = mip.resolve.resolve_bare_name('testpkg');
             testCase.verifyEqual(fqn, '');
         end
 
         function testMipCannotBeUninstalled(testCase)
             % Verify that mip-org/core/mip is detected as mip
-            r = mip.utils.parse_package_arg('mip-org/core/mip');
+            r = mip.parse.parse_package_arg('mip-org/core/mip');
             testCase.verifyTrue(r.is_fqn);
             testCase.verifyEqual(r.org, 'mip-org');
             testCase.verifyEqual(r.channel, 'core');
@@ -127,7 +127,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
 
             % Call the resolution logic that uninstall uses
-            allMatches = mip.utils.find_all_installed_by_name('duppkg');
+            allMatches = mip.resolve.find_all_installed_by_name('duppkg');
             testCase.verifyEqual(length(allMatches), 2, ...
                 'Should find two installed packages with same bare name');
             testCase.verifyTrue(ismember('mip-org/core/duppkg', allMatches));
@@ -138,7 +138,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             % When bare name matches exactly one installed package, resolve it
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'uniqpkg');
 
-            allMatches = mip.utils.find_all_installed_by_name('uniqpkg');
+            allMatches = mip.resolve.find_all_installed_by_name('uniqpkg');
             testCase.verifyEqual(length(allMatches), 1);
             testCase.verifyEqual(allMatches{1}, 'mip-org/core/uniqpkg');
         end
@@ -149,7 +149,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'other-org', 'extras', 'duppkg');
 
             % FQN parsing should identify it as FQN and skip bare name resolution
-            result = mip.utils.parse_package_arg('other-org/extras/duppkg');
+            result = mip.parse.parse_package_arg('other-org/extras/duppkg');
             testCase.verifyTrue(result.is_fqn);
         end
 
@@ -160,7 +160,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             % and not a dep of anything directly installed should be pruned.
             orphanDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'orphan');
 
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
 
             testCase.verifyFalse(exist(orphanDir, 'dir') > 0, ...
                 'Orphan should be pruned');
@@ -170,9 +170,9 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             % A directly-installed package should never be pruned, even
             % if nothing else references it.
             keepDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'keep');
-            mip.utils.add_directly_installed('mip-org/core/keep');
+            mip.state.add_directly_installed('mip-org/core/keep');
 
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
 
             testCase.verifyTrue(exist(keepDir, 'dir') > 0, ...
                 'Directly-installed package should be preserved');
@@ -184,9 +184,9 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             parentDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'parent', ...
                 'dependencies', {'child'});
             childDir  = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'child');
-            mip.utils.add_directly_installed('mip-org/core/parent');
+            mip.state.add_directly_installed('mip-org/core/parent');
 
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
 
             testCase.verifyTrue(exist(parentDir, 'dir') > 0, ...
                 'Directly-installed parent should be preserved');
@@ -199,9 +199,9 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             % orphan. Only the orphan is removed.
             keepDir   = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'keep');
             orphanDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'orphan');
-            mip.utils.add_directly_installed('mip-org/core/keep');
+            mip.state.add_directly_installed('mip-org/core/keep');
 
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
 
             testCase.verifyTrue(exist(keepDir, 'dir') > 0);
             testCase.verifyFalse(exist(orphanDir, 'dir') > 0);
@@ -212,7 +212,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             % from pruning even when it isn't in directly_installed.txt.
             mipDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
 
-            mip.utils.prune_unused_packages();
+            mip.state.prune_unused_packages();
 
             testCase.verifyTrue(exist(mipDir, 'dir') > 0, ...
                 'mip-org/core/mip must never be pruned');

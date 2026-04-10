@@ -130,7 +130,7 @@ classdef TestInfoPackage < matlab.unittest.TestCase
 
         function testInfoShowsEditableFlag(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.utils.install_local(srcDir, true);
+            mip.build.install_local(srcDir, true);
 
             output = evalc('try; mip.info(''local/local/mypkg''); catch; end');
             testCase.verifyTrue(contains(output, 'Editable: Yes'), ...

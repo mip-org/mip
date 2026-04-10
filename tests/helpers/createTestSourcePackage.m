@@ -2,7 +2,7 @@ function srcDir = createTestSourcePackage(baseDir, pkgName, varargin)
 %CREATETESTSOURCEPACKAGE   Create a source package directory with mip.yaml.
 %
 % Creates a directory with mip.yaml and a simple MATLAB function,
-% suitable for testing mip.utils.install_local.
+% suitable for testing mip.build.install_local.
 %
 % Args:
 %   baseDir - Parent directory to create the package in

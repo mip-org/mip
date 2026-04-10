@@ -108,8 +108,8 @@ function update(varargin)
     % update cycle. We remember both the full loaded list (so transitive
     % deps that get pruned can be re-loaded) and the directly-loaded
     % list (so we can preserve the direct-vs-transitive distinction).
-    loadedBefore = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
-    directlyLoadedBefore = mip.utils.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+    loadedBefore = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+    directlyLoadedBefore = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 
     % --- Local packages: rmdir + install_local (no mip.uninstall) ---
     % Local packages cannot go through mip.uninstall because that prunes
@@ -118,19 +118,19 @@ function update(varargin)
         p = localPkgs{i};
         fprintf('Updating local package "%s"...\n', p.fqn);
 
-        if mip.utils.is_loaded(p.fqn)
+        if mip.state.is_loaded(p.fqn)
             fprintf('Unloading "%s" before update...\n', p.fqn);
             mip.unload(p.fqn);
         end
 
         rmdir(p.pkgDir, 's');
-        mip.utils.remove_directly_installed(p.fqn);
-        packagesDir = mip.utils.get_packages_dir();
-        mip.utils.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
-        mip.utils.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
+        mip.state.remove_directly_installed(p.fqn);
+        packagesDir = mip.paths.get_packages_dir();
+        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
+        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
 
         fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
-        mip.utils.install_local(p.sourcePath, p.editable);
+        mip.build.install_local(p.sourcePath, p.editable);
     end
 
     % --- Remote packages: mip.uninstall + mip.install ---
@@ -155,7 +155,7 @@ function p = resolvePackage(packageArg)
 % update it. Validates that the package is installed and, for local
 % packages, that the original source directory is still available.
 
-    r = mip.utils.resolve_to_installed(packageArg);
+    r = mip.resolve.resolve_to_installed(packageArg);
     if isempty(r)
         error('mip:update:notInstalled', ...
               'Package "%s" is not installed. Run "mip install %s" first.', ...
@@ -163,7 +163,7 @@ function p = resolvePackage(packageArg)
     end
 
     try
-        pkgInfo = mip.utils.read_package_json(r.pkg_dir);
+        pkgInfo = mip.config.read_package_json(r.pkg_dir);
     catch
         pkgInfo = struct('version', 'unknown', 'name', r.name);
     end
@@ -207,8 +207,8 @@ function tf = checkRemoteNeedsUpdate(p)
     fprintf('Checking for updates to "%s" (installed: %s, channel: %s)...\n', ...
             fqn, installedVersion, channelStr);
 
-    index = mip.utils.fetch_index(channelStr);
-    [packageInfoMap, unavailablePackages] = mip.utils.build_package_info_map(index, p.org, p.channel);
+    index = mip.channel.fetch_index(channelStr);
+    [packageInfoMap, unavailablePackages] = mip.resolve.build_package_info_map(index, p.org, p.channel);
 
     currentArch = mip.arch();
     if ~packageInfoMap.isKey(fqn)
@@ -263,14 +263,14 @@ function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
 
     for i = 1:length(loadedBefore)
         pkg = loadedBefore{i};
-        if mip.utils.is_loaded(pkg)
+        if mip.state.is_loaded(pkg)
             continue
         end
-        r = mip.utils.parse_package_arg(pkg);
+        r = mip.parse.parse_package_arg(pkg);
         if ~r.is_fqn
             continue
         end
-        pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+        pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
         if ~exist(pkgDir, 'dir')
             fprintf('Warning: "%s" was loaded before update but is no longer installed; skipping reload.\n', pkg);
             continue
@@ -284,7 +284,7 @@ function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
     % loaded (since mip.load is always a direct call). Reset the state
     % so only the packages that were directly loaded before -- and that
     % are still loaded now -- are marked as directly loaded.
-    currentlyLoaded = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+    currentlyLoaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     desiredDirectly = {};
     for i = 1:length(directlyLoadedBefore)
         pkg = directlyLoadedBefore{i};
@@ -292,7 +292,7 @@ function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
             desiredDirectly{end+1} = pkg; %#ok<AGROW>
         end
     end
-    mip.utils.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', desiredDirectly);
+    mip.state.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', desiredDirectly);
 end
 
 function updateSelf(p, force)
@@ -308,8 +308,8 @@ function updateSelf(p, force)
 
     fprintf('Checking for updates to mip (installed: %s)...\n', installedVersion);
 
-    index = mip.utils.fetch_index(channelStr);
-    [packageInfoMap, ~] = mip.utils.build_package_info_map(index, 'mip-org', 'core');
+    index = mip.channel.fetch_index(channelStr);
+    [packageInfoMap, ~] = mip.resolve.build_package_info_map(index, 'mip-org', 'core');
 
     if ~packageInfoMap.isKey(fqn)
         error('mip:update:notInIndex', 'mip not found in the mip-org/core channel index.');
@@ -342,9 +342,9 @@ function updateSelf(p, force)
     mkdir(tempDir);
 
     try
-        mhlPath = mip.utils.download_mhl(latestInfo.mhl_url, tempDir);
+        mhlPath = mip.channel.download_mhl(latestInfo.mhl_url, tempDir);
         stagingDir = fullfile(tempDir, 'staging');
-        mip.utils.extract_mhl(mhlPath, stagingDir);
+        mip.channel.extract_mhl(mhlPath, stagingDir);
         rmdir(pkgDir, 's');
         movefile(stagingDir, pkgDir);
         fprintf('Successfully updated mip to %s\n', latestVersion);

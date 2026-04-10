@@ -38,8 +38,8 @@ classdef TestResetCommand < matlab.unittest.TestCase
 
             mip.reset();
 
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgA'));
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/core/pkgB'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgA'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/core/pkgB'));
         end
 
         function testReset_ClearsAllKeyValueStores(testCase)

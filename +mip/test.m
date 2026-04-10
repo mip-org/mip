@@ -20,21 +20,21 @@ end
 packageArg = varargin{1};
 
 % Resolve to installed FQN
-r = mip.utils.resolve_to_installed(packageArg);
+r = mip.resolve.resolve_to_installed(packageArg);
 if isempty(r)
     error('mip:test:notInstalled', ...
           'Package "%s" is not installed.', packageArg);
 end
 
 % Load the package if not already loaded
-if ~mip.utils.is_loaded(r.fqn)
+if ~mip.state.is_loaded(r.fqn)
     fprintf('Loading package "%s"...\n', r.fqn);
     mip.load(r.fqn);
 end
 
 % Find test script
-pkgInfo = mip.utils.read_package_json(r.pkg_dir);
-testScript = mip.utils.get_build_field(pkgInfo, r.pkg_dir, 'test_script');
+pkgInfo = mip.config.read_package_json(r.pkg_dir);
+testScript = mip.config.get_build_field(pkgInfo, r.pkg_dir, 'test_script');
 
 if isempty(testScript)
     fprintf('No test script defined for package "%s".\n', r.fqn);
@@ -42,7 +42,7 @@ if isempty(testScript)
 end
 
 % Determine test directory
-testDir = mip.utils.get_source_dir(r.pkg_dir, pkgInfo);
+testDir = mip.paths.get_source_dir(r.pkg_dir, pkgInfo);
 
 if ~isfolder(testDir)
     error('mip:test:dirMissing', ...

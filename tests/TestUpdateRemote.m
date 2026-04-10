@@ -43,12 +43,12 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
                 'mip-org', 'test-channel1', 'alpha');
-            info1 = mip.utils.read_package_json(pkgDir);
+            info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info1.version, '1.0.0');
 
             mip.update('mip-org/test-channel1/alpha');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info2.version, '2.0.0', ...
                 'Update should upgrade alpha from 1.0.0 to 2.0.0');
         end
@@ -61,12 +61,12 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
                 'mip-org', 'test-channel1', 'alpha');
-            info1 = mip.utils.read_package_json(pkgDir);
+            info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info1.version, '2.0.0');
 
             mip.update('mip-org/test-channel1/alpha');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info2.version, '2.0.0');
             testCase.verifyEqual(info2.timestamp, info1.timestamp, ...
                 'Timestamp should not change when already up to date');
@@ -88,7 +88,7 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
 
             mip.update('--force', 'mip-org/test-channel1/alpha');
 
-            info2 = mip.utils.read_package_json(pkgDir);
+            info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info2.version, '2.0.0');
             testCase.verifyFalse(exist(marker, 'file') > 0, ...
                 'Marker file should be gone after force reinstall');
@@ -100,14 +100,14 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             % Install old version, load, update, verify still loaded
             mip.install('--channel', 'mip-org/test-channel1', 'alpha@1.0.0');
             mip.load('mip-org/test-channel1/alpha');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/alpha'));
 
             mip.update('mip-org/test-channel1/alpha');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/alpha'), ...
                 'Package should be reloaded after update');
 
-            info = mip.utils.read_package_json(fullfile(testCase.TestRoot, ...
+            info = mip.config.read_package_json(fullfile(testCase.TestRoot, ...
                 'packages', 'mip-org', 'test-channel1', 'alpha'));
             testCase.verifyEqual(info.version, '2.0.0', ...
                 'Should be upgraded to latest version');
@@ -116,14 +116,14 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
         function testUpdate_PreservesUnloadState(testCase)
             % Install old version without loading, update, verify still unloaded
             mip.install('--channel', 'mip-org/test-channel1', 'alpha@1.0.0');
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/test-channel1/alpha'));
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/test-channel1/alpha'));
 
             mip.update('mip-org/test-channel1/alpha');
 
-            testCase.verifyFalse(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+            testCase.verifyFalse(mip.state.is_loaded('mip-org/test-channel1/alpha'), ...
                 'Package should remain unloaded if it was not loaded before update');
 
-            info = mip.utils.read_package_json(fullfile(testCase.TestRoot, ...
+            info = mip.config.read_package_json(fullfile(testCase.TestRoot, ...
                 'packages', 'mip-org', 'test-channel1', 'alpha'));
             testCase.verifyEqual(info.version, '2.0.0', ...
                 'Should be upgraded to latest version');
@@ -166,15 +166,15 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             mip.install('--channel', 'mip-org/test-channel1', 'gamma');
             mip.load('mip-org/test-channel1/gamma');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/gamma'));
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/gamma'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/alpha'), ...
                 'alpha should be transitively loaded');
 
             mip.update('--force', 'mip-org/test-channel1/gamma');
 
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/gamma'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/gamma'), ...
                 'gamma should be reloaded after force update');
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/test-channel1/alpha'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/test-channel1/alpha'), ...
                 'alpha should be reloaded as transitive dependency');
         end
 

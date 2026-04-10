@@ -40,20 +40,20 @@ classdef TestMipIdentity < matlab.unittest.TestCase
             % A package named 'mip' on a different channel should be unloadable
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mip');
             mip.load('mylab/custom/mip');
-            testCase.verifyTrue(mip.utils.is_loaded('mylab/custom/mip'));
+            testCase.verifyTrue(mip.state.is_loaded('mylab/custom/mip'));
 
             mip.unload('mylab/custom/mip');
-            testCase.verifyFalse(mip.utils.is_loaded('mylab/custom/mip'));
+            testCase.verifyFalse(mip.state.is_loaded('mylab/custom/mip'));
         end
 
         function testCanUnloadMipLocalInstall(testCase)
             % A local/editable 'mip' package should be unloadable
             createTestPackage(testCase.TestRoot, 'local', 'local', 'mip');
             mip.load('local/local/mip');
-            testCase.verifyTrue(mip.utils.is_loaded('local/local/mip'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mip'));
 
             mip.unload('local/local/mip');
-            testCase.verifyFalse(mip.utils.is_loaded('local/local/mip'));
+            testCase.verifyFalse(mip.state.is_loaded('local/local/mip'));
         end
 
         function testMipOrgCoreMipAlwaysLoadedMessage(testCase)
@@ -63,8 +63,8 @@ classdef TestMipIdentity < matlab.unittest.TestCase
         end
 
         function testUnloadAllForce_NeverUnloadsMipOrgCoreMip(testCase)
-            mip.utils.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
-            mip.utils.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
+            mip.state.key_value_append('MIP_LOADED_PACKAGES', 'mip-org/core/mip');
+            mip.state.key_value_append('MIP_STICKY_PACKAGES', 'mip-org/core/mip');
 
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mip');
             mip.load('mylab/custom/mip');
@@ -72,9 +72,9 @@ classdef TestMipIdentity < matlab.unittest.TestCase
             mip.unload('--all', '--force');
 
             % mip-org/core/mip should still be loaded
-            testCase.verifyTrue(mip.utils.is_loaded('mip-org/core/mip'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/mip'));
             % mylab/custom/mip should be unloaded
-            testCase.verifyFalse(mip.utils.is_loaded('mylab/custom/mip'));
+            testCase.verifyFalse(mip.state.is_loaded('mylab/custom/mip'));
         end
 
         function testMipEntryPoint_SetsFqn(testCase)
@@ -82,7 +82,7 @@ classdef TestMipIdentity < matlab.unittest.TestCase
             % 'mip-org/core/mip' (not a path-derived FQN)
             clearMipState();
             mip('version');
-            loaded = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
             testCase.verifyTrue(ismember('mip-org/core/mip', loaded), ...
                 'mip-org/core/mip should be in MIP_LOADED_PACKAGES after calling mip()');
         end
@@ -90,7 +90,7 @@ classdef TestMipIdentity < matlab.unittest.TestCase
         function testMipEntryPoint_SetsSticky(testCase)
             clearMipState();
             mip('version');
-            sticky = mip.utils.key_value_get('MIP_STICKY_PACKAGES');
+            sticky = mip.state.key_value_get('MIP_STICKY_PACKAGES');
             testCase.verifyTrue(ismember('mip-org/core/mip', sticky), ...
                 'mip-org/core/mip should be in MIP_STICKY_PACKAGES after calling mip()');
         end
@@ -99,10 +99,10 @@ classdef TestMipIdentity < matlab.unittest.TestCase
             % Verify that no path-derived garbage FQN is added
             clearMipState();
             mip('version');
-            loaded = mip.utils.key_value_get('MIP_LOADED_PACKAGES');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
             for i = 1:length(loaded)
                 fqn = loaded{i};
-                r = mip.utils.parse_package_arg(fqn);
+                r = mip.parse.parse_package_arg(fqn);
                 testCase.verifyTrue(r.is_fqn, ...
                     sprintf('Loaded package "%s" is not a valid FQN', fqn));
             end
@@ -113,8 +113,8 @@ classdef TestMipIdentity < matlab.unittest.TestCase
             % normal loading flow (not short-circuit)
             createTestPackage(testCase.TestRoot, 'other-org', 'test', 'mip');
             mip.load('other-org/test/mip');
-            testCase.verifyTrue(mip.utils.is_loaded('other-org/test/mip'));
-            testCase.verifyTrue(mip.utils.is_directly_loaded('other-org/test/mip'));
+            testCase.verifyTrue(mip.state.is_loaded('other-org/test/mip'));
+            testCase.verifyTrue(mip.state.is_directly_loaded('other-org/test/mip'));
         end
 
     end

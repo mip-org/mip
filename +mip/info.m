@@ -21,7 +21,7 @@ if nargin < 1
     error('mip:noPackage', 'Package name is required');
 end
 
-[channel, args] = mip.utils.parse_channel_flag(varargin);
+[channel, args] = mip.parse.parse_channel_flag(varargin);
 
 if isempty(args)
     error('mip:noPackage', 'Package name is required');
@@ -37,28 +37,28 @@ if isempty(channel)
     channel = 'mip-org/core';
 end
 
-[org, channelName, packageName] = mip.utils.resolve_package_name(packageArg, channel);
+[org, channelName, packageName] = mip.resolve.resolve_package_name(packageArg, channel);
 
 % Find all local installations of this package
-result = mip.utils.parse_package_arg(packageArg);
+result = mip.parse.parse_package_arg(packageArg);
 if result.is_fqn
     % FQN: only check that specific installation
-    pkgDir = mip.utils.get_package_dir(org, channelName, packageName);
+    pkgDir = mip.paths.get_package_dir(org, channelName, packageName);
     if exist(pkgDir, 'dir')
-        installedFqns = {mip.utils.make_fqn(org, channelName, packageName)};
+        installedFqns = {mip.parse.make_fqn(org, channelName, packageName)};
     else
         installedFqns = {};
     end
 else
     % Bare name: find all installations across channels
-    installedFqns = mip.utils.find_all_installed_by_name(packageName);
+    installedFqns = mip.resolve.find_all_installed_by_name(packageName);
 end
 
 % ---- Collect channels to query ----
 
 channelsToQuery = {[org '/' channelName]};
 for i = 1:length(installedFqns)
-    r = mip.utils.parse_package_arg(installedFqns{i});
+    r = mip.parse.parse_package_arg(installedFqns{i});
     ch = [r.org '/' r.channel];
     % Skip local/local — no remote index for local installs
     if strcmp(ch, 'local/local')
@@ -120,13 +120,13 @@ end
 function showLocalInstallInfo(fqn)
 % Display info about a single local installation.
 
-    r = mip.utils.parse_package_arg(fqn);
-    pkgDir = mip.utils.get_package_dir(r.org, r.channel, r.name);
+    r = mip.parse.parse_package_arg(fqn);
+    pkgDir = mip.paths.get_package_dir(r.org, r.channel, r.name);
 
     fprintf('\n  %s\n', fqn);
 
     try
-        pkgInfo = mip.utils.read_package_json(pkgDir);
+        pkgInfo = mip.config.read_package_json(pkgDir);
     catch
         fprintf('    (could not read mip.json)\n\n');
         return
@@ -139,8 +139,8 @@ function showLocalInstallInfo(fqn)
     fprintf('    Path: %s\n', pkgDir);
 
     % Loaded / sticky status
-    isLoaded = mip.utils.is_loaded(fqn);
-    isSticky = mip.utils.is_sticky(fqn);
+    isLoaded = mip.state.is_loaded(fqn);
+    isSticky = mip.state.is_sticky(fqn);
     if isLoaded && isSticky
         fprintf('    Loaded: Yes (sticky)\n');
     elseif isLoaded
@@ -175,7 +175,7 @@ end
 function index = fetchRemoteIndex(channelStr)
 % Fetch the remote index for a channel. Returns [] on failure.
     try
-        index = mip.utils.fetch_index(channelStr);
+        index = mip.channel.fetch_index(channelStr);
     catch
         index = [];
     end
@@ -203,7 +203,7 @@ end
 function showRemoteChannelInfo(channelStr, packageName, index)
 % Display remote channel info for a package using a pre-fetched index.
 
-    [chOrg, chName] = mip.utils.parse_channel_spec(channelStr);
+    [chOrg, chName] = mip.parse.parse_channel_spec(channelStr);
 
     fprintf('=== Remote Channel: %s/%s ===\n\n', chOrg, chName);
 
@@ -302,7 +302,7 @@ function sorted = sortVersions(versions)
     for i = 2:n
         key = sorted{i};
         j = i - 1;
-        while j >= 1 && mip.utils.compare_versions(sorted{j}, key) > 0
+        while j >= 1 && mip.resolve.compare_versions(sorted{j}, key) > 0
             sorted{j+1} = sorted{j};
             j = j - 1;
         end
