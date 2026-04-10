@@ -70,7 +70,7 @@ classdef TestBundleCommand < matlab.unittest.TestCase
         function testBundle_NonexistentDirectoryErrors(testCase)
             testCase.verifyError( ...
                 @() mip.bundle('/nonexistent/path/12345'), ...
-                'mip:bundle:notADirectory');
+                'mip:notAFileOrDirectory');
         end
 
         function testBundle_NoMipYamlErrors(testCase)
