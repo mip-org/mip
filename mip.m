@@ -10,6 +10,7 @@ function varargout = mip(command, varargin)
 %   mip update --force <package>             - Force update even if up to date
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
+%   mip uninstall mip                        - Uninstall mip itself
 %   mip list                                 - List installed packages (reverse load order)
 %   mip list --sort-by-name                  - List installed packages (alphabetical)
 %   mip load <package> [...]  [--sticky]     - Load one or more packages into MATLAB path
