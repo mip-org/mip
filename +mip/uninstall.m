@@ -54,12 +54,11 @@ function uninstall(varargin)
         end
     end
 
-    % mip-org/core/mip cannot be uninstalled via this command
+    % Self-uninstall: mip-org/core/mip triggers full mip removal
     if ismember('mip-org/core/mip', resolvedPackages)
-        fprintf('Cannot uninstall mip via "mip uninstall".\n');
-        fprintf('To uninstall mip manually:\n');
-        fprintf('  1. Remove the mip directory: %s\n', mip.root());
-        fprintf('  2. Remove the mip entry from your MATLAB path (e.g., using pathtool)\n');
+        if uninstallSelf()
+            return
+        end
         resolvedPackages = resolvedPackages(~strcmp(resolvedPackages, 'mip-org/core/mip'));
     end
 
@@ -81,7 +80,6 @@ function uninstall(varargin)
     end
 
     % Uninstall each requested package
-    fprintf('\n');
     for i = 1:length(resolvedPackages)
         fqn = resolvedPackages{i};
         r = mip.parse.parse_package_arg(fqn);
@@ -109,4 +107,75 @@ function uninstall(varargin)
 
     % After pruning, check for broken dependencies
     mip.state.check_broken_dependencies('installed');
+end
+
+function didUninstall = uninstallSelf()
+% Completely uninstall mip: reset state, remove from path, delete root dir.
+
+    mipRoot        = mip.root();
+    mipPackagesDir = mip.paths.get_packages_dir();
+    mipPackageDir  = mip.paths.get_package_dir('mip-org', 'core', 'mip');
+    mipSourceDir   = fullfile(mipPackageDir, 'mip');
+
+    if ~exist(mipPackagesDir, 'dir')
+        error('mip:uninstall:corrupted', ...
+              'The mip root directory is corrupted. Uninstallation aborted.');
+    end
+
+    fprintf('WARNING: This will completely uninstall mip.\n\n');
+    fprintf('This action will:\n');
+    fprintf('- Remove mip from your saved MATLAB path.\n');
+    fprintf('- Unload and delete all installed packages.\n');
+    fprintf('- Delete the mip root directory:\n\n');
+    fprintf('  %s\n\n', shorten_home(mipRoot));
+    fprintf('This cannot be undone.\n');
+    confirm = getenv('MIP_CONFIRM');
+    if isempty(confirm)
+        confirm = input('Are you sure? (y/n): ', 's');
+    end
+    if ~strcmpi(confirm, 'y') && ~strcmpi(confirm, 'yes')
+        didUninstall = false;
+        fprintf('Uninstallation aborted.\n');
+        return
+    end
+    didUninstall = true;
+
+    % Reset all loaded packages and key-value stores
+    mip.reset();
+
+    fprintf('Removing mip from saved MATLAB path...\n');
+
+    % Cache the user's current path
+    current_path = path;
+
+    % Change the path to match what it would be if MATLAB had just started up
+    path(pathdef);
+
+    % Remove <MIP_ROOT>/packages/mip-org/core/mip/mip from the path and save it
+    % for future MATLAB sessions
+    w = warning('off', 'MATLAB:rmpath:DirNotFound');
+    rmpath(mipSourceDir);
+    warning(w);
+    savepath();
+
+    % Restore the path to what it was before and remove
+    % <MIP_ROOT>/packages/mip-org/core/mip/mip from the path for the current
+    % MATLAB session
+    path(current_path);
+    w = warning('off', 'MATLAB:rmpath:DirNotFound');
+    rmpath(mipSourceDir);
+    warning(w);
+
+    % Delete the mip root directory
+    fprintf('Deleting %s...\n', shorten_home(mipRoot));
+    rmdir(mipRoot, 's');
+    fprintf('mip has been uninstalled!\n');
+    fprintf('To reinstall mip, run:\n\n');
+    fprintf('   eval(webread(''https://mip.sh/install.txt''))\n\n');
+end
+
+function p = shorten_home(p)
+    if ~(ispc || isempty(getenv('HOME')))
+        p = replace(p, getenv('HOME'), '~');
+    end
 end
