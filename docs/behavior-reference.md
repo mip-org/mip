@@ -208,6 +208,8 @@ Given all variants for the chosen version:
 
 Priority: exact match > `numbl_wasm` fallback > `any`.
 
+**Version selection is final.** Architecture selection only considers variants within the version chosen in §3.1.3. If the best version has no compatible architecture, the package is reported as unavailable — MIP does **not** fall back to an older version that might have a compatible build. To install a specific older version that supports the current architecture, use the `@version` suffix explicitly.
+
 #### 3.1.5 Dependency Resolution
 
 1. Build a dependency graph recursively using `build_dependency_graph`.
