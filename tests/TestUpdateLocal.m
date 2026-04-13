@@ -312,5 +312,32 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'pkgB should have been reinstalled');
         end
 
+        %% --- Partial batch failure reloads earlier packages (issue #146) ---
+
+        function testUpdate_BatchFailureReloadsEarlierPackages(testCase)
+            % When updating pkgA and pkgB, if pkgB fails, pkgA should
+            % still be reloaded (not left unloaded).
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            mip.install(srcA);
+            mip.install(srcB);
+
+            mip.load('local/local/pkgA');
+            mip.load('local/local/pkgB');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgB'));
+
+            % Break pkgB's source so its update fails
+            delete(fullfile(srcB, 'mip.yaml'));
+
+            % Update both — pkgB should fail but pkgA should still reload
+            testCase.verifyError( ...
+                @() mip.update('local/local/pkgA', 'local/local/pkgB'), ...
+                'mip:mipYamlNotFound');
+
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'), ...
+                'pkgA should be reloaded even though pkgB failed');
+        end
+
     end
 end

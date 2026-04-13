@@ -109,53 +109,67 @@ function update(varargin)
     loadedBefore = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     directlyLoadedBefore = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 
-    % --- Local packages: rmdir + install_local (no mip.uninstall) ---
-    % Local packages cannot go through mip.uninstall because that prunes
-    % orphaned deps, and install_local cannot re-fetch them from a channel.
-    for i = 1:length(localPkgs)
-        p = localPkgs{i};
-        fprintf('Updating local package "%s"...\n', p.fqn);
+    % Wrap the update loops in try-catch so that reloadPreviouslyLoaded
+    % always runs. Without this, a failure mid-batch would leave
+    % already-updated packages unloaded for the rest of the session.
+    updateError = [];
+    try
+        % --- Local packages: rmdir + install_local (no mip.uninstall) ---
+        % Local packages cannot go through mip.uninstall because that prunes
+        % orphaned deps, and install_local cannot re-fetch them from a channel.
+        for i = 1:length(localPkgs)
+            p = localPkgs{i};
+            fprintf('Updating local package "%s"...\n', p.fqn);
 
-        if mip.state.is_loaded(p.fqn)
-            fprintf('Unloading "%s" before update...\n', p.fqn);
-            mip.unload(p.fqn);
-        end
-
-        rmdir(p.pkgDir, 's');
-        mip.state.remove_directly_installed(p.fqn);
-        packagesDir = mip.paths.get_packages_dir();
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
-
-        fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
-        mip.build.install_local(p.sourcePath, p.editable);
-    end
-
-    % --- Remote packages: update in place, install new deps, prune ---
-    % Each package is replaced on disk with the latest version from the
-    % channel. Existing dependencies are left alone. After all packages are
-    % updated, any new dependencies are installed and orphaned packages are
-    % pruned.
-    if ~isempty(remotePkgs)
-        for i = 1:length(remotePkgs)
-            p = remotePkgs{i};
             if mip.state.is_loaded(p.fqn)
                 fprintf('Unloading "%s" before update...\n', p.fqn);
                 mip.unload(p.fqn);
             end
-            downloadAndReplace(p);
+
+            rmdir(p.pkgDir, 's');
+            mip.state.remove_directly_installed(p.fqn);
+            packagesDir = mip.paths.get_packages_dir();
+            mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
+            mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
+
+            fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
+            mip.build.install_local(p.sourcePath, p.editable);
         end
 
-        % Install any new dependencies that the updated packages require
-        remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
-        installMissingDeps(remoteFqns);
+        % --- Remote packages: update in place, install new deps, prune ---
+        % Each package is replaced on disk with the latest version from the
+        % channel. Existing dependencies are left alone. After all packages are
+        % updated, any new dependencies are installed and orphaned packages are
+        % pruned.
+        if ~isempty(remotePkgs)
+            for i = 1:length(remotePkgs)
+                p = remotePkgs{i};
+                if mip.state.is_loaded(p.fqn)
+                    fprintf('Unloading "%s" before update...\n', p.fqn);
+                    mip.unload(p.fqn);
+                end
+                downloadAndReplace(p);
+            end
 
-        % Prune packages that are no longer needed
-        mip.state.prune_unused_packages();
+            % Install any new dependencies that the updated packages require
+            remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
+            installMissingDeps(remoteFqns);
+
+            % Prune packages that are no longer needed
+            mip.state.prune_unused_packages();
+        end
+    catch ME
+        updateError = ME;
     end
 
     % Reload anything that was loaded before update but isn't now.
+    % This runs even after a partial failure so that successfully-updated
+    % packages are not left unloaded.
     reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore);
+
+    if ~isempty(updateError)
+        rethrow(updateError);
+    end
 end
 
 function p = resolvePackage(packageArg)

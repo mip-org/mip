@@ -534,6 +534,7 @@ Does not go through the normal update flow since mip cannot be uninstalled. Self
 - Packages that were not loaded before the update remain unloaded afterward.
 - The directly-vs-transitively loaded distinction is preserved: a package that was only transitively loaded before the update is not promoted to directly loaded, even if it needed an explicit `mip.load` call during the reload pass.
 - If a previously-loaded package ends up uninstalled after the update (e.g. it was a transitive dep of the old version but not the new one, and was pruned), it is skipped with a warning; its entry is effectively dropped from the loaded set.
+- **Partial failure**: if a package fails mid-batch, the reload pass still runs so that packages updated earlier in the batch are not left unloaded. The original error is re-raised after reloading.
 
 ### 7.6 Dependency Handling
 
