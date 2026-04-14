@@ -8,10 +8,13 @@ function varargout = mip(command, varargin)
 %   mip install owner/chan/package           - Install using fully qualified name
 %   mip update <package> [...]               - Update one or more packages
 %   mip update --force <package>             - Force update even if up to date
+%   mip update --deps <package>              - Update package and its dependencies
+%   mip update --all                         - Update all installed packages
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
+%   mip uninstall mip                        - Uninstall mip itself
 %   mip list                                 - List installed packages (reverse load order)
-%   mip list --sort-by-name                   - List installed packages (alphabetical)
+%   mip list --sort-by-name                  - List installed packages (alphabetical)
 %   mip load <package> [...]  [--sticky]     - Load one or more packages into MATLAB path
 %   mip unload <package> [...]               - Unload one or more packages from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
@@ -22,6 +25,7 @@ function varargout = mip(command, varargin)
 %   mip avail                                - List available packages in repository
 %   mip avail --channel dev                  - List packages from a specific channel
 %   mip index                                - Display the mip package index URL
+%   mip root                                 - Display the mip root directory
 %   mip version                              - Display mip version
 %   mip test <package>                       - Run package test script
 %   mip compile <package>                    - Compile/recompile MEX files
@@ -88,7 +92,7 @@ switch command
         end
         mip.unload(varargin{:});
 
-    case {'architecture', 'arch'}
+    case 'arch'
         fprintf('%s\n', mip.arch());
 
     case 'info'

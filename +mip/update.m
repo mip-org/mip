@@ -6,10 +6,14 @@ function update(varargin)
 %   mip.update('org/channel/packageName')
 %   mip.update('package1', 'package2')
 %   mip.update('--force', 'packageName')
+%   mip.update('--deps', 'packageName')
+%   mip.update('--all')
 %   mip.update('mip')
 %
 % Options:
 %   --force           Force update even if already up to date
+%   --all             Update all installed packages
+%   --deps            Also update the dependencies of the named packages
 %
 % For each requested package, checks whether an update is needed. For
 % remote packages, the installed version (and commit hash) is compared
@@ -18,10 +22,11 @@ function update(varargin)
 % nothing happens for that package (unless --force is specified).
 %
 % Remote packages are updated in place: the old directory is removed and
-% the new version is downloaded. Existing dependencies are not updated.
-% After the update, any new dependencies that the updated package requires
-% are installed, and any orphaned packages (old dependencies no longer
-% needed by any directly installed package) are pruned.
+% the new version is downloaded. Existing dependencies are not updated
+% (unless --deps is specified). After the update, any missing dependencies
+% that the updated package requires are installed, and any orphaned
+% packages (old dependencies no longer needed by any directly installed
+% package) are pruned.
 %
 % Local packages are reinstalled directly from their source path without
 % going through uninstall (since install_local cannot re-fetch deps from
@@ -35,20 +40,45 @@ function update(varargin)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
 
-    % Check for --force flag
+    % Check for --force, --all, and --deps flags
     force = false;
+    updateAll = false;
+    updateDeps = false;
     args = {};
     for i = 1:length(varargin)
         arg = varargin{i};
         if ischar(arg) && strcmp(arg, '--force')
             force = true;
+        elseif ischar(arg) && strcmp(arg, '--all')
+            updateAll = true;
+        elseif ischar(arg) && strcmp(arg, '--deps')
+            updateDeps = true;
         else
             args{end+1} = arg; %#ok<AGROW>
         end
     end
 
+    % --all: update all installed packages
+    if updateAll
+        if ~isempty(args)
+            error('mip:update:allWithPackages', ...
+                  'Cannot specify package names with --all.');
+        end
+        allInstalled = mip.state.list_installed_packages();
+        if isempty(allInstalled)
+            fprintf('No packages installed.\n');
+            return
+        end
+        args = allInstalled;
+    end
+
     if isempty(args)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
+    end
+
+    % --deps: expand the argument list with each package's dependencies
+    if updateDeps
+        args = expandWithDeps(args);
     end
 
     % Resolve and validate each argument. Any error here (not installed,
@@ -131,10 +161,10 @@ function update(varargin)
         mip.build.install_local(p.sourcePath, p.editable);
     end
 
-    % --- Remote packages: update in place, install new deps, prune ---
+    % --- Remote packages: update in place, install missing deps, prune ---
     % Each package is replaced on disk with the latest version from the
     % channel. Existing dependencies are left alone. After all packages are
-    % updated, any new dependencies are installed and orphaned packages are
+    % updated, any missing dependencies are installed and orphaned packages are
     % pruned.
     if ~isempty(remotePkgs)
         for i = 1:length(remotePkgs)
@@ -146,7 +176,7 @@ function update(varargin)
             downloadAndReplace(p);
         end
 
-        % Install any new dependencies that the updated packages require
+        % Install any missing dependencies that the updated packages require
         remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
         installMissingDeps(remoteFqns);
 
@@ -317,10 +347,11 @@ function installMissingDeps(remoteFqns)
         return
     end
 
-    fprintf('\nInstalling new dependencies: %s\n', strjoin(missingDeps, ', '));
+    fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDeps, ', '));
 
     % Record which packages are directly installed before calling mip.install
-    % so we can undo any additions (new deps should not be directly installed).
+    % so we can undo any additions (missing deps should not be directly
+    % installed).
     directBefore = mip.state.get_directly_installed();
 
     mip.install(missingDeps{:});
@@ -427,3 +458,24 @@ function updateSelf(p, force)
     fprintf('\nmip has been updated to %s.\n', latestInfo.version);
 end
 
+function expanded = expandWithDeps(args)
+% Expand a list of package arguments to include their installed
+% dependencies (recursively). The original packages come first, followed
+% by any dependencies not already in the list.
+
+    expanded = args;
+    for i = 1:length(args)
+        r = mip.resolve.resolve_to_installed(args{i});
+        if isempty(r)
+            % Not installed — will error later in resolvePackage; skip here
+            continue
+        end
+        deps = mip.resolve.get_all_dependencies(r.fqn);
+        for j = 1:length(deps)
+            isInstalled = ~isempty(mip.resolve.resolve_to_installed(deps{j}));
+            if isInstalled && ~any(strcmp(expanded, deps{j}))
+                expanded{end+1} = deps{j}; %#ok<AGROW>
+            end
+        end
+    end
+end

@@ -25,6 +25,8 @@ function install(varargin)
 %   or a Windows drive letter (e.g. 'C:\path\mypkg', 'C:/path/mypkg').
 %   The directory must contain a mip.yaml file. In editable mode, changes
 %   to the source directory are reflected immediately without reinstalling.
+%   '@' in local paths is treated as a literal character, not a version
+%   separator (e.g. './@MyClass', './pkg@dev' are valid local paths).
 %
 %   Bare names like 'chebfun' are always resolved against channels, even
 %   if a directory of the same name exists in the current folder. Use
@@ -514,15 +516,34 @@ end
 function hint = buildLocalDirHint(repoPackages)
 % If any of the repo-style args also exists as a relative directory in
 % the current folder, build a hint suggesting the './' form.
+% Also checks the base name after stripping any @version suffix, since
+% local paths treat '@' as a literal character (not a version separator).
     lines = {};
     for i = 1:length(repoPackages)
-        pkg = repoPackages{i};
-        if isfolder(pkg)
+        dirName = matchLocalDir(repoPackages{i});
+        if ~isempty(dirName)
             lines{end+1} = sprintf( ... %#ok<AGROW>
                 ['Note: a local directory "%s" exists in the current folder.\n' ...
                  'To install it as a local package instead, run:\n' ...
-                 '  mip install ./%s'], pkg, pkg);
+                 '  mip install ./%s'], dirName, dirName);
         end
     end
     hint = strjoin(lines, sprintf('\n\n'));
+end
+
+function dirName = matchLocalDir(pkg)
+% Check if pkg matches a local directory, either as-is or after stripping
+% a trailing @version suffix.
+    dirName = '';
+    if isfolder(pkg)
+        dirName = pkg;
+    else
+        atIdx = strfind(pkg, '@');
+        if ~isempty(atIdx)
+            baseName = pkg(1:atIdx(end)-1);
+            if isfolder(baseName)
+                dirName = baseName;
+            end
+        end
+    end
 end

@@ -79,28 +79,6 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, '');
         end
 
-        function testMipCannotBeUninstalled(testCase)
-            % Verify that mip-org/core/mip is detected as mip
-            r = mip.parse.parse_package_arg('mip-org/core/mip');
-            testCase.verifyTrue(r.is_fqn);
-            testCase.verifyEqual(r.org, 'mip-org');
-            testCase.verifyEqual(r.channel, 'core');
-            testCase.verifyEqual(r.name, 'mip');
-
-            % The uninstall.m code checks: ismember('mip-org/core/mip', resolvedPackages)
-            resolvedPackages = {'mip-org/core/mip', 'mip-org/core/otherpkg'};
-            filtered = resolvedPackages(~strcmp(resolvedPackages, 'mip-org/core/mip'));
-            testCase.verifyEqual(filtered, {'mip-org/core/otherpkg'});
-        end
-
-        function testOtherMipPackageCanBeUninstalled(testCase)
-            % A 'mip' package on another channel should not be blocked
-            resolvedPackages = {'mylab/custom/mip'};
-            filtered = resolvedPackages(~strcmp(resolvedPackages, 'mip-org/core/mip'));
-            testCase.verifyEqual(filtered, {'mylab/custom/mip'}, ...
-                'mip on a different channel should not be filtered out');
-        end
-
         function testCleanupEmptyParentDirs(testCase)
             pkgDir = createTestPackage(testCase.TestRoot, 'testorg', 'testchan', 'testpkg');
             chanDir = fullfile(testCase.TestRoot, 'packages', 'testorg', 'testchan');

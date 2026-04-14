@@ -312,5 +312,171 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'pkgB should have been reinstalled');
         end
 
+        %% --- --all flag ---
+
+        function testUpdateAll_UpdatesAllLocalPackages(testCase)
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            mip.install(srcA);
+            mip.install(srcB);
+
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgA');
+            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgB');
+            infoA1 = mip.config.read_package_json(pkgDirA);
+            infoB1 = mip.config.read_package_json(pkgDirB);
+
+            pause(1.1);
+
+            mip.update('--all');
+
+            infoA2 = mip.config.read_package_json(pkgDirA);
+            infoB2 = mip.config.read_package_json(pkgDirB);
+            testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
+                'pkgA should have been reinstalled');
+            testCase.verifyFalse(strcmp(infoB2.timestamp, infoB1.timestamp), ...
+                'pkgB should have been reinstalled');
+        end
+
+        function testUpdateAll_PreservesLoadState(testCase)
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            mip.install(srcA);
+            mip.install(srcB);
+
+            mip.load('local/local/pkgA');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'));
+            testCase.verifyFalse(mip.state.is_loaded('local/local/pkgB'));
+
+            mip.update('--all');
+
+            testCase.verifyTrue(mip.state.is_loaded('local/local/pkgA'), ...
+                'pkgA should be reloaded after update --all');
+            testCase.verifyFalse(mip.state.is_loaded('local/local/pkgB'), ...
+                'pkgB should remain unloaded after update --all');
+        end
+
+        function testUpdateAll_ErrorsWithPackageNames(testCase)
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            mip.install(srcA);
+
+            testCase.verifyError(@() mip.update('--all', 'local/local/pkgA'), ...
+                'mip:update:allWithPackages');
+        end
+
+        function testUpdateAll_NoPackagesInstalled(testCase)
+            mip.update('--all');
+            % Should not error — just a no-op
+        end
+
+        function testUpdateAll_WithForce(testCase)
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            mip.install(srcA);
+
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'pkgA');
+            infoA1 = mip.config.read_package_json(pkgDirA);
+
+            pause(1.1);
+
+            mip.update('--all', '--force');
+
+            infoA2 = mip.config.read_package_json(pkgDirA);
+            testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
+                'pkgA should have been reinstalled with --all --force');
+        end
+
+        %% --- --deps flag ---
+
+        function testUpdateDeps_UpdatesPackageAndDependency(testCase)
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            mip.install(srcDep);
+
+            srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/local/depA'});
+            mip.install(srcMain);
+
+            pkgDirMain = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            pkgDirDep = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'depA');
+            infoMain1 = mip.config.read_package_json(pkgDirMain);
+            infoDep1 = mip.config.read_package_json(pkgDirDep);
+
+            pause(1.1);
+
+            mip.update('--deps', 'local/local/mypkg');
+
+            infoMain2 = mip.config.read_package_json(pkgDirMain);
+            infoDep2 = mip.config.read_package_json(pkgDirDep);
+            testCase.verifyFalse(strcmp(infoMain2.timestamp, infoMain1.timestamp), ...
+                'Main package should have been reinstalled with --deps');
+            testCase.verifyFalse(strcmp(infoDep2.timestamp, infoDep1.timestamp), ...
+                'Dependency should have been reinstalled with --deps');
+        end
+
+        function testUpdateDeps_PreservesLoadState(testCase)
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            mip.install(srcDep);
+
+            srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/local/depA'});
+            mip.install(srcMain);
+
+            mip.load('local/local/mypkg');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'));
+            testCase.verifyTrue(mip.state.is_loaded('local/local/depA'));
+
+            mip.update('--deps', 'local/local/mypkg');
+
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'), ...
+                'Main package should be reloaded after --deps update');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/depA'), ...
+                'Dependency should be reloaded after --deps update');
+        end
+
+        function testUpdateDeps_WithForce(testCase)
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            mip.install(srcDep);
+
+            srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/local/depA'});
+            mip.install(srcMain);
+
+            pkgDirMain = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            infoMain1 = mip.config.read_package_json(pkgDirMain);
+
+            pause(1.1);
+
+            mip.update('--deps', '--force', 'local/local/mypkg');
+
+            infoMain2 = mip.config.read_package_json(pkgDirMain);
+            testCase.verifyFalse(strcmp(infoMain2.timestamp, infoMain1.timestamp), ...
+                'Main package should have been reinstalled with --deps --force');
+        end
+
+        function testUpdateDeps_TransitiveDeps(testCase)
+            % depB depends on depC. mypkg depends on depB.
+            % --deps should update mypkg, depB, and depC.
+            srcC = createTestSourcePackage(testCase.SourceDir, 'depC');
+            mip.install(srcC);
+
+            srcB = createTestSourcePackage(testCase.SourceDir, 'depB', ...
+                'dependencies', {'local/local/depC'});
+            mip.install(srcB);
+
+            srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/local/depB'});
+            mip.install(srcMain);
+
+            mip.load('local/local/mypkg');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/depC'));
+
+            mip.update('--deps', 'local/local/mypkg');
+
+            testCase.verifyTrue(mip.state.is_loaded('local/local/mypkg'), ...
+                'Main package should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/depB'), ...
+                'depB should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/local/depC'), ...
+                'depC (transitive) should be reloaded');
+        end
+
     end
 end

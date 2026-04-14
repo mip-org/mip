@@ -287,5 +287,80 @@ classdef TestInstallLocal < matlab.unittest.TestCase
                 'mip:install:notADirectory');
         end
 
+        %% --- @ in local paths (issue #107) ---
+        % When a local-path prefix (~, ., /) is present, '@' is a literal
+        % path character, not a version separator.
+
+        function testInstall_DotSlashAtDirTreatedAsLocal(testCase)
+            % './@foo' should be categorized as a local path, not parsed
+            % as a bare name with '@' version syntax.
+            testCase.verifyError(@() mip.install('./@nonexistent_mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_DotSlashPathWithAtTreatedAsLocal(testCase)
+            % './pkg@1.0' should be categorized as a local path, not
+            % split on '@' to extract a version.
+            testCase.verifyError(@() mip.install('./pkg@1.0'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_AbsolutePathWithAtTreatedAsLocal(testCase)
+            % An absolute path containing '@' is still a local path.
+            testCase.verifyError(@() mip.install('/nonexistent/@mip_pkg'), ...
+                'mip:install:notADirectory');
+        end
+
+        function testInstall_LocalDirWithAtInstallsSuccessfully(testCase)
+            % A local directory whose name contains '@' should install
+            % when prefixed with './'. The '@' is part of the path, not
+            % a version separator.
+            atDir = fullfile(testCase.SourceDir, 'pkg@dev');
+            mkdir(atDir);
+            fid = fopen(fullfile(atDir, 'mip.yaml'), 'w');
+            fprintf(fid, 'name: mypkg\nversion: "1.0.0"\n');
+            fprintf(fid, 'description: "Test"\nlicense: MIT\n');
+            fprintf(fid, 'dependencies: []\naddpaths:\n  - path: "."\n');
+            fprintf(fid, 'builds:\n  - architectures: [any]\n');
+            fclose(fid);
+            fid = fopen(fullfile(atDir, 'mypkg.m'), 'w');
+            fprintf(fid, 'function r = mypkg(), r = 1; end\n');
+            fclose(fid);
+
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(testCase.SourceDir);
+
+            mip.install('./pkg@dev');
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'Package from @-containing directory should be installed');
+        end
+
+        function testInstall_EditableLocalDirWithAt(testCase)
+            % Editable install from a directory with '@' in the name.
+            atDir = fullfile(testCase.SourceDir, '@MyClass');
+            mkdir(atDir);
+            fid = fopen(fullfile(atDir, 'mip.yaml'), 'w');
+            fprintf(fid, 'name: myclass\nversion: "1.0.0"\n');
+            fprintf(fid, 'description: "Test"\nlicense: MIT\n');
+            fprintf(fid, 'dependencies: []\naddpaths:\n  - path: "."\n');
+            fprintf(fid, 'builds:\n  - architectures: [any]\n');
+            fclose(fid);
+            fid = fopen(fullfile(atDir, 'myclass.m'), 'w');
+            fprintf(fid, 'function r = myclass(), r = 1; end\n');
+            fclose(fid);
+
+            mip.install('-e', atDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'myclass');
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'Editable install from @-directory should succeed');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyTrue(info.editable);
+            testCase.verifyTrue(contains(info.source_path, '@MyClass'));
+        end
+
     end
 end
