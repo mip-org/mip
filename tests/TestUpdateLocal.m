@@ -312,6 +312,58 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'pkgB should have been reinstalled');
         end
 
+        %% --- Rollback on failure (issue #145) ---
+
+        function testUpdateLocalPackage_PreservesPackageOnFailure(testCase)
+            % If install_local fails during update, the old package should
+            % be restored from backup (not lost).
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '1.0.0');
+            mip.install(srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            infoBefore = mip.config.read_package_json(pkgDir);
+
+            % Break the source so install_local will fail (remove mip.yaml)
+            delete(fullfile(srcDir, 'mip.yaml'));
+
+            testCase.verifyError(@() mip.update('local/local/mypkg'), ...
+                'mip:mipYamlNotFound');
+
+            % Package should still be installed with original contents
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'Package directory should be restored after failed update');
+            infoAfter = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(infoAfter.version, infoBefore.version, ...
+                'Package version should be unchanged after failed update');
+            testCase.verifyTrue(ismember('local/local/mypkg', ...
+                mip.state.get_directly_installed()), ...
+                'Package should still be directly installed after failed update');
+        end
+
+        function testUpdateLocalPackage_PreservesEditableOnFailure(testCase)
+            % Editable install should also be restored on failure.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            mip.install('-e', srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'mypkg');
+            infoBefore = mip.config.read_package_json(pkgDir);
+            testCase.verifyTrue(infoBefore.editable);
+
+            % Break the source so install_local will fail
+            delete(fullfile(srcDir, 'mip.yaml'));
+
+            testCase.verifyError(@() mip.update('local/local/mypkg'), ...
+                'mip:mipYamlNotFound');
+
+            % Package should still be installed
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'Package directory should be restored after failed update');
+            infoAfter = mip.config.read_package_json(pkgDir);
+            testCase.verifyTrue(infoAfter.editable, ...
+                'Editable flag should be preserved after failed update');
+        end
+
         %% --- --all flag ---
 
         function testUpdateAll_UpdatesAllLocalPackages(testCase)

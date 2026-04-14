@@ -21,16 +21,17 @@ function update(varargin)
 % considered to need an update. If a package does not need updating,
 % nothing happens for that package (unless --force is specified).
 %
-% Remote packages are updated in place: the old directory is removed and
-% the new version is downloaded. Existing dependencies are not updated
+% Remote packages are updated via staging: the new version is downloaded
+% to a temporary directory first, then the old directory is replaced only
+% after the download succeeds. Existing dependencies are not updated
 % (unless --deps is specified). After the update, any missing dependencies
 % that the updated package requires are installed, and any orphaned
 % packages (old dependencies no longer needed by any directly installed
 % package) are pruned.
 %
-% Local packages are reinstalled directly from their source path without
-% going through uninstall (since install_local cannot re-fetch deps from
-% a channel).
+% Local packages are reinstalled from their source path without going
+% through uninstall (since install_local cannot re-fetch deps from a
+% channel). The old package is backed up and restored if reinstall fails.
 %
 % Any packages that were loaded before the update are reloaded afterward.
 %
@@ -144,9 +145,11 @@ function update(varargin)
     % already-updated packages unloaded for the rest of the session.
     updateError = [];
     try
-        % --- Local packages: rmdir + install_local (no mip.uninstall) ---
+        % --- Local packages: backup + install_local (no mip.uninstall) ---
         % Local packages cannot go through mip.uninstall because that prunes
         % orphaned deps, and install_local cannot re-fetch them from a channel.
+        % The old package is moved to a backup directory before reinstalling so
+        % that a failure in install_local does not destroy the installed copy.
         for i = 1:length(localPkgs)
             p = localPkgs{i};
             fprintf('Updating local package "%s"...\n', p.fqn);
@@ -156,17 +159,33 @@ function update(varargin)
                 mip.unload(p.fqn);
             end
 
-            rmdir(p.pkgDir, 's');
+            % Move old package to backup before reinstalling
+            backupDir = [tempname '_mip_backup'];
+            movefile(p.pkgDir, backupDir);
             mip.state.remove_directly_installed(p.fqn);
             packagesDir = mip.paths.get_packages_dir();
             mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local', 'local'));
             mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'local'));
 
             fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
-            mip.build.install_local(p.sourcePath, p.editable);
+            try
+                mip.build.install_local(p.sourcePath, p.editable);
+            catch ME
+                % Restore old package on failure
+                parentDir = fileparts(p.pkgDir);
+                if ~exist(parentDir, 'dir')
+                    mkdir(parentDir);
+                end
+                movefile(backupDir, p.pkgDir);
+                mip.state.add_directly_installed(p.fqn);
+                rethrow(ME);
+            end
+            if exist(backupDir, 'dir')
+                rmdir(backupDir, 's');
+            end
         end
 
-        % --- Remote packages: update in place, install missing deps, prune ---
+        % --- Remote packages: update via staging, install missing deps, prune ---
         % Each package is replaced on disk with the latest version from the
         % channel. Existing dependencies are left alone. After all packages are
         % updated, any missing dependencies are installed and orphaned packages
@@ -296,21 +315,29 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
 end
 
 function downloadAndReplace(p)
-% Remove the old package directory and download the new version.
+% Download the new version to a staging directory, then swap it in.
+% The old package is moved to a backup and restored if the swap fails,
+% so a failure at any point does not destroy the installed copy.
 
     fprintf('Downloading %s %s...\n', p.fqn, p.latestInfo.version);
-
-    rmdir(p.pkgDir, 's');
 
     tempDir = tempname;
     mkdir(tempDir);
     try
         mhlPath = mip.channel.download_mhl(p.latestInfo.mhl_url, tempDir);
-        parentDir = fileparts(p.pkgDir);
-        if ~exist(parentDir, 'dir')
-            mkdir(parentDir);
+        stagingDir = fullfile(tempDir, 'staging');
+        mip.channel.extract_mhl(mhlPath, stagingDir);
+
+        % Download succeeded — swap old package out and new one in
+        backupDir = [tempname '_mip_backup'];
+        movefile(p.pkgDir, backupDir);
+        try
+            movefile(stagingDir, p.pkgDir);
+        catch ME
+            movefile(backupDir, p.pkgDir);
+            rethrow(ME);
         end
-        mip.channel.extract_mhl(mhlPath, p.pkgDir);
+        rmdir(backupDir, 's');
         fprintf('Successfully updated "%s" to %s\n', p.fqn, p.latestInfo.version);
     catch ME
         if exist(tempDir, 'dir')
