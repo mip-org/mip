@@ -104,7 +104,7 @@ mip update --all              % update all installed packages
 mip update ./mypackage        % local packages always reinstall
 ```
 
-Only the named packages are updated -- existing dependencies are left as-is unless `--deps` is specified. New dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
+Only the named packages are updated -- existing dependencies are left as-is unless `--deps` is specified. Missing dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
 
 ---
 

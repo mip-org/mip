@@ -23,7 +23,7 @@ function update(varargin)
 %
 % Remote packages are updated in place: the old directory is removed and
 % the new version is downloaded. Existing dependencies are not updated
-% (unless --deps is specified). After the update, any new dependencies
+% (unless --deps is specified). After the update, any missing dependencies
 % that the updated package requires are installed, and any orphaned
 % packages (old dependencies no longer needed by any directly installed
 % package) are pruned.
@@ -161,10 +161,10 @@ function update(varargin)
         mip.build.install_local(p.sourcePath, p.editable);
     end
 
-    % --- Remote packages: update in place, install new deps, prune ---
+    % --- Remote packages: update in place, install missing deps, prune ---
     % Each package is replaced on disk with the latest version from the
     % channel. Existing dependencies are left alone. After all packages are
-    % updated, any new dependencies are installed and orphaned packages are
+    % updated, any missing dependencies are installed and orphaned packages are
     % pruned.
     if ~isempty(remotePkgs)
         for i = 1:length(remotePkgs)
@@ -176,7 +176,7 @@ function update(varargin)
             downloadAndReplace(p);
         end
 
-        % Install any new dependencies that the updated packages require
+        % Install any missing dependencies that the updated packages require
         remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
         installMissingDeps(remoteFqns);
 
@@ -347,10 +347,11 @@ function installMissingDeps(remoteFqns)
         return
     end
 
-    fprintf('\nInstalling new dependencies: %s\n', strjoin(missingDeps, ', '));
+    fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDeps, ', '));
 
     % Record which packages are directly installed before calling mip.install
-    % so we can undo any additions (new deps should not be directly installed).
+    % so we can undo any additions (missing deps should not be directly
+    % installed).
     directBefore = mip.state.get_directly_installed();
 
     mip.install(missingDeps{:});
@@ -463,52 +464,18 @@ function expanded = expandWithDeps(args)
 % by any dependencies not already in the list.
 
     expanded = args;
-    queue = args;
-    seen = containers.Map('KeyType', 'char', 'ValueType', 'logical');
-
-    while ~isempty(queue)
-        current = queue{1};
-        queue(1) = [];
-
-        % Resolve to installed FQN
-        r = mip.resolve.resolve_to_installed(current);
+    for i = 1:length(args)
+        r = mip.resolve.resolve_to_installed(args{i});
         if isempty(r)
             % Not installed — will error later in resolvePackage; skip here
             continue
         end
-        fqn = r.fqn;
-        if seen.isKey(fqn)
-            continue
-        end
-        seen(fqn) = true;
-
-        % Read dependencies
-        try
-            pkgInfo = mip.config.read_package_json(r.pkg_dir);
-        catch
-            continue
-        end
-        deps = pkgInfo.dependencies;
-        if isempty(deps) || (isnumeric(deps) && isempty(deps))
-            continue
-        end
-        if ~iscell(deps)
-            deps = {deps};
-        end
+        deps = mip.resolve.get_all_dependencies(r.fqn);
         for j = 1:length(deps)
-            depFqn = mip.resolve.resolve_dependency(deps{j});
-            if ~seen.isKey(depFqn)
-                % Only add if installed
-                depR = mip.parse.parse_package_arg(depFqn);
-                depDir = mip.paths.get_package_dir(depR.org, depR.channel, depR.name);
-                if exist(depDir, 'dir')
-                    if ~any(strcmp(expanded, depFqn))
-                        expanded{end+1} = depFqn; %#ok<AGROW>
-                    end
-                    queue{end+1} = depFqn; %#ok<AGROW>
-                end
+            isInstalled = ~isempty(mip.resolve.resolve_to_installed(deps{j}));
+            if isInstalled && ~any(strcmp(expanded, deps{j}))
+                expanded{end+1} = deps{j}; %#ok<AGROW>
             end
         end
     end
 end
-

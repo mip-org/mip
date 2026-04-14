@@ -485,16 +485,16 @@ Using an FQN bypasses this check entirely.
 
 ## 7. Updating
 
-`mip update X Y Z` updates only the named packages. Existing dependencies are **not** updated (unless `--deps` is specified). After replacing each package with the latest version from its channel, any new dependencies that the updated packages require are installed and any orphaned packages (old dependencies no longer needed by any directly installed package) are pruned. Packages that do **not** need updating are left entirely alone unless `--force` is specified.
+`mip update X Y Z` updates only the named packages. Existing dependencies are **not** updated (unless `--deps` is specified). After replacing each package with the latest version from its channel, any missing dependencies that the updated packages require are installed and any orphaned packages (old dependencies no longer needed by any directly installed package) are pruned. Packages that do **not** need updating are left entirely alone unless `--force` is specified.
 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
 1. Parse `--force`, `--all`, and `--deps` flags.
-2. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
+2. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
+3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package without `source_path` in `mip.json` → `mip:update:noSourcePath`.
    - Local package whose source directory is missing → `mip:update:sourceNotFound`.
-3. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
 4. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.6](#76-self-update-mip-update-mip)) and remove it from the batch.
 5. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
@@ -506,7 +506,7 @@ Using an FQN bypasses this check entirely.
 6. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
    - **Local packages** are updated in-place: unload if loaded, `rmdir` the old directory, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable)`. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
-   - **Remote packages** are updated in place: unload if loaded, `rmdir` the old directory, download and extract the new version from the channel. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any new dependencies that the updated packages require but are not yet installed, and prune any orphaned packages.
+   - **Remote packages** are updated in place: unload if loaded, `rmdir` the old directory, download and extract the new version from the channel. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any missing dependencies that the updated packages require, and prune any orphaned packages.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
    - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
 
@@ -550,7 +550,7 @@ Does not go through the normal update flow since mip cannot be uninstalled. Self
 
 `mip update foo` does **not** check whether `foo`'s dependencies have newer versions in the channel index. Only the named packages are updated. After the update:
 
-- **New dependencies**: if the new version of `foo` depends on a package that is not installed, it is installed automatically.
+- **Missing dependencies**: if the new version of `foo` depends on a package that is not installed, it is installed automatically.
 - **Removed dependencies**: if the old version of `foo` depended on a package that is no longer needed by any directly installed package, it is pruned.
 - **Existing dependencies**: dependencies that are already installed are left as-is, even if newer versions exist in the channel.
 
@@ -558,7 +558,7 @@ To update a dependency, name it explicitly (`mip update dep`) or use `--deps` to
 
 ### 7.9 Directly Installed Tracking
 
-The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). New dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
+The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 
 ---
 

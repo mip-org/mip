@@ -178,5 +178,70 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
                 'alpha should be reloaded as transitive dependency');
         end
 
+        %% --- --all flag ---
+
+        function testUpdateAll_UpdatesRemotePackages(testCase)
+            % Install alpha@1.0.0 and gamma. --all should upgrade alpha.
+            mip.install('--channel', 'mip-org/test-channel1', 'alpha@1.0.0');
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+
+            alphaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'alpha');
+            info1 = mip.config.read_package_json(alphaDir);
+            testCase.verifyEqual(info1.version, '1.0.0');
+
+            mip.update('--all');
+
+            info2 = mip.config.read_package_json(alphaDir);
+            testCase.verifyEqual(info2.version, '2.0.0', ...
+                '--all should upgrade alpha to latest');
+        end
+
+        %% --- --deps flag ---
+
+        function testUpdateDeps_UpdatesDependency(testCase)
+            % Install gamma (depends on alpha). Downgrade alpha to 1.0.0.
+            % --deps on gamma should upgrade alpha back to 2.0.0.
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+
+            % Downgrade alpha by reinstalling at 1.0.0
+            mip.uninstall('mip-org/test-channel1/alpha');
+            mip.install('--channel', 'mip-org/test-channel1', 'alpha@1.0.0');
+
+            alphaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'alpha');
+            info1 = mip.config.read_package_json(alphaDir);
+            testCase.verifyEqual(info1.version, '1.0.0');
+
+            mip.update('--deps', 'mip-org/test-channel1/gamma');
+
+            info2 = mip.config.read_package_json(alphaDir);
+            testCase.verifyEqual(info2.version, '2.0.0', ...
+                '--deps should upgrade alpha dependency to latest');
+        end
+
+        function testUpdateDeps_SkipsUninstalledDeps(testCase)
+            % If a package lists a dependency that is not installed,
+            % --deps should not error — just skip it and let the normal
+            % new-dependency step handle it later.
+            % Install gamma (depends on alpha), then uninstall alpha.
+            % --deps on gamma should skip the missing dep and still
+            % update gamma itself.
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+            mip.uninstall('mip-org/test-channel1/alpha');
+
+            gammaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'mip-org', 'test-channel1', 'gamma');
+
+            % Drop a marker to prove gamma was reinstalled
+            marker = fullfile(gammaDir, '.test_marker');
+            fid = fopen(marker, 'w'); fclose(fid);
+
+            mip.update('--deps', '--force', 'mip-org/test-channel1/gamma');
+
+            testCase.verifyFalse(exist(marker, 'file') > 0, ...
+                'Gamma should have been reinstalled (marker gone)');
+        end
+
     end
 end
