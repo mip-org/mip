@@ -99,7 +99,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     packageDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
 
     % Check if package exists
-    if ~exist(packageDir, 'dir')
+    if ~mip.state.is_installed(fqn)
         error('mip:packageNotFound', ...
               'Package "%s" is not installed. Run "mip install %s" first.', ...
               fqn, fqn);
@@ -134,9 +134,6 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
         try
             mipConfig = mip.config.read_package_json(packageDir);
             deps = mipConfig.dependencies;
-            if ~iscell(deps)
-                deps = {deps};
-            end
         catch ME
             warning('mip:jsonParseError', ...
                     'Could not parse mip.json for package "%s": %s', ...

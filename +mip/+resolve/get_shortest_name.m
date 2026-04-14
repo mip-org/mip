@@ -1,7 +1,7 @@
-function name = load_hint_name(fqn)
-%LOAD_HINT_NAME   Return bare name if unique among installed packages, else FQN.
+function name = get_shortest_name(fqn)
+%GET_SHORTEST_NAME   Return bare name if unique among installed packages, else FQN.
 %
-% Used to suggest the simplest name a user can type in `mip load`.
+% Used to suggest the simplest unambiguous name a user can type.
 %
 % Args:
 %   fqn - Fully qualified package name

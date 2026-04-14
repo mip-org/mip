@@ -64,7 +64,7 @@ end
 mip.state.add_directly_installed(fqn);
 fprintf('Successfully installed "%s"\n', fqn);
 fprintf('\nTo use this package, run:\n');
-fprintf('  mip load %s\n', mip.resolve.load_hint_name(fqn));
+fprintf('  mip load %s\n', mip.resolve.get_shortest_name(fqn));
 
 % Warn if package exists in multiple channels
 allInstalled = mip.resolve.find_all_installed_by_name(packageName);

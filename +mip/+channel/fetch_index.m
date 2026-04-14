@@ -23,4 +23,20 @@ end
 
 index = jsondecode(indexJson);
 
+% Normalize fields that jsondecode may not return as cell arrays
+if isfield(index, 'packages')
+    if ~iscell(index.packages)
+        index.packages = num2cell(index.packages);
+    end
+    for i = 1:length(index.packages)
+        if ~isfield(index.packages{i}, 'dependencies')
+            index.packages{i}.dependencies = {};
+        elseif isempty(index.packages{i}.dependencies)
+            index.packages{i}.dependencies = {};
+        elseif ~iscell(index.packages{i}.dependencies)
+            index.packages{i}.dependencies = {index.packages{i}.dependencies};
+        end
+    end
+end
+
 end

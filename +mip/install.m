@@ -150,7 +150,7 @@ function install(varargin)
         fprintf('\nSuccessfully installed %d package(s).\n', length(installedFqns));
         fprintf('\nTo use installed packages, run:\n');
         for i = 1:length(installedFqns)
-            fprintf('  mip load %s\n', mip.resolve.load_hint_name(installedFqns{i}));
+            fprintf('  mip load %s\n', mip.resolve.get_shortest_name(installedFqns{i}));
         end
     end
 end

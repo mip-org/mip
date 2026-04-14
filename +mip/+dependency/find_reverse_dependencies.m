@@ -43,10 +43,6 @@ for i = 1:length(allPackages)
         pkgInfo = mip.config.read_package_json(pkgDir);
         dependencies = pkgInfo.dependencies;
 
-        if ~iscell(dependencies)
-            dependencies = {dependencies};
-        end
-
         % Check if this package depends on our target (by bare name or FQN)
         if ismember(bareName, dependencies) || ismember(packageName, dependencies)
             reverseDeps = [reverseDeps, {fqn}]; %#ok<*AGROW>

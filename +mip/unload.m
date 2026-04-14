@@ -148,7 +148,7 @@ function pruneUnusedPackages()
     neededPackages = {};
     for i = 1:length(MIP_DIRECTLY_LOADED_PACKAGES)
         directPkg = MIP_DIRECTLY_LOADED_PACKAGES{i};
-        neededPackages = [neededPackages, mip.resolve.get_all_dependencies(directPkg)]; %#ok<*AGROW>
+        neededPackages = [neededPackages, mip.dependency.find_all_dependencies(directPkg)]; %#ok<*AGROW>
     end
 
     % Add directly loaded packages themselves

@@ -384,11 +384,8 @@ function installMissingDeps(remoteFqns)
             continue
         end
         deps = pkgInfo.dependencies;
-        if isempty(deps) || (isnumeric(deps) && isempty(deps))
+        if isempty(deps)
             continue
-        end
-        if ~iscell(deps)
-            deps = {deps};
         end
         for j = 1:length(deps)
             depFqn = mip.resolve.resolve_dependency(deps{j});
@@ -528,10 +525,9 @@ function expanded = expandWithDeps(args)
             % Not installed — will error later in resolvePackage; skip here
             continue
         end
-        deps = mip.resolve.get_all_dependencies(r.fqn);
+        deps = mip.dependency.find_all_dependencies(r.fqn);
         for j = 1:length(deps)
-            isInstalled = ~isempty(mip.resolve.resolve_to_installed(deps{j}));
-            if isInstalled && ~any(strcmp(expanded, deps{j}))
+            if mip.state.is_installed(deps{j}) && ~any(strcmp(expanded, deps{j}))
                 expanded{end+1} = deps{j}; %#ok<AGROW>
             end
         end

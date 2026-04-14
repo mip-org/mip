@@ -160,9 +160,6 @@ function showLocalInstallInfo(fqn)
     % Dependencies
     if isfield(pkgInfo, 'dependencies') && ~isempty(pkgInfo.dependencies)
         deps = pkgInfo.dependencies;
-        if ~iscell(deps)
-            deps = {deps};
-        end
         fprintf('    Dependencies: %s\n', strjoin(deps, ', '));
     else
         fprintf('    Dependencies: None\n');
@@ -283,9 +280,6 @@ function showRemoteChannelInfo(channelStr, packageName, index)
 
     if ~isempty(compatibleVariant) && isfield(compatibleVariant, 'dependencies') && ~isempty(compatibleVariant.dependencies)
         deps = compatibleVariant.dependencies;
-        if ~iscell(deps)
-            deps = {deps};
-        end
         fprintf('\n  Dependencies (latest):\n');
         for i = 1:length(deps)
             fprintf('    - %s\n', deps{i});
