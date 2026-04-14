@@ -316,8 +316,8 @@ end
 
 function downloadAndReplace(p)
 % Download the new version to a staging directory, then swap it in.
-% The old package is only removed after the download succeeds, so a
-% network or extraction failure does not destroy the installed copy.
+% The old package is moved to a backup and restored if the swap fails,
+% so a failure at any point does not destroy the installed copy.
 
     fprintf('Downloading %s %s...\n', p.fqn, p.latestInfo.version);
 
@@ -328,13 +328,16 @@ function downloadAndReplace(p)
         stagingDir = fullfile(tempDir, 'staging');
         mip.channel.extract_mhl(mhlPath, stagingDir);
 
-        % Download succeeded — remove old package and move new into place
-        rmdir(p.pkgDir, 's');
-        parentDir = fileparts(p.pkgDir);
-        if ~exist(parentDir, 'dir')
-            mkdir(parentDir);
+        % Download succeeded — swap old package out and new one in
+        backupDir = [tempname '_mip_backup'];
+        movefile(p.pkgDir, backupDir);
+        try
+            movefile(stagingDir, p.pkgDir);
+        catch ME
+            movefile(backupDir, p.pkgDir);
+            rethrow(ME);
         end
-        movefile(stagingDir, p.pkgDir);
+        rmdir(backupDir, 's');
         fprintf('Successfully updated "%s" to %s\n', p.fqn, p.latestInfo.version);
     catch ME
         if exist(tempDir, 'dir')
