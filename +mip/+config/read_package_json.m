@@ -38,12 +38,9 @@ try
 
     if ~isfield(pkgInfo, 'dependencies')
         pkgInfo.dependencies = {};
-    elseif isempty(pkgInfo.dependencies) || ...
-           (isnumeric(pkgInfo.dependencies) && isempty(pkgInfo.dependencies))
-        % jsondecode returns 0x0 double for empty JSON arrays
+    elseif isempty(pkgInfo.dependencies)
         pkgInfo.dependencies = {};
     elseif ~iscell(pkgInfo.dependencies)
-        % Convert to cell array if needed
         pkgInfo.dependencies = {pkgInfo.dependencies};
     end
 

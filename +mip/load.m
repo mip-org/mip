@@ -134,9 +134,6 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
         try
             mipConfig = mip.config.read_package_json(packageDir);
             deps = mipConfig.dependencies;
-            if ~iscell(deps)
-                deps = {deps};
-            end
         catch ME
             warning('mip:jsonParseError', ...
                     'Could not parse mip.json for package "%s": %s', ...

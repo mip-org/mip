@@ -34,12 +34,6 @@ for i = 1:length(packageFqns)
     % Get dependencies
     if isfield(pkgInfo, 'dependencies')
         deps = pkgInfo.dependencies;
-        % Handle empty arrays (jsondecode returns 0x0 double for [])
-        if isempty(deps) || (isnumeric(deps) && isempty(deps))
-            deps = {};
-        elseif ~iscell(deps)
-            deps = {deps};
-        end
     else
         deps = {};
     end

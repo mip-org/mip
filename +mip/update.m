@@ -384,11 +384,8 @@ function installMissingDeps(remoteFqns)
             continue
         end
         deps = pkgInfo.dependencies;
-        if isempty(deps) || (isnumeric(deps) && isempty(deps))
+        if isempty(deps)
             continue
-        end
-        if ~iscell(deps)
-            deps = {deps};
         end
         for j = 1:length(deps)
             depFqn = mip.resolve.resolve_dependency(deps{j});

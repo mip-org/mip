@@ -42,9 +42,6 @@ for i = 1:length(packages)
         end
 
         depNames = pkgInfo.dependencies;
-        if ~iscell(depNames)
-            depNames = {depNames};
-        end
         for j = 1:length(depNames)
             dep = depNames{j};
             if strcmp(mode, 'installed')

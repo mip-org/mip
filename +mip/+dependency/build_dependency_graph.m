@@ -55,12 +55,6 @@ path = [path, {packageFqn}];
 % Collect all dependencies first
 depList = {};
 dependencies = pkgInfo.dependencies;
-% Handle empty arrays (jsondecode returns 0x0 double for [])
-if isempty(dependencies) || (isnumeric(dependencies) && isempty(dependencies))
-    dependencies = {};
-elseif ~iscell(dependencies)
-    dependencies = {dependencies};
-end
 
 for i = 1:length(dependencies)
     dep = dependencies{i};
