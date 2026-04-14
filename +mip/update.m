@@ -528,7 +528,7 @@ function expanded = expandWithDeps(args)
             % Not installed — will error later in resolvePackage; skip here
             continue
         end
-        deps = mip.resolve.get_all_dependencies(r.fqn);
+        deps = mip.dependency.find_all_dependencies(r.fqn);
         for j = 1:length(deps)
             isInstalled = ~isempty(mip.resolve.resolve_to_installed(deps{j}));
             if isInstalled && ~any(strcmp(expanded, deps{j}))

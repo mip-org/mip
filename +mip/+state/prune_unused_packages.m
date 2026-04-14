@@ -24,7 +24,7 @@ function prune_unused_packages()
     for i = 1:length(directlyInstalled)
         directPkg = directlyInstalled{i};
         if ismember(directPkg, allInstalled)
-            neededPackages = [neededPackages, mip.resolve.get_all_dependencies(directPkg)]; %#ok<AGROW>
+            neededPackages = [neededPackages, mip.dependency.find_all_dependencies(directPkg)]; %#ok<AGROW>
         end
     end
 
