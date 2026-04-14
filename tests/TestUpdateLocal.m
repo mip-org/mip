@@ -137,6 +137,27 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'compile_script should run on update even though original install used --no-compile');
         end
 
+        function testUpdateLocalPackage_NoCompileFlagSkipsCompilation(testCase)
+            % `mip update --no-compile` on an editable install should skip
+            % the compile_script (issue #130).
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'compile_script', 'compile.m');
+            mip.install('-e', srcDir);
+
+            markerPath = fullfile(srcDir, '.compiled');
+            testCase.verifyTrue(exist(markerPath, 'file') > 0, ...
+                'compile_script should run on initial install');
+
+            % Delete marker, then update with --no-compile
+            delete(markerPath);
+            testCase.verifyFalse(exist(markerPath, 'file') > 0);
+
+            mip.update('--no-compile', 'local/local/mypkg');
+
+            testCase.verifyFalse(exist(markerPath, 'file') > 0, ...
+                'compile_script should NOT run when update uses --no-compile');
+        end
+
         %% --- Load state preserved across update ---
 
         function testUpdateLocalPackage_PreservesLoadState(testCase)

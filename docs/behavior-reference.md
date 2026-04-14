@@ -516,7 +516,7 @@ Using an FQN bypasses this check entirely.
 Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is moved to a temporary backup and `mip.build.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. If `install_local` fails, the backup is restored and the package remains in its pre-update state. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
 
 - The up-to-date check is skipped -- local packages are always reinstalled.
-- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved.
+- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. Pass `--no-compile` to `mip update` to skip compilation for the current update.
 
 ### 7.3 Force Update (`--force`)
 

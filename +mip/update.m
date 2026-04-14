@@ -14,6 +14,7 @@ function update(varargin)
 %   --force           Force update even if already up to date
 %   --all             Update all installed packages
 %   --deps            Also update the dependencies of the named packages
+%   --no-compile      Skip compilation when updating editable local installs
 %
 % For each requested package, checks whether an update is needed. For
 % remote packages, the installed version (and commit hash) is compared
@@ -41,10 +42,11 @@ function update(varargin)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
 
-    % Check for --force, --all, and --deps flags
+    % Check for --force, --all, --deps, and --no-compile flags
     force = false;
     updateAll = false;
     updateDeps = false;
+    noCompile = false;
     args = {};
     for i = 1:length(varargin)
         arg = varargin{i};
@@ -54,6 +56,8 @@ function update(varargin)
             updateAll = true;
         elseif ischar(arg) && strcmp(arg, '--deps')
             updateDeps = true;
+        elseif ischar(arg) && strcmp(arg, '--no-compile')
+            noCompile = true;
         else
             args{end+1} = arg; %#ok<AGROW>
         end
@@ -169,7 +173,7 @@ function update(varargin)
 
             fprintf('Reinstalling "%s" from %s...\n', p.fqn, p.sourcePath);
             try
-                mip.build.install_local(p.sourcePath, p.editable);
+                mip.build.install_local(p.sourcePath, p.editable, noCompile);
             catch ME
                 % Restore old package on failure
                 parentDir = fileparts(p.pkgDir);

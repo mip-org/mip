@@ -10,6 +10,7 @@ function varargout = mip(command, varargin)
 %   mip update --force <package>             - Force update even if up to date
 %   mip update --deps <package>              - Update package and its dependencies
 %   mip update --all                         - Update all installed packages
+%   mip update --no-compile <package>        - Skip compile step (editable local installs)
 %   mip update mip                           - Update mip itself
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip uninstall mip                        - Uninstall mip itself
