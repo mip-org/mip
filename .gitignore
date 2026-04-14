@@ -18,6 +18,10 @@ build/
 dist/
 *.egg-info/
 
+# Coverage
+coverage.xml
+coverage-report/
+
 # IDE
 .vscode/
 .idea/

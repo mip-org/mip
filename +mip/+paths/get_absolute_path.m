@@ -1,0 +1,18 @@
+function absPath = get_absolute_path(relPath)
+%GET_ABSOLUTE_PATH   Resolve a file or directory path to an absolute path.
+%
+% Args:
+%   relPath - A relative or absolute file or directory path.
+%
+% Returns:
+%   absPath - The absolute path to the file or directory.
+%
+% Errors if the file or directory does not exist.
+
+[status, info] = fileattrib(relPath);
+if ~status
+    error('mip:notAFileOrDirectory', '"%s" is not a file or directory.', relPath);
+end
+absPath = info.Name;
+
+end

@@ -441,6 +441,54 @@ classdef TestInstallRemote < matlab.unittest.TestCase
             assert(isobject(cleanupScratch) && isobject(cleanupCwd));
         end
 
+        function testInstall_BareNameWithVersionFailureMentionsLocalDirHint(testCase)
+            % If 'foo@1.0' fails on the channel and a directory named 'foo'
+            % exists in cwd, the error should hint at './foo'.
+            scratch = [tempname '_mip_cwd'];
+            mkdir(scratch);
+            cleanupScratch = onCleanup(@() rmdir(scratch, 's'));
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(scratch);
+
+            mkdir(fullfile(scratch, 'no_such_pkg_xyz'));
+
+            try
+                mip.install('no_such_pkg_xyz@1.0');
+                testCase.verifyFail('Expected mip.install to fail');
+            catch ME
+                testCase.verifyTrue(contains(ME.message, './no_such_pkg_xyz'), ...
+                    'Error message should hint at ./no_such_pkg_xyz when @version is stripped');
+            end
+
+            assert(isobject(cleanupScratch) && isobject(cleanupCwd));
+        end
+
+        function testInstall_BareNameWithVersionFailureHintsLiteralAtDir(testCase)
+            % If 'foo@1.0' fails on the channel and both 'foo@1.0' and
+            % 'foo' exist as directories, the hint should prefer the exact
+            % match 'foo@1.0'.
+            scratch = [tempname '_mip_cwd'];
+            mkdir(scratch);
+            cleanupScratch = onCleanup(@() rmdir(scratch, 's'));
+            origCwd = pwd;
+            cleanupCwd = onCleanup(@() cd(origCwd));
+            cd(scratch);
+
+            mkdir(fullfile(scratch, 'no_such_pkg_xyz'));
+            mkdir(fullfile(scratch, 'no_such_pkg_xyz@1.0'));
+
+            try
+                mip.install('no_such_pkg_xyz@1.0');
+                testCase.verifyFail('Expected mip.install to fail');
+            catch ME
+                testCase.verifyTrue(contains(ME.message, './no_such_pkg_xyz@1.0'), ...
+                    'Error message should hint at ./no_such_pkg_xyz@1.0 (exact match preferred)');
+            end
+
+            assert(isobject(cleanupScratch) && isobject(cleanupCwd));
+        end
+
     end
 
 end

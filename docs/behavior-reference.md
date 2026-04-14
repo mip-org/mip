@@ -32,7 +32,9 @@ Any package argument passed to a `mip` command (bare or FQN) can include `@versi
 
 The `@` is parsed from the last occurrence in the string. The version suffix is stripped before resolving the package identity.
 
-The `@version` suffix applies **only** to command-line package arguments. It is not supported inside the `dependencies` field of `mip.yaml` -- dependency entries are plain package names (bare or FQN) with no version or version-constraint grammar.
+The `@version` suffix applies **only** to command-line package arguments that are not local paths. It is not supported inside the `dependencies` field of `mip.yaml` -- dependency entries are plain package names (bare or FQN) with no version or version-constraint grammar.
+
+When an argument is identified as a local path (see [§3.0](#30-argument-categorization)), `@` is treated as a literal path character, not a version separator. This allows installing from directories whose names contain `@` (e.g., MATLAB class folders like `@MyClass`). For example, `./@MyClass` and `./pkg@dev` are both valid local paths where `@` is part of the directory name.
 
 ### 1.5 Channels
 
@@ -166,7 +168,7 @@ Used by: `mip install` for remote packages
 
 This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
 
-If a channel install fails (e.g. `mip:packageNotFound`, `mip:indexFetchFailed`) and one of the requested names also exists as a relative directory in the current folder, the error message is augmented with a hint about prefixing with `./` so the user knows how to install it as a local package instead.
+If a channel install fails (e.g. `mip:packageNotFound`, `mip:indexFetchFailed`) and one of the requested names also exists as a relative directory in the current folder, the error message is augmented with a hint about prefixing with `./` so the user knows how to install it as a local package instead. When the argument contains `@` (e.g. `foo@1.0`), the hint also checks the base name with the `@version` suffix stripped (i.e. checks for a directory named `foo`).
 
 The `--editable` / `-e` flag is only valid when at least one local path is present in the argument list. Using `-e` with only bare-name or FQN arguments raises `mip:install:editableRequiresLocal`.
 

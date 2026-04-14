@@ -431,9 +431,13 @@ function updateSelf(p, force)
         mhlPath = mip.channel.download_mhl(latestInfo.mhl_url, tempDir);
         stagingDir = fullfile(tempDir, 'staging');
         mip.channel.extract_mhl(mhlPath, stagingDir);
+        unloadScript = fullfile(pkgDir, 'unload_package.m');
+        if exist(unloadScript, 'file')
+            run(unloadScript);
+        end
         rmdir(pkgDir, 's');
         movefile(stagingDir, pkgDir);
-        fprintf('Successfully updated mip to %s\n', latestVersion);
+        fprintf('Successfully updated mip to %s\n', latestInfo.version);
     catch ME
         if exist(tempDir, 'dir')
             rmdir(tempDir, 's');
@@ -450,7 +454,7 @@ function updateSelf(p, force)
     if exist(loadScript, 'file')
         run(loadScript);
     end
-    fprintf('\nmip has been updated to %s.\n', latestVersion);
+    fprintf('\nmip has been updated to %s.\n', latestInfo.version);
 end
 
 function expanded = expandWithDeps(args)

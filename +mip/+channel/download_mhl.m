@@ -17,6 +17,8 @@ if ~exist(destDir, 'dir')
     mkdir(destDir);
 end
 
+source = char(source);
+
 % Check if source is a URL or local file
 isURL = startsWith(source, {'http://', 'https://'});
 
@@ -31,9 +33,7 @@ if isURL
     if isempty(ext)
         ext = '.mhl'; % Default extension for packages
     end
-    filename = [filename, ext];
-
-    localPath = fullfile(destDir, filename);
+    localPath = fullfile(destDir, [filename ext]);
 
     try
         fprintf('Downloading from %s...\n', source);
@@ -50,9 +50,8 @@ else
     if ~exist(source, 'file')
         error('mip:fileNotFound', 'Local file not found: %s', source);
     end
-
     [~, filename, ext] = fileparts(source);
-    localPath = fullfile(destDir, [filename, ext]);
+    localPath = fullfile(destDir, [filename ext]);
 
     try
         copyfile(source, localPath);

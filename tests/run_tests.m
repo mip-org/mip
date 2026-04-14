@@ -1,8 +1,13 @@
-function results = run_tests()
+function results = run_tests(varargin)
 %RUN_TESTS   Run all mip unit tests.
 %
 % Usage:
 %   results = run_tests();
+%   results = run_tests('Coverage', true);
+%
+% Name-Value Arguments:
+%   Coverage - Enable code coverage reporting (default: false).
+%              Generates coverage.xml (Cobertura format) in the repo root.
 %
 % Returns:
 %   results - TestResult array from MATLAB's testing framework
@@ -10,6 +15,11 @@ function results = run_tests()
 import matlab.unittest.TestSuite
 import matlab.unittest.TestRunner
 import matlab.unittest.plugins.DiagnosticsValidationPlugin
+
+% Parse optional arguments
+p = inputParser;
+addParameter(p, 'Coverage', false, @islogical);
+parse(p, varargin{:});
 
 % Get the directory containing this script
 testDir = fileparts(mfilename('fullpath'));
@@ -38,6 +48,7 @@ suite = [ ...
     TestSuite.fromClass(?TestMipIdentity), ...
     TestSuite.fromClass(?TestInstallLocal), ...
     TestSuite.fromClass(?TestUninstallPackage), ...
+    TestSuite.fromClass(?TestUninstallSelf), ...
     TestSuite.fromClass(?TestInfoPackage), ...
     TestSuite.fromClass(?TestUpdateLocal), ...
     TestSuite.fromClass(?TestCompile), ...
@@ -55,11 +66,31 @@ if isempty(getenv('MIP_SKIP_REMOTE'))
     suite = [suite, ...
         TestSuite.fromClass(?TestInstallRemote), ...
         TestSuite.fromClass(?TestUpdateRemote), ...
+        TestSuite.fromClass(?TestUpdateSelf), ...
         TestSuite.fromClass(?TestInstallRemoteAdvanced)];
 end
 
 % Run tests
 runner = TestRunner.withTextOutput('Verbosity', 3);
+
+% Add coverage plugins if requested
+if p.Results.Coverage
+    import matlab.unittest.plugins.CodeCoveragePlugin
+    import matlab.unittest.plugins.codecoverage.CoberturaFormat
+    import matlab.unittest.plugins.codecoverage.CoverageReport
+
+    sourceFolder = fullfile(repoRoot, '+mip');
+    coverageFile = fullfile(repoRoot, 'coverage.xml');
+    coverageDir = fullfile(repoRoot, 'coverage-report');
+    runner.addPlugin(CodeCoveragePlugin.forFolder(sourceFolder, ...
+        'IncludingSubfolders', true, ...
+        'Producing', [CoberturaFormat(coverageFile), ...
+                      CoverageReport(coverageDir)]));
+    fprintf('Code coverage enabled.\n');
+    fprintf('  Cobertura XML: %s\n', coverageFile);
+    fprintf('  HTML report:   %s\n', fullfile(coverageDir, 'index.html'));
+end
+
 results = runner.run(suite);
 
 % Print summary

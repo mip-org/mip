@@ -22,7 +22,7 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
 - **FQN (Fully Qualified Name)**: `org/channel/package` (e.g., `mip-org/core/chebfun`)
 - **Bare name**: Just `package` — resolved via priority: `mip-org/core` first, then alphabetical
 - **Channels**: Package repositories hosted on GitHub Pages (e.g., `mip-org/mip-core`)
-- **Packages installed at**: `~/.mip/packages/<org>/<channel>/<package>/`
+- **Packages installed at**: `<root>/packages/<org>/<channel>/<package>/`
 - **Editable installs**: Thin wrapper at `local/local/<pkg>/` pointing to source directory
 - **Persistent state**: Uses `setappdata(0, key, value)` for loaded/sticky/directly-loaded package tracking; `directly_installed.txt` for install tracking
 
@@ -42,5 +42,5 @@ results = run_tests();
 
 ## Development Rules
 
-- **Always add unit tests** for new functionality. Tests go in `tests/Test*.m` as `matlab.unittest.TestCase` subclasses. Use `createTestPackage` and `createTestSourcePackage` helpers to set up fake packages in temporary directories. Use `MIP_ROOT` env var to isolate tests from the real `~/.mip`.
+- **Always add unit tests** for new functionality. Tests go in `tests/Test*.m` as `matlab.unittest.TestCase` subclasses. Use `createTestPackage` and `createTestSourcePackage` helpers to set up fake packages in temporary directories. Use `MIP_ROOT` env var to isolate tests from the real `<root>` directory.
 - The special identity `mip-org/core/mip` must always be checked by FQN, never by bare name `'mip'`. Other packages named `mip` on different channels must not get special treatment.

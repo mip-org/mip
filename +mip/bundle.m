@@ -58,14 +58,7 @@ function bundle(varargin)
     end
 
     % Resolve source directory
-    if ~exist(sourceDir, 'dir')
-        error('mip:bundle:notADirectory', '"%s" is not a directory.', sourceDir);
-    end
-    w = what(sourceDir);
-    if isempty(w)
-        error('mip:bundle:notADirectory', '"%s" is not a directory.', sourceDir);
-    end
-    sourceDir = w.path;
+    sourceDir = mip.paths.get_absolute_path(sourceDir);
 
     % Check for mip.yaml
     if ~exist(fullfile(sourceDir, 'mip.yaml'), 'file')
@@ -77,11 +70,7 @@ function bundle(varargin)
     if ~exist(outputDir, 'dir')
         mkdir(outputDir);
     end
-    w = what(outputDir);
-    if isempty(w)
-        error('mip:bundle:notADirectory', '"%s" is not a directory.', outputDir);
-    end
-    outputDir = w.path;
+    outputDir = mip.paths.get_absolute_path(outputDir);
 
     % Prepare in a staging directory
     stagingDir = tempname;
