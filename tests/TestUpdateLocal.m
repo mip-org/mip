@@ -158,6 +158,17 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'compile_script should NOT run when update uses --no-compile');
         end
 
+        function testUpdateLocalPackage_NoCompileErrorsOnNonEditable(testCase)
+            % `mip update --no-compile` on a non-editable local install
+            % should error — the flag only applies to editable installs.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
+            mip.install(srcDir);
+
+            testCase.verifyError( ...
+                @() mip.update('--no-compile', 'local/local/mypkg'), ...
+                'mip:update:noCompileRequiresEditable');
+        end
+
         %% --- Load state preserved across update ---
 
         function testUpdateLocalPackage_PreservesLoadState(testCase)

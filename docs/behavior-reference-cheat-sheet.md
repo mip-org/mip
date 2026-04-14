@@ -40,6 +40,7 @@ Pin a version with `@`: `chebfun@1.2.0`, `mip-org/core/chebfun@main`
 | `mip update <pkg>` | Reinstall latest version, preserve load state |
 | `mip update --deps <pkg>` | Update package and its dependencies |
 | `mip update --all` | Update all installed packages |
+| `mip update --no-compile <pkg>` | Update editable local install without re-running compile_script |
 | `mip load <pkg>` | Add package (+ deps) to MATLAB path |
 | `mip unload <pkg>` | Remove package from path, prune unused deps |
 | `mip list` | List installed packages |
@@ -102,6 +103,7 @@ mip update --force chebfun    % force reinstall even if up to date
 mip update --deps chebfun     % update chebfun and its dependencies
 mip update --all              % update all installed packages
 mip update ./mypackage        % local packages always reinstall
+mip update --no-compile <pkg> % editable local: skip compile_script
 ```
 
 Only the named packages are updated -- existing dependencies are left as-is unless `--deps` is specified. Missing dependencies are installed automatically; orphaned dependencies are pruned. Load state is preserved across the update.
@@ -114,7 +116,7 @@ Only the named packages are updated -- existing dependencies are left as-is unle
 
 **Directly installed vs. dependencies.** MIP tracks which packages you explicitly installed vs. which were pulled in as dependencies. Orphaned dependencies are automatically pruned on uninstall or unload.
 
-**Editable installs** create a thin wrapper that points to your source directory. Changes to source files take effect immediately. `mip update` re-runs compilation.
+**Editable installs** create a thin wrapper that points to your source directory. Changes to source files take effect immediately. `mip update` re-runs compilation by default; pass `--no-compile` to skip it for a given update.
 
 **Sticky packages** survive `mip unload --all`. Use `--force` to override.
 

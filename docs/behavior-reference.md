@@ -490,13 +490,14 @@ Using an FQN bypasses this check entirely.
 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
-1. Parse `--force`, `--all`, and `--deps` flags.
+1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
 2. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
 3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package without `source_path` in `mip.json` → `mip:update:noSourcePath`.
    - Local package whose source directory is missing → `mip:update:sourceNotFound`.
-4. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.6](#76-self-update-mip-update-mip)) and remove it from the batch.
+   - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable`.
+4. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
 5. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
@@ -506,7 +507,7 @@ Using an FQN bypasses this check entirely.
      - Different version: update.
 6. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
-   - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
+   - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable, noCompile)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
    - **Remote packages** are updated via staging: unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any missing dependencies that the updated packages require, and prune any orphaned packages.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
    - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
@@ -516,7 +517,7 @@ Using an FQN bypasses this check entirely.
 Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is moved to a temporary backup and `mip.build.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. If `install_local` fails, the backup is restored and the package remains in its pre-update state. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
 
 - The up-to-date check is skipped -- local packages are always reinstalled.
-- Timestamps change on every update. For editable installs the `compile_script` runs again on every update; the `--no-compile` flag from the original install is **not** preserved. Pass `--no-compile` to `mip update` to skip compilation for the current update.
+- Timestamps change on every update. For editable installs the `compile_script` runs again on every update by default; the `--no-compile` flag from the original install is **not** preserved. Pass `--no-compile` to `mip update` to skip compilation for the current update ([§7.6](#76-skip-compilation-no-compile)).
 
 ### 7.3 Force Update (`--force`)
 
@@ -530,7 +531,11 @@ Skips the up-to-date check. The named package is replaced with the latest versio
 
 `mip update --deps foo` updates `foo` **and** all of its installed transitive dependencies. Dependencies are resolved recursively from each package's `mip.json`. Only dependencies that are actually installed are included — missing dependencies are not installed by this flag (they are handled by the normal new-dependency installation step after the update). Can be combined with `--force`. Can be combined with multiple package names: `mip update --deps foo bar`.
 
-### 7.6 Self-Update (`mip update mip`)
+### 7.6 Skip Compilation (`--no-compile`)
+
+`mip update --no-compile foo` skips the `compile_script` step when updating `foo`. Only applies to editable local installs — if any package in the batch is not an editable local install (non-editable local, remote, or `mip` itself), the call raises `mip:update:noCompileRequiresEditable` **before** any destructive action. Can be combined with `--force`, `--all`, and `--deps`, but only when every resolved package is an editable local install.
+
+### 7.7 Self-Update (`mip update mip`)
 
 Special flow for `mip-org/core/mip`:
 1. Fetch the latest from the `mip-org/core` channel.
@@ -540,7 +545,7 @@ Special flow for `mip-org/core/mip`:
 
 Does not go through the normal update flow since mip cannot be uninstalled. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages.
 
-### 7.7 Load State Preservation
+### 7.8 Load State Preservation
 
 - Packages that were loaded before the update are reloaded afterward.
 - Packages that were not loaded before the update remain unloaded afterward.
@@ -548,7 +553,7 @@ Does not go through the normal update flow since mip cannot be uninstalled. Self
 - If a previously-loaded package ends up uninstalled after the update (e.g. it was a transitive dep of the old version but not the new one, and was pruned), it is skipped with a warning; its entry is effectively dropped from the loaded set.
 - **Partial failure**: if a package fails mid-batch, the reload pass still runs so that packages updated earlier in the batch are not left unloaded. The original error is re-raised after reloading.
 
-### 7.8 Dependency Handling
+### 7.9 Dependency Handling
 
 `mip update foo` does **not** check whether `foo`'s dependencies have newer versions in the channel index. Only the named packages are updated. After the update:
 
@@ -558,7 +563,7 @@ Does not go through the normal update flow since mip cannot be uninstalled. Self
 
 To update a dependency, name it explicitly (`mip update dep`) or use `--deps` to update a package and all its dependencies in one command.
 
-### 7.9 Directly Installed Tracking
+### 7.10 Directly Installed Tracking
 
 The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 

@@ -94,6 +94,19 @@ function update(varargin)
         toProcess{i} = resolvePackage(args{i});
     end
 
+    % --no-compile only applies to editable local installs. Error if any
+    % package in the batch is not an editable local install.
+    if noCompile
+        for i = 1:length(toProcess)
+            p = toProcess{i};
+            if ~(p.isLocal && p.editable)
+                error('mip:update:noCompileRequiresEditable', ...
+                      '--no-compile can only be used when all updated packages are editable local installs (offending package: "%s").', ...
+                      p.fqn);
+            end
+        end
+    end
+
     % Handle self-update (`mip-org/core/mip`) separately and remove it
     % from the batch. mip cannot be uninstalled through the normal flow.
     keepMask = true(1, length(toProcess));
