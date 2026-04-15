@@ -31,6 +31,7 @@ function varargout = mip(command, varargin)
 %   mip test <package>                       - Run package test script
 %   mip compile <package>                    - Compile/recompile MEX files
 %   mip bundle <directory> [--output <dir>]  - Build .mhl from local package
+%   mip init <directory> [--name <name>]     - Generate a starter mip.yaml
 %   mip reset                                - Reset mip to a clean state
 %   mip help [command]                       - Show help text for command
 %
@@ -119,6 +120,12 @@ switch command
             error('mip:noDirectory', 'A directory path is required for bundle command.');
         end
         mip.bundle(varargin{:});
+
+    case 'init'
+        if nargin < 2
+            error('mip:noDirectory', 'A directory path is required for init command.');
+        end
+        mip.init(varargin{:});
 
     case 'reset'
         mip.reset();
