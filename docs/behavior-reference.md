@@ -331,6 +331,8 @@ Constraints:
 - `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
 - `--editable` / `-e` is rejected (the source dir is temporary; raises `mip:install:editableRequiresLocal`).
 
+**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fxResolveFailed`.
+
 Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. To pull in an updated archive, re-run `mip install <name> --url <zip-url>` (uninstall first if needed).
 
 ### 3.5 Load Hint After Install
@@ -873,6 +875,7 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:install:missingUrlValue` | `--url` flag provided without a value |
 | `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
 | `mip:install:zipExtractFailed` | Extraction of a downloaded `.zip` failed |
+| `mip:install:fxResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
 | `mip:update:notInstalled` | Package not installed |

@@ -24,6 +24,9 @@ function install(varargin)
 %   --url <zip-url>     Install from a remote .zip archive. The positional
 %                       argument is used as the package name. At most one
 %                       --url per call; incompatible with --editable.
+%                       File Exchange landing URLs (https://www.mathworks
+%                       .com/matlabcentral/fileexchange/...) are also
+%                       accepted and auto-resolved to their .zip download.
 %
 % Local packages:
 %   To install a local directory, the path must start with '~', '.', '/',
@@ -589,11 +592,19 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
     parsed = mip.parse.parse_package_arg(pkgName);  % validates name chars
     pkgName = parsed.name;
 
+    % If the URL is a File Exchange landing page, resolve it to the
+    % underlying .zip download URL. The resolved URL (with query string
+    % stripped) is what gets baked into the generated mip.yaml.
+    if isFileExchangeUrl(zipUrl)
+        fprintf('Resolving File Exchange URL %s...\n', zipUrl);
+        zipUrl = resolveFileExchangeUrl(zipUrl);
+        fprintf('Resolved to %s\n', zipUrl);
+    end
+
     if ~isZipUrl(zipUrl)
         error('mip:install:urlMustBeZip', ...
-              ['--url value must point to a .zip archive ' ...
-               '(path ends in .zip, case-insensitive, query/fragment ignored). ' ...
-               'Got: %s'], zipUrl);
+              ['--url value must point to a .zip archive or a File Exchange ' ...
+               'page. Got: %s'], zipUrl);
     end
 
     tempDir = tempname;
@@ -631,6 +642,76 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
     end
 
     mip.build.install_local(sourceDir, false, noCompile);
+end
+
+function tf = isFileExchangeUrl(url)
+% A MathWorks File Exchange landing page looks like
+%   https://www.mathworks.com/matlabcentral/fileexchange/<id>[-<slug>]
+% (with optional query string).
+    if ~ischar(url) && ~isstring(url)
+        tf = false; return;
+    end
+    url = char(url);
+    tf = startsWith(url, 'https://www.mathworks.com/matlabcentral/fileexchange/') || ...
+         startsWith(url, 'http://www.mathworks.com/matlabcentral/fileexchange/');
+end
+
+function zipUrl = resolveFileExchangeUrl(fxUrl)
+% Resolve a File Exchange landing URL to the underlying .zip download URL.
+% Appends ?download=true (or &download=true if a query string is already
+% present), issues a HEAD request, follows the 302 redirect to the UUID-
+% based mlc-downloads URL, and strips the resulting URL's query string.
+%
+% A non-default User-Agent is required: the MathWorks Akamai layer
+% returns 403 to MATLAB's default UA, but accepts curl-style UAs.
+
+    if contains(fxUrl, '?')
+        landingUrl = [fxUrl '&download=true'];
+    else
+        landingUrl = [fxUrl '?download=true'];
+    end
+
+    try
+        uri = matlab.net.URI(landingUrl);
+        req = matlab.net.http.RequestMessage('HEAD');
+        req.Header = matlab.net.http.HeaderField('User-Agent', 'curl/8.0');
+        opt = matlab.net.http.HTTPOptions('ConnectTimeout', 30);
+        [~, ~, history] = send(req, uri, opt);
+    catch ME
+        error('mip:install:fxResolveFailed', ...
+              'Failed to resolve File Exchange URL %s: %s', fxUrl, ME.message);
+    end
+
+    if isempty(history)
+        error('mip:install:fxResolveFailed', ...
+              'Empty redirect history for File Exchange URL %s.', fxUrl);
+    end
+
+    finalStatus = double(history(end).Response.StatusCode);
+    if finalStatus < 200 || finalStatus >= 300
+        error('mip:install:fxResolveFailed', ...
+              'File Exchange URL %s returned HTTP %d.', fxUrl, finalStatus);
+    end
+
+    finalUrl = char(history(end).URI);
+
+    % Strip query string and fragment.
+    qIdx = strfind(finalUrl, '?');
+    if ~isempty(qIdx)
+        finalUrl = finalUrl(1:qIdx(1)-1);
+    end
+    hIdx = strfind(finalUrl, '#');
+    if ~isempty(hIdx)
+        finalUrl = finalUrl(1:hIdx(1)-1);
+    end
+
+    if ~endsWith(lower(finalUrl), '.zip')
+        error('mip:install:fxResolveFailed', ...
+              ['File Exchange URL %s did not resolve to a .zip URL ' ...
+               '(got: %s).'], fxUrl, finalUrl);
+    end
+
+    zipUrl = finalUrl;
 end
 
 function tf = isZipUrl(url)
