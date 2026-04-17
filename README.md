@@ -33,8 +33,11 @@ Install several at once, ask for a specific version, or install from a local
 directory:
 
 ```matlab
-mip install chebfun gridfit
+mip install chebfun chunkie            % install multiple packages
+mip install chunkie                    % automatically installs dependencies
+mip install kdtree                     % automatically installs MEX files
 mip install chebfun@1.2.0              % request version 1.2.0
+mip install --channel user/repo pkg    % install from a channel
 mip install ./my-package               % local install
 mip install -e ./my-package            % editable install (pip -e style)
 ```
