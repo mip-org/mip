@@ -94,8 +94,9 @@ function uninstall(varargin)
                   'Failed to uninstall package "%s": %s', fqn, ME.message);
         end
 
-        % Remove from directly installed packages
+        % Remove from directly installed and pinned packages
         mip.state.remove_directly_installed(fqn);
+        mip.state.remove_pinned(fqn);
 
         % Clean up empty parent directories
         mip.paths.cleanup_empty_dirs(fullfile(mip.paths.get_packages_dir(), r.org, r.channel));

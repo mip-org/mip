@@ -12,6 +12,8 @@ function varargout = mip(command, varargin)
 %   mip update --all                         - Update all installed packages
 %   mip update --no-compile <package>        - Skip compile step (editable local installs)
 %   mip update mip                           - Update mip itself
+%   mip pin <package> [...]                  - Pin packages to their current version
+%   mip unpin <package> [...]                - Unpin packages
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip uninstall mip                        - Uninstall mip itself
 %   mip list                                 - List installed packages (reverse load order)
@@ -71,6 +73,18 @@ switch command
             error('mip:noPackage', 'At least one package name required for update command.');
         end
         mip.update(varargin{:});
+
+    case 'pin'
+        if nargin < 2
+            error('mip:noPackage', 'At least one package name required for pin command.');
+        end
+        mip.pin(varargin{:});
+
+    case 'unpin'
+        if nargin < 2
+            error('mip:noPackage', 'At least one package name required for unpin command.');
+        end
+        mip.unpin(varargin{:});
 
     case 'uninstall'
         if nargin < 2

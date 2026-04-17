@@ -74,6 +74,22 @@ function update(varargin)
             fprintf('No packages installed.\n');
             return
         end
+        % Skip pinned packages unless --force is set
+        if ~force
+            filtered = {};
+            for i = 1:length(allInstalled)
+                if mip.state.is_pinned(allInstalled{i})
+                    fprintf('Skipping pinned package "%s".\n', allInstalled{i});
+                else
+                    filtered{end+1} = allInstalled{i}; %#ok<AGROW>
+                end
+            end
+            allInstalled = filtered;
+        end
+        if isempty(allInstalled)
+            fprintf('All packages are pinned. Nothing to update.\n');
+            return
+        end
         args = allInstalled;
     end
 
@@ -200,6 +216,12 @@ function update(varargin)
             if exist(backupDir, 'dir')
                 rmdir(backupDir, 's');
             end
+
+            % Unpin if this was a forced update of a pinned package
+            if force && mip.state.is_pinned(p.fqn)
+                mip.state.remove_pinned(p.fqn);
+                fprintf('Unpinned "%s".\n', p.fqn);
+            end
         end
 
         % --- Remote packages: update via staging, install missing deps, prune ---
@@ -215,6 +237,12 @@ function update(varargin)
                     mip.unload(p.fqn);
                 end
                 downloadAndReplace(p);
+
+                % Unpin if this was a forced update of a pinned package
+                if force && mip.state.is_pinned(p.fqn)
+                    mip.state.remove_pinned(p.fqn);
+                    fprintf('Unpinned "%s".\n', p.fqn);
+                end
             end
 
             % Install any missing dependencies that the updated packages require
