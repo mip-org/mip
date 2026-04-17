@@ -22,14 +22,8 @@ end
 [org, channelName] = mip.parse.parse_channel_spec(channel);
 
 try
-    indexUrl = mip.index(channel);
     fprintf('Using channel: %s/%s\n', org, channelName);
-    tempFile = [tempname, '.json'];
-    websave(tempFile, indexUrl, weboptions('Timeout', 60));
-    indexJson = fileread(tempFile);
-    delete(tempFile);
-
-    index = jsondecode(indexJson);
+    index = mip.channel.fetch_index(channel, true);
 
     % Get current architecture
     currentArch = mip.arch();
