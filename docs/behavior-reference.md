@@ -187,6 +187,8 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 3. Also fetch indexes for any channels referenced by FQN arguments.
 4. During dependency resolution, if a cross-channel FQN dependency is missing, fetch its channel lazily (up to 10 retry attempts).
 
+Channel index fetches go through an on-disk cache (see [§11.6](#116-channel-index-cache)). Repeat fetches of the same channel within the cache TTL are served from the cache without hitting the network.
+
 #### 3.1.3 Version Selection (`select_best_version`)
 
 Given all available versions for a package:
@@ -651,7 +653,7 @@ Displays information about a package from two sources:
 
 ### 9.3 `mip avail`
 
-Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`).
+Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`). Always re-downloads the channel index, bypassing the on-disk cache (see [§11.6](#116-channel-index-cache)) so the displayed list reflects the current state of the channel.
 
 ### 9.4 `mip version`
 
@@ -824,6 +826,17 @@ The `MIP_ROOT` environment variable overrides the location of the mip root direc
 - **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
+
+### 11.6 Channel Index Cache
+
+Channel index downloads are cached on disk under `<root>/cache/index/<org>/<channel>.json`. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
+
+- **TTL**: 30 seconds. A cache entry whose age is `< 30s` is served without contacting the network.
+- **Bypass**: `mip avail` always re-downloads, bypassing the cache, so the displayed list reflects the current state of the channel. All other commands (`mip install`, `mip update`, `mip info`, etc.) use the cache.
+- **Successes only**: only successful downloads are cached. A failed fetch (`mip:indexFetchFailed`) does not write a cache entry, so the next call retries immediately.
+- **Corrupt cache**: if a cache file exists but cannot be read or parsed, it is treated as a miss and a fresh download is attempted.
+- **Cache write failure**: if the cache write itself fails (read-only filesystem, etc.), the fetched index is still returned -- caching is best-effort.
+- The cache directory is created on first write and is not pruned automatically.
 
 ---
 
