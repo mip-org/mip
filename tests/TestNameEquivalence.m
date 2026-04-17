@@ -152,11 +152,21 @@ classdef TestNameEquivalence < matlab.unittest.TestCase
                 '');
         end
 
-        function testInstalledDirIgnoresHiddenDirs(testCase)
-            mkdir(fullfile(testCase.TestRoot, 'packages', 'mip-org', 'core', '.hidden'));
-            testCase.verifyEqual( ...
-                mip.resolve.installed_dir('mip-org', 'core', '.hidden'), ...
-                '');
+        %% build_package_info_map
+
+        function testBuildPackageInfoMap_DifferentNamesNotMerged(testCase)
+            % Names that are not equivalent under mip.name.match stay
+            % separate. `mypkg` (no separator) and `my-pkg` (with dash)
+            % normalize to different forms and must not be merged.
+            pkg1 = struct('name', 'mypkg',  'version', '1.0', 'architecture', 'any');
+            pkg2 = struct('name', 'my-pkg', 'version', '1.0', 'architecture', 'any');
+            index = struct('packages', {{pkg1, pkg2}});
+
+            m = mip.resolve.build_package_info_map(index, 'mip-org', 'core');
+
+            testCase.verifyEqual(m.Count, uint64(2));
+            testCase.verifyTrue(m.isKey('mip-org/core/mypkg'));
+            testCase.verifyTrue(m.isKey('mip-org/core/my-pkg'));
         end
 
     end

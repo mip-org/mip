@@ -228,9 +228,8 @@ function installedFqns = installFromRepository(repoPackages, channel)
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
         if ~packageInfoMap.isKey(s.fqn)
-            unavailFqn = mip.resolve.canonicalize_in_map(s.fqn, unavailablePackages);
-            if unavailablePackages.isKey(unavailFqn)
-                archs = unavailablePackages(unavailFqn);
+            if unavailablePackages.isKey(s.fqn)
+                archs = unavailablePackages(s.fqn);
                 fprintf('\nError: Package "%s" is not available for architecture "%s"\n', ...
                         s.fqn, currentArch);
                 fprintf('Available architectures: %s\n', strjoin(archs, ', '));
