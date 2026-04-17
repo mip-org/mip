@@ -149,7 +149,7 @@ classdef TestLoadAddpathRmpath < matlab.unittest.TestCase
                 'unload sweep should remove --addpath entries');
         end
 
-        function testUnload_SweepsResidualEntriesFromNoopUnloadScript(testCase)
+        function testUnload_SweepsResidualEntriesFromStaleUnloadScript(testCase)
             % Build a package where load_package.m adds a path but
             % unload_package.m DOES NOT remove it. The sweep should still
             % clean it up.
@@ -168,6 +168,23 @@ classdef TestLoadAddpathRmpath < matlab.unittest.TestCase
             mip.unload('foo');
             testCase.verifyFalse(onPath(sourceSubdir), ...
                 'sweep should remove the residual entry');
+        end
+
+        function testUnload_SweepsWhenUnloadScriptMissing(testCase)
+            % When unload_package.m does not exist, mip:unloadNotFound
+            % fires AND the sweep still cleans up the path entry that
+            % load_package.m added.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'foo', ...
+                'sourceSubdir', true);
+            sourceSubdir = fullfile(pkgDir, 'foo');
+            delete(fullfile(pkgDir, 'unload_package.m'));
+
+            mip.load('foo');
+            testCase.verifyTrue(onPath(sourceSubdir));
+
+            testCase.verifyWarning(@() mip.unload('foo'), 'mip:unloadNotFound');
+            testCase.verifyFalse(onPath(sourceSubdir), ...
+                'sweep should run even when unload_package.m is absent');
         end
 
         function testUnload_DoesNotTouchUnrelatedSiblingPaths(testCase)
