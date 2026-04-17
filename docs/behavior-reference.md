@@ -55,9 +55,9 @@ The package `mip-org/core/mip` is the package manager itself. It has special pro
 
 - It is **always** marked as loaded and sticky when any `mip` command runs.
 - It **cannot** be unloaded via `mip unload` (raises `mip:cannotUnloadMip`).
-- It **cannot** be uninstalled via `mip uninstall` (prints instructions instead).
 - It survives `mip unload --all --force`.
 - It is never pruned during dependency pruning.
+- `mip uninstall mip-org/core/mip` triggers a full self-uninstall (see [§6.4](#64-self-uninstall-mip-uninstall-mip)) rather than an ordinary package removal.
 
 **Important**: These protections apply **only** to the exact FQN `mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`, `local/local/mip`) is treated as a normal package.
 
@@ -457,7 +457,7 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
 1. Resolve each argument to an FQN:
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
-2. Filter out `mip-org/core/mip` (prints manual uninstall instructions).
+2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow returns after tearing everything down and the remaining arguments (if any) are not processed. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
 3. Unload any packages that are currently loaded.
 4. Remove each package directory (`rmdir`).
 5. Remove from `directly_installed.txt`.
@@ -481,6 +481,18 @@ If a bare name matches packages in multiple channels:
 - The user must specify the FQN to disambiguate.
 
 Using an FQN bypasses this check entirely.
+
+### 6.4 Self-Uninstall (`mip uninstall mip`)
+
+When `mip-org/core/mip` is among the resolved uninstall targets, the command delegates to a self-uninstall flow:
+
+1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
+2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
+3. If the user declines, the self-uninstall is aborted. `mip uninstall` then drops `mip-org/core/mip` from its argument list and proceeds normally with any remaining packages.
+4. If the user confirms, mip runs `mip.reset()`, removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.root(), 's')`).
+5. A reinstall hint is printed.
+
+If the packages directory is missing when self-uninstall is invoked, the flow raises `mip:uninstall:corrupted` and aborts without touching anything.
 
 ---
 
@@ -543,7 +555,7 @@ Special flow for `mip-org/core/mip`:
 3. Replace the installed package in-place.
 4. Re-run `load_package.m` to reload.
 
-Does not go through the normal update flow since mip cannot be uninstalled. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages.
+Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
 
 ### 7.8 Load State Preservation
 
@@ -854,6 +866,7 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:compile:notInstalled` | Package not installed |
 | `mip:compile:noCompileScript` | Package has no `compile_script` |
 | `mip:uninstall:noPackage` | No package specified for uninstall |
+| `mip:uninstall:corrupted` | Self-uninstall invoked but packages directory is missing |
 
 ---
 
