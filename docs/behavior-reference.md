@@ -59,7 +59,36 @@ The package `mip-org/core/mip` is the package manager itself. It has special pro
 - It survives `mip unload --all --force`.
 - It is never pruned during dependency pruning.
 
-**Important**: These protections apply **only** to the exact FQN `mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`, `local/local/mip`) is treated as a normal package.
+**Important**: These protections apply **only** to the exact FQN `mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`, `local/local/mip`) is treated as a normal package. The match is by name equivalence (see [§1.8](#18-name-equivalence)), so `mip-org/core/MIP`, `mip-org/core/Mip`, etc. all refer to the same protected identity.
+
+### 1.8 Name Equivalence
+
+Two package names refer to the same package iff their **normalized** forms are equal, where normalization is:
+
+```
+normalize(name) = lowercase(name) with '-' replaced by '_'
+```
+
+So `My-Pkg`, `my_pkg`, `MY-PKG`, and `My_Pkg` all refer to the same package. `mypkg` (no separator) is a *different* name — normalization equates `-` with `_`, but does not remove them.
+
+This rule applies **only to the name component** of an FQN. The `org` and `channel` components compare strictly (case-sensitive, no separator equivalence) because they map to GitHub paths. So `mip-org/core/My-Pkg` and `mip-org/core/my_pkg` refer to the same package, but `MIP-ORG/core/my_pkg` does not.
+
+#### 1.8.1 Canonical Form
+
+Internally, mip stores names in a single **canonical** form per install. The canonical form is:
+
+- **For an installed package**: the actual on-disk directory name under `<root>/packages/<org>/<channel>/`. Whatever case/separators the directory uses is the canonical form for that install.
+- **For a not-yet-installed package being installed**: the name as published by its source — the `name` field in the channel index entry, the `name` field in `mip.yaml` (local install), or the `name` field in `mip.json` (mhl install). The on-disk directory is named to match.
+
+This means the on-disk name is always the canonical name, and stored FQNs (`MIP_LOADED_PACKAGES`, `directly_installed.txt`, etc.) are always in canonical form. User input that differs from the canonical form is canonicalized at command entry by case-insensitive lookup against the on-disk directory or the channel index.
+
+#### 1.8.2 Consequences
+
+- `mip install MyPkg` followed by `mip load MY_PKG` works — bare-name resolution finds the on-disk directory case-insensitively.
+- `mip install mip-org/core/MyPkg` when the package is already installed as `mip-org/core/my-pkg` is treated as already-installed (no-op), regardless of which form was used originally.
+- The channel index lookup is case-insensitive: `mip install MyPkg` will match an entry named `mypkg` in the channel index, and the install uses the channel's published form (`mypkg`) as the on-disk dir name.
+- If a channel publishes two entries with names that differ only in case/separator (e.g. `MyPkg` and `my_pkg`), they are treated as the same package and the first encountered is canonical.
+- The mip identity check ([§1.7](#17-the-mip-orgcoremip-identity)) uses name equivalence, so any case variant of `mip` on the `mip-org/core` channel is protected.
 
 ---
 

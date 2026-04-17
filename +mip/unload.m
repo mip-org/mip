@@ -75,17 +75,27 @@ function fqn = resolveLoadedFqn(packageArg)
     result = mip.parse.parse_package_arg(packageArg);
 
     if result.is_fqn
-        fqn = packageArg;
+        % Canonicalize to the on-disk name so we match the form stored in
+        % MIP_LOADED_PACKAGES. If not installed at all, fall back to the
+        % user-typed form (caller will report "not loaded").
+        onDisk = mip.resolve.installed_dir(result.org, result.channel, result.name);
+        if isempty(onDisk)
+            fqn = packageArg;
+        else
+            fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+        end
         return
     end
 
-    % Search loaded packages for a bare name match
+    % Search loaded packages for a bare name match. Stored entries are in
+    % canonical (on-disk) form; the user's bare name may differ in case
+    % or `-`/`_`, so match by name equivalence.
     loadedPackages = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     matches = {};
     for i = 1:length(loadedPackages)
         loaded = loadedPackages{i};
         r = mip.parse.parse_package_arg(loaded);
-        if r.is_fqn && strcmp(r.name, result.name)
+        if r.is_fqn && mip.name.match(r.name, result.name)
             matches{end+1} = loaded; %#ok<AGROW>
         end
     end

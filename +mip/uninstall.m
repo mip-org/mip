@@ -27,8 +27,17 @@ function uninstall(varargin)
         result = mip.parse.parse_package_arg(arg);
 
         if result.is_fqn
-            fqn = arg;
-            pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
+            % Canonicalize to the on-disk name so the stored FQN we
+            % remove from directly_installed.txt matches what was added
+            % during install.
+            onDisk = mip.resolve.installed_dir(result.org, result.channel, result.name);
+            if isempty(onDisk)
+                fqn = arg;
+                pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
+            else
+                fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+                pkgDir = mip.paths.get_package_dir(result.org, result.channel, onDisk);
+            end
         else
             allMatches = mip.resolve.find_all_installed_by_name(result.name);
             if isempty(allMatches)

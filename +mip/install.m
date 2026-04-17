@@ -245,6 +245,22 @@ function installedFqns = installFromRepository(repoPackages, channel)
         fetchChannelIndex([s.org '/' s.channel], packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
     end
 
+    % Canonicalize each requested package to the channel-published name.
+    % The user may have typed a name that differs in case or in `-`/`_`
+    % from the channel's form; from here on we use the channel-canonical
+    % form so the install path on disk and stored FQN match what other
+    % commands will look up.
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        canonical = mip.resolve.canonicalize_in_map(s.fqn, packageInfoMap);
+        if ~strcmp(canonical, s.fqn)
+            cParsed = mip.parse.parse_package_arg(canonical);
+            s.name = cParsed.name;
+            s.fqn = canonical;
+            resolvedPackages{i} = s;
+        end
+    end
+
     % Check if any requested packages are unavailable
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};

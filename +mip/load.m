@@ -198,12 +198,23 @@ end
 
 function fqn = resolveToFqn(packageArg)
 % Resolve a package argument to a fully qualified name.
-% If already FQN, return as-is. If bare name, look up installed packages.
+% If already FQN, canonicalize the name component to its on-disk form.
+% If bare name, look up installed packages.
 
     result = mip.parse.parse_package_arg(packageArg);
 
     if result.is_fqn
-        fqn = packageArg;
+        % Canonicalize: find the actual on-disk name (case- and
+        % dash/underscore-insensitive) so the rest of load uses the
+        % canonical form, matching what's already in the loaded/sticky
+        % state lists.
+        onDisk = mip.resolve.installed_dir(result.org, result.channel, result.name);
+        if isempty(onDisk)
+            error('mip:packageNotFound', ...
+                  'Package "%s" is not installed. Run "mip install %s" first.', ...
+                  packageArg, packageArg);
+        end
+        fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
     else
         % Resolve bare name to installed FQN
         fqn = mip.resolve.resolve_bare_name(result.name);

@@ -18,7 +18,16 @@ end
 parsed = mip.parse.parse_package_arg(packageArg);
 
 if parsed.is_fqn
-    fqn = packageArg;
+    % Canonicalize: find the actual on-disk name (case-insensitive) so that
+    % downstream code (and storage) sees the canonical form regardless of
+    % how the user typed the name.
+    onDisk = mip.resolve.installed_dir(parsed.org, parsed.channel, parsed.name);
+    if isempty(onDisk)
+        result = [];
+        return
+    end
+    parsed.name = onDisk;
+    fqn = mip.parse.make_fqn(parsed.org, parsed.channel, onDisk);
 else
     fqn = mip.resolve.resolve_bare_name(parsed.name);
     if isempty(fqn)
