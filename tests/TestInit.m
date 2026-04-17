@@ -22,23 +22,37 @@ classdef TestInit < matlab.unittest.TestCase
 
     methods (Test)
 
-        function testInit_NoArgsErrors(testCase)
-            testCase.verifyError(@() mip.init(), 'mip:init:noPath');
+        function testInit_NoArgsUsesCurrentDir(testCase)
+            % With no path argument, init targets the current directory.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            origDir = pwd;
+            cleaner = onCleanup(@() cd(origDir));
+            cd(pkgDir);
+
+            mip.init();
+
+            testCase.verifyTrue(exist(fullfile(pkgDir, 'mip.yaml'), 'file') > 0);
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'mypkg');
         end
 
         function testInit_NonexistentPathErrors(testCase)
+            % A path that does not exist is rejected by get_absolute_path.
             testCase.verifyError( ...
                 @() mip.init('/nonexistent/path/12345'), ...
                 'mip:notAFileOrDirectory');
         end
 
         function testInit_FileInsteadOfDirErrors(testCase)
+            % A path that points to a file (not a directory) is rejected.
             filePath = fullfile(testCase.TestDir, 'a_file.txt');
             fid = fopen(filePath, 'w'); fclose(fid);
             testCase.verifyError(@() mip.init(filePath), 'mip:init:notADirectory');
         end
 
         function testInit_CreatesMipYaml(testCase)
+            % init writes a mip.yaml in the target directory.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -48,6 +62,8 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_DefaultsNameToDirBasename(testCase)
+            % When --name is omitted, the package name defaults to the
+            % target directory's basename.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -58,6 +74,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_NameOverride(testCase)
+            % --name overrides the directory-basename default.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -68,6 +85,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_RejectsInvalidName(testCase)
+            % Names containing disallowed characters (e.g. spaces) are rejected.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -77,6 +95,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_RejectsDotDotName(testCase)
+            % A name consisting solely of dots is rejected.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -85,7 +104,60 @@ classdef TestInit < matlab.unittest.TestCase
                 'mip:init:invalidName');
         end
 
+        function testInit_RejectsLeadingHyphenName(testCase)
+            % Names must not start with a hyphen (would collide with arg parsing).
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.init(pkgDir, '--name', '-foo'), ...
+                'mip:init:invalidName');
+        end
+
+        function testInit_RejectsTrailingHyphenName(testCase)
+            % Names must not end with a hyphen.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.init(pkgDir, '--name', 'foo-'), ...
+                'mip:init:invalidName');
+        end
+
+        function testInit_RejectsTrailingUnderscoreName(testCase)
+            % Names must not end with an underscore.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.init(pkgDir, '--name', 'foo_'), ...
+                'mip:init:invalidName');
+        end
+
+        function testInit_RejectsDottedName(testCase)
+            % Dots are disallowed anywhere in a package name.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.init(pkgDir, '--name', 'my.pkg'), ...
+                'mip:init:invalidName');
+        end
+
+        function testInit_AcceptsSingleCharName(testCase)
+            % A single letter/digit is a valid name (exercises the
+            % optional middle+tail group in the regex).
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            mip.init(pkgDir, '--name', 'a');
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'a');
+        end
+
         function testInit_AlreadyExistsDoesNotOverwrite(testCase)
+            % If mip.yaml already exists, init leaves it untouched.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             yamlPath = fullfile(pkgDir, 'mip.yaml');
@@ -103,6 +175,9 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_BlankOptionalFields(testCase)
+            % Optional string fields are emitted blank and dependencies
+            % defaults to an empty list, so the scaffolded config loads
+            % cleanly via read_mip_yaml. Version is set to "unknown".
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -114,6 +189,7 @@ classdef TestInit < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.homepage, '');
             testCase.verifyEqual(cfg.repository, '');
             testCase.verifyEqual(cfg.dependencies, {});
+            testCase.verifyEqual(cfg.version, 'unknown');
         end
 
         function testInit_RepositoryOverride(testCase)
@@ -137,6 +213,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_BuildIsAny(testCase)
+            % The scaffold emits a single `any`-architecture build entry.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -148,6 +225,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_CreatesEmptyTestScript(testCase)
+            % A zero-byte test_<name>.m is created alongside mip.yaml.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -160,6 +238,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_TestScriptReferencedInYaml(testCase)
+            % The generated mip.yaml wires test_script to the new test file.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -170,6 +249,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_DoesNotOverwriteExistingTestScript(testCase)
+            % If test_<name>.m already exists, init must not overwrite it.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             existing = fullfile(pkgDir, 'test_mypkg.m');
@@ -186,6 +266,7 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_AutoAddPathsRoot(testCase)
+            % A runtime .m file at the root causes '.' to be auto-included.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             % Place a runtime .m file at the root
@@ -201,6 +282,8 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_AutoAddPathsSkipsTestsAndDocs(testCase)
+            % auto_add_paths includes runtime dirs like `src/` but skips
+            % well-known non-runtime dirs like `tests/` and `docs/`.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             mkdir(fullfile(pkgDir, 'src'));
@@ -243,6 +326,8 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
         function testInit_AddpathsListMatchesAutoUtil(testCase)
+            % The addpaths written into mip.yaml agree with what
+            % mip.init.auto_add_paths returns for the same tree.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             mkdir(fullfile(pkgDir, 'src'));
