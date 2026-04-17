@@ -642,6 +642,28 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
     end
 
     mip.build.install_local(sourceDir, false, noCompile);
+
+    % Clear source_path in the installed mip.json. `install_local` records
+    % the extracted source dir, but that temp dir is deleted when this
+    % function returns, so the stored path would be stale. An empty
+    % source_path signals "no source available to reinstall from";
+    % `mip update` skips such packages.
+    clearSourcePath(pkgName);
+end
+
+function clearSourcePath(pkgName)
+    mipJsonPath = fullfile(mip.paths.get_package_dir('local', 'local', pkgName), 'mip.json');
+    if ~isfile(mipJsonPath)
+        return
+    end
+    mipData = jsondecode(fileread(mipJsonPath));
+    mipData.source_path = '';
+    fid = fopen(mipJsonPath, 'w');
+    if fid == -1
+        error('mip:fileError', 'Could not write to mip.json at %s', mipJsonPath);
+    end
+    cleaner = onCleanup(@() fclose(fid));
+    fwrite(fid, jsonencode(mipData));
 end
 
 function tf = isFileExchangeUrl(url)

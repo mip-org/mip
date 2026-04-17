@@ -96,7 +96,10 @@ end
 
 function tf = is_build_only_script(name)
 % Return true if the filename looks like a build / install / dev
-% script rather than a runtime library function.
+% script rather than a runtime library function. Note: Contents.m is
+% treated as build-only since it contains only documentation comments;
+% a directory whose only .m file is Contents.m will not be auto-added,
+% which means `help <dirname>` won't resolve for that folder.
 [~, base, ~] = fileparts(name);
 baseL = lower(base);
 exact = {'buildfile', 'build', 'make', 'makefile', ...

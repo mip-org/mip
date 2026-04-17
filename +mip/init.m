@@ -2,11 +2,12 @@ function init(varargin)
 %INIT   Initialize a new mip package by generating a mip.yaml.
 %
 % Usage:
-%   mip init <path>
-%   mip init . [--name <packagename>] [--repository <url>]
+%   mip init [<path>]
+%   mip init [<path>] [--name <packagename>] [--repository <url>]
 %
-% Generates a mip.yaml in the given directory. The package name defaults
-% to the directory's basename and can be overridden with --name. Optional
+% Generates a mip.yaml in the given directory (defaults to the current
+% directory if no path is provided). The package name defaults to the
+% directory's basename and can be overridden with --name. Optional
 % string fields (description, version, license, homepage, repository)
 % are emitted blank for the user to fill in (--repository fills in that
 % field instead of leaving it blank). The list of addpaths is determined
@@ -18,11 +19,6 @@ function init(varargin)
 %
 % If the target directory already contains a mip.yaml, init prints a
 % message and exits without modifying anything.
-
-    if nargin < 1
-        error('mip:init:noPath', ...
-              'A directory path is required for init command.');
-    end
 
     targetPath = '';
     overrideName = '';
@@ -53,8 +49,7 @@ function init(varargin)
     end
 
     if isempty(targetPath)
-        error('mip:init:noPath', ...
-              'A directory path is required for init command.');
+        targetPath = '.';
     end
 
     targetDir = mip.paths.get_absolute_path(targetPath);
@@ -79,11 +74,13 @@ function init(varargin)
 
     if ~is_valid_package_name(pkgName)
         error('mip:init:invalidName', ...
-              ['"%s" is not a valid package name. Names must match ' ...
-               '[-a-zA-Z0-9_.]+ and not be "." or "..". ' ...
-               'Use --name to override.'], pkgName);
+              ['"%s" is not a valid package name. Names must contain only ' ...
+               'letters, digits, hyphens, and underscores, and must start ' ...
+               'and end with a letter or digit. Use --name to override.'], pkgName);
     end
 
+    % Discover addpaths before creating the test script so the new file
+    % doesn't cause the root to be auto-included.
     addpaths = mip.init.auto_add_paths(targetDir);
 
     testScript = sprintf('test_%s.m', pkgName);
@@ -108,8 +105,7 @@ end
 
 
 function tf = is_valid_package_name(name)
-    tf = ~isempty(regexp(name, '^[-a-zA-Z0-9_.]+$', 'once')) && ...
-         ~strcmp(name, '.') && ~strcmp(name, '..');
+    tf = ~isempty(regexp(name, '^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$', 'once'));
 end
 
 
@@ -123,7 +119,7 @@ function write_mip_yaml(yamlPath, pkgName, addpaths, testScript, repository)
 
     fprintf(fid, 'name: %s\n', pkgName);
     fprintf(fid, 'description: ""\n');
-    fprintf(fid, 'version: ""\n');
+    fprintf(fid, 'version: "unknown"\n');
     fprintf(fid, 'license: ""\n');
     fprintf(fid, 'homepage: ""\n');
     fprintf(fid, 'repository: "%s"\n', repository);

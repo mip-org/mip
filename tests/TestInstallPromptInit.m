@@ -115,11 +115,10 @@ classdef TestInstallPromptInit < matlab.unittest.TestCase
             pkgDir = fullfile(testCase.SourceDir, 'mypkg');
             mkdir(pkgDir);
 
-            setenv('MIP_CONFIRM', '');
             % With MIP_CONFIRM unset, would normally prompt. We can't
             % easily simulate stdin, so this case is covered by the 'n'
             % path. Skip — but verify that arbitrary non-yes value declines.
-            setenv('MIP_CONFIRM', 'maybe');
+            setenv('MIP_CONFIRM', 'empty');
             testCase.verifyError(@() mip.install(pkgDir), ...
                 'mip:install:abortedNoMipYaml');
         end

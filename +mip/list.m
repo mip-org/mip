@@ -31,10 +31,11 @@ if isempty(allPackages)
     return
 end
 
-% Get loaded and sticky packages
+% Get loaded, sticky, and pinned packages
 MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
 MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 MIP_STICKY_PACKAGES          = mip.state.key_value_get('MIP_STICKY_PACKAGES');
+pinnedPackages               = mip.state.get_pinned();
 
 % Build info for each package
 n = length(allPackages);
@@ -44,6 +45,7 @@ editablePaths = cell(1, n);
 loaded = false(1, n);
 direct = false(1, n);
 sticky = false(1, n);
+pinned = false(1, n);
 editable = false(1, n);
 
 for i = 1:n
@@ -69,6 +71,7 @@ for i = 1:n
     loaded(i) = ismember(fqn, MIP_LOADED_PACKAGES);
     direct(i) = ismember(fqn, MIP_DIRECTLY_LOADED_PACKAGES);
     sticky(i) = ismember(fqn, MIP_STICKY_PACKAGES);
+    pinned(i) = ismember(fqn, pinnedPackages);
 end
 
 loadedIdx = find(loaded);
@@ -100,20 +103,20 @@ if isempty(loadedIdx)
     fprintf('No packages are currently loaded. Use "mip load <package>" to load one.\n\n');
 else
     fprintf('=== Loaded Packages ===\n');
-    print_packages(loadedIdx, names, allPackages, versions, direct, sticky, editable, editablePaths);
+    print_packages(loadedIdx, names, allPackages, versions, direct, sticky, pinned, editable, editablePaths);
     fprintf('\n');
 end
 
 % Display not-loaded packages section
 if ~isempty(notLoadedIdx)
     fprintf('=== Other Installed Packages ===\n');
-    print_packages(notLoadedIdx, names, allPackages, versions, direct, sticky, editable, editablePaths);
+    print_packages(notLoadedIdx, names, allPackages, versions, direct, sticky, pinned, editable, editablePaths);
 end
 
 end
 
 
-function print_packages(idx, names, fqns, versions, direct, sticky, editable, editablePaths)
+function print_packages(idx, names, fqns, versions, direct, sticky, pinned, editable, editablePaths)
     % Compute column widths for this section
     maxNameLen = 0;
     maxFqnLen = 0;
@@ -134,6 +137,10 @@ function print_packages(idx, names, fqns, versions, direct, sticky, editable, ed
 
         if sticky(i)
             line = sprintf('%s [sticky]', line);
+        end
+
+        if pinned(i)
+            line = sprintf('%s [pinned]', line);
         end
 
         if editable(i)
