@@ -246,10 +246,10 @@ If a package is already installed, `mip install` prints a message and skips it. 
 
 ### 3.2 Local Installation
 
-An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory containing a `mip.yaml` file:
+An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory:
 
 - If the path is not a directory, raises `mip:install:notADirectory`.
-- If the directory does not contain `mip.yaml`, raises `mip:install:noMipYaml`.
+- If the directory does not contain `mip.yaml`, mip prompts the user (`Auto-generate mip.yaml? (y/n):`) to auto-generate one via `mip init`. On `y`/`yes`, init runs and the install continues. Otherwise, raises `mip:install:abortedNoMipYaml` and no install work is done. The `MIP_CONFIRM` environment variable overrides the prompt (`y` to auto-confirm, anything else to decline) for non-interactive use. This applies to both editable and non-editable local installs.
 
 Bare names without a path prefix are **never** dispatched to local install, even if a directory of the same name exists in the current folder ([§3.0](#30-argument-categorization), [#107](https://github.com/mip-org/mip/issues/107)).
 
@@ -316,7 +316,29 @@ If the package is already installed at `local/local/<name>`, prints a message an
 6. The org/channel is determined by the `--channel` flag (default `mip-org/core`).
 7. Mark as directly installed.
 
-### 3.4 Load Hint After Install
+### 3.4 Installation from a Remote `.zip` URL
+
+`mip install <name> --url <zip-url>` installs a package from a remote `.zip` archive, using the positional `<name>` as the package name:
+
+1. Download the archive to a temporary directory.
+2. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
+3. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No prompt is issued -- the user opted in by specifying `--url`.
+4. Run a non-editable local install (`mip.build.install_local`) on the extracted source.
+5. Clear `source_path` in the installed `mip.json` to an empty string. `install_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
+6. Clean up the temp directory regardless of success or failure.
+
+Constraints:
+
+- The URL must point to a `.zip` archive: the URL's path component (before `?` or `#`) ends in `.zip`, case-insensitive. Otherwise raises `mip:install:urlMustBeZip`.
+- Exactly one positional argument is required when `--url` is given, and it must be a bare name (not an FQN, URL, or path). Otherwise raises `mip:install:urlRequiresName` / `mip:install:urlTakesSingleName`.
+- `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
+- `--editable` / `-e` is rejected (the source dir is temporary; raises `mip:install:editableRequiresLocal`).
+
+**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`.
+
+Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. `mip update <name>` (or `mip update --all`) prints a skip message for URL-installed packages and moves on. To pull in an updated archive, re-run `mip install <name> --url <zip-url>` (uninstall first if needed).
+
+### 3.5 Load Hint After Install
 
 After installation, a hint is printed showing how to load the package:
 - If the package name is unique across all installed packages, the bare name is shown.
@@ -494,20 +516,20 @@ Using an FQN bypasses this check entirely.
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
 2. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
-3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
+3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
-   - Local package without `source_path` in `mip.json` → `mip:update:noSourcePath`.
-   - Local package whose source directory is missing → `mip:update:sourceNotFound`.
-   - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable`.
-4. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
-5. For each remaining package, decide whether it needs updating:
+   - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
+   - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable` (checked after the `noSource` filter in step 4).
+4. **Skip** local packages whose `source_path` is absent or empty in `mip.json` (`noSource = true`) -- these have no local source to reinstall from (URL installs being the primary case, see [§3.4](#34-installation-from-a-remote-zip-url)). A "Skipping" message is printed and they are dropped from the batch. If every requested package is skipped, `mip update` returns without error. `--force` does not override this skip.
+5. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
+6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
    - Remote package: fetch the channel index and compare installed version + commit hash with latest:
      - Same version **and** same commit hash (or no hash available): "already up to date", skip.
      - Same version but different commit hash: update (content changed within the same version).
      - Different version: update.
-6. If no packages need updating, return. Otherwise:
+7. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
    - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable, noCompile)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
    - **Remote packages** are updated via staging: unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any missing dependencies that the updated packages require, and prune any orphaned packages.
@@ -858,11 +880,18 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:mipJsonNotFound` | `mip.json` missing in package directory |
 | `mip:unknownPackage` | Package not installed and not found in any channel |
 | `mip:install:noPackage` | No package specified for install |
-| `mip:install:noMipYaml` | Directory doesn't contain `mip.yaml` |
+| `mip:install:abortedNoMipYaml` | Local install aborted because user declined to auto-generate `mip.yaml` |
+| `mip:install:urlRequiresName` | `--url` given without a positional package name |
+| `mip:install:urlTakesSingleName` | `--url` given with 0 or 2+ positional args, or a non-bare-name positional |
+| `mip:install:urlMustBeZip` | `--url` value does not point to a `.zip` archive |
+| `mip:install:multipleUrls` | `--url` passed more than once |
+| `mip:install:missingUrlValue` | `--url` flag provided without a value |
+| `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
+| `mip:install:zipExtractFailed` | Extraction of a downloaded `.zip` failed |
+| `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
 | `mip:update:notInstalled` | Package not installed |
-| `mip:update:noSourcePath` | Local package missing `source_path` in `mip.json` |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
 | `mip:compile:notInstalled` | Package not installed |
 | `mip:compile:noCompileScript` | Package has no `compile_script` |

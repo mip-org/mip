@@ -234,13 +234,62 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'mip:update:sourceNotFound');
         end
 
-        function testUpdateLocalPackage_NoSourcePathErrors(testCase)
-            % Create a local package without source_path in mip.json
-            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'oldpkg');
-            % The createTestPackage helper doesn't add source_path
+        function testUpdateLocalPackage_NoSourcePathSkipped(testCase)
+            % A local package with no source_path in mip.json has no
+            % source to reinstall from; update skips it with a message
+            % rather than erroring.
+            createTestPackage(testCase.TestRoot, 'local', 'local', 'nosrc');
+            mip.state.add_directly_installed('local/local/nosrc');
 
-            testCase.verifyError(@() mip.update('local/local/oldpkg'), ...
-                'mip:update:noSourcePath');
+            output = evalc("mip.update('local/local/nosrc')");
+            testCase.verifyTrue(contains(output, 'Skipping'));
+            testCase.verifyTrue(contains(output, 'local/local/nosrc'));
+        end
+
+        function testUpdateLocalPackage_EmptySourcePathSkipped(testCase)
+            % Same behavior when source_path is present but empty (the
+            % state produced by `mip install <name> --url <zip-url>`).
+            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            setEmptySourcePath(pkgDir);
+            mip.state.add_directly_installed('local/local/urlpkg');
+
+            output = evalc("mip.update('local/local/urlpkg')");
+            testCase.verifyTrue(contains(output, 'Skipping'));
+            testCase.verifyTrue(contains(output, 'local/local/urlpkg'));
+        end
+
+        function testUpdateForce_EmptySourcePathSkipped(testCase)
+            % --force does not override the skip: no source means no update.
+            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            setEmptySourcePath(pkgDir);
+            mip.state.add_directly_installed('local/local/urlpkg');
+
+            output = evalc("mip.update('--force', 'local/local/urlpkg')");
+            testCase.verifyTrue(contains(output, 'Skipping'));
+        end
+
+        function testUpdateAll_SkipsEmptySourcePathPackages(testCase)
+            % --all must not abort when one package has no source; other
+            % packages should still be processed. Here the "other" is a
+            % regular local install whose update succeeds.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'normalpkg');
+            mip.install(srcDir);
+
+            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            setEmptySourcePath(pkgDir);
+            mip.state.add_directly_installed('local/local/urlpkg');
+
+            normalPkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'local', 'normalpkg');
+            info1 = mip.config.read_package_json(normalPkgDir);
+            pause(1.1);
+
+            output = evalc("mip.update('--all')");
+            testCase.verifyTrue(contains(output, 'Skipping'));
+            testCase.verifyTrue(contains(output, 'local/local/urlpkg'));
+
+            info2 = mip.config.read_package_json(normalPkgDir);
+            testCase.verifyFalse(strcmp(info2.timestamp, info1.timestamp), ...
+                'normalpkg should still have been updated despite skipping urlpkg');
         end
 
         %% --- Bare name resolution ---
@@ -638,4 +687,14 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         end
 
     end
+end
+
+
+function setEmptySourcePath(pkgDir)
+    mipJsonPath = fullfile(pkgDir, 'mip.json');
+    data = jsondecode(fileread(mipJsonPath));
+    data.source_path = '';
+    fid = fopen(mipJsonPath, 'w');
+    fwrite(fid, jsonencode(data));
+    fclose(fid);
 end
