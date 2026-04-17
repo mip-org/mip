@@ -172,6 +172,27 @@ classdef TestPackageDiscovery < matlab.unittest.TestCase
             testCase.verifyEqual(sort(pkgs), sort({'mip-org/core/new1', 'mip-org/core/new2'}));
         end
 
+        function testDirectlyInstalled_StaleTmpReplaced(testCase)
+            % A leftover directly_installed.txt.tmp (e.g. from a prior crash)
+            % must be replaced, and the final file must contain only the
+            % new entries.
+            packagesDir = mip.paths.get_packages_dir();
+            if ~exist(packagesDir, 'dir')
+                mkdir(packagesDir);
+            end
+            tmpPath = fullfile(packagesDir, 'directly_installed.txt.tmp');
+            fid = fopen(tmpPath, 'w');
+            fprintf(fid, 'mip-org/core/garbage\n');
+            fclose(fid);
+
+            mip.state.set_directly_installed({'mip-org/core/alpha', 'mip-org/core/beta'});
+
+            pkgs = mip.state.get_directly_installed();
+            testCase.verifyEqual(sort(pkgs), sort({'mip-org/core/alpha', 'mip-org/core/beta'}));
+            testCase.verifyFalse(exist(tmpPath, 'file') > 0, ...
+                'directly_installed.txt.tmp should not exist after a successful write');
+        end
+
         %% get_package_dir tests
 
         function testGetPackageDir(testCase)
