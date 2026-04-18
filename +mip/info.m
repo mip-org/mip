@@ -42,10 +42,11 @@ end
 % Find all local installations of this package
 result = mip.parse.parse_package_arg(packageArg);
 if result.is_fqn
-    % FQN: only check that specific installation
-    pkgDir = mip.paths.get_package_dir(org, channelName, packageName);
-    if exist(pkgDir, 'dir')
-        installedFqns = {mip.parse.make_fqn(org, channelName, packageName)};
+    % FQN: only check that specific installation. Canonicalize the name
+    % to the on-disk form so we report and operate on the canonical FQN.
+    onDisk = mip.resolve.installed_dir(org, channelName, packageName);
+    if ~isempty(onDisk)
+        installedFqns = {mip.parse.make_fqn(org, channelName, onDisk)};
     else
         installedFqns = {};
     end
@@ -180,7 +181,8 @@ end
 
 
 function found = packageInIndex(index, packageName)
-% Check if a package exists in a pre-fetched index.
+% Check if a package exists in a pre-fetched index. Match by name
+% equivalence (case- and dash/underscore-insensitive).
     found = false;
     packages = index.packages;
     for i = 1:length(packages)
@@ -189,7 +191,7 @@ function found = packageInIndex(index, packageName)
         else
             pkg = packages(i);
         end
-        if isstruct(pkg) && strcmp(pkg.name, packageName)
+        if isstruct(pkg) && mip.name.match(pkg.name, packageName)
             found = true;
             return
         end
@@ -209,7 +211,7 @@ function showRemoteChannelInfo(channelStr, packageName, index)
         return
     end
 
-    % Find all variants of this package
+    % Find all variants of this package (match by name equivalence)
     packages = index.packages;
     packageVariants = {};
     for i = 1:length(packages)
@@ -218,7 +220,7 @@ function showRemoteChannelInfo(channelStr, packageName, index)
         else
             pkg = packages(i);
         end
-        if isstruct(pkg) && strcmp(pkg.name, packageName)
+        if isstruct(pkg) && mip.name.match(pkg.name, packageName)
             packageVariants = [packageVariants, {pkg}]; %#ok<AGROW>
         end
     end

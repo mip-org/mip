@@ -1,9 +1,14 @@
 function fqn = resolve_bare_name(packageName)
 %RESOLVE_BARE_NAME   Resolve a bare package name to its fully qualified name.
 %
-% Searches installed packages for a bare name match. Resolution priority:
+% Searches installed packages for a name match under the equivalence
+% rules of mip.name.match (case-insensitive, dash/underscore-equivalent).
+% Resolution priority:
 %   1. mip-org/core (the default channel)
 %   2. First alphabetically by org/channel
+%
+% The returned FQN uses the actual on-disk directory name, which may
+% differ in case or separators from the input.
 %
 % Args:
 %   packageName - Bare package name (e.g. 'chebfun')
@@ -18,7 +23,7 @@ if ~exist(packagesDir, 'dir')
     return
 end
 
-% Collect all matches: scan org/channel/packageName directories
+% Collect all matches: per channel, do a case-insensitive lookup.
 matches = {};
 
 orgDirs = dir(packagesDir);
@@ -35,9 +40,9 @@ for i = 1:length(orgDirs)
             continue
         end
         ch = chanDirs(j).name;
-        pkgDir = fullfile(orgPath, ch, packageName);
-        if exist(pkgDir, 'dir')
-            matches{end+1} = mip.parse.make_fqn(org, ch, packageName); %#ok<AGROW>
+        onDisk = mip.resolve.installed_dir(org, ch, packageName);
+        if ~isempty(onDisk)
+            matches{end+1} = mip.parse.make_fqn(org, ch, onDisk); %#ok<AGROW>
         end
     end
 end
@@ -47,7 +52,6 @@ if isempty(matches)
 end
 
 % Priority: mip-org/core first
-coreMatch = [packageName]; % unused, just for clarity
 for i = 1:length(matches)
     if startsWith(matches{i}, 'mip-org/core/')
         fqn = matches{i};

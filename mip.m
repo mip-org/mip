@@ -12,11 +12,15 @@ function varargout = mip(command, varargin)
 %   mip update --all                         - Update all installed packages
 %   mip update --no-compile <package>        - Skip compile step (editable local installs)
 %   mip update mip                           - Update mip itself
+%   mip pin <package> [...]                  - Pin packages to their current version
+%   mip unpin <package> [...]                - Unpin packages
 %   mip uninstall <package> [...]            - Uninstall one or more packages
 %   mip uninstall mip                        - Uninstall mip itself
 %   mip list                                 - List installed packages (reverse load order)
 %   mip list --sort-by-name                  - List installed packages (alphabetical)
 %   mip load <package> [...]  [--sticky]     - Load one or more packages into MATLAB path
+%   mip load <package> --addpath <relpath>   - Add a source-relative path after loading
+%   mip load <package> --rmpath  <relpath>   - Remove a source-relative path after loading
 %   mip unload <package> [...]               - Unload one or more packages from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
 %   mip unload --all --force                 - Unload all packages (including sticky)
@@ -31,6 +35,7 @@ function varargout = mip(command, varargin)
 %   mip test <package>                       - Run package test script
 %   mip compile <package>                    - Compile/recompile MEX files
 %   mip bundle <directory> [--output <dir>]  - Build .mhl from local package
+%   mip init <directory> [--name <name>]     - Generate a starter mip.yaml
 %   mip reset                                - Reset mip to a clean state
 %   mip help [command]                       - Show help text for command
 %
@@ -71,6 +76,18 @@ switch command
             error('mip:noPackage', 'At least one package name required for update command.');
         end
         mip.update(varargin{:});
+
+    case 'pin'
+        if nargin < 2
+            error('mip:noPackage', 'At least one package name required for pin command.');
+        end
+        mip.pin(varargin{:});
+
+    case 'unpin'
+        if nargin < 2
+            error('mip:noPackage', 'At least one package name required for unpin command.');
+        end
+        mip.unpin(varargin{:});
 
     case 'uninstall'
         if nargin < 2
@@ -119,6 +136,9 @@ switch command
             error('mip:noDirectory', 'A directory path is required for bundle command.');
         end
         mip.bundle(varargin{:});
+
+    case 'init'
+        mip.init(varargin{:});
 
     case 'reset'
         mip.reset();

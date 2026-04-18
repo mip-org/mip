@@ -74,6 +74,22 @@ function update(varargin)
             fprintf('No packages installed.\n');
             return
         end
+        % Skip pinned packages unless --force is set
+        if ~force
+            filtered = {};
+            for i = 1:length(allInstalled)
+                if mip.state.is_pinned(allInstalled{i})
+                    fprintf('Skipping pinned package "%s".\n', allInstalled{i});
+                else
+                    filtered{end+1} = allInstalled{i}; %#ok<AGROW>
+                end
+            end
+            allInstalled = filtered;
+        end
+        if isempty(allInstalled)
+            fprintf('All packages are pinned. Nothing to update.\n');
+            return
+        end
         args = allInstalled;
     end
 
@@ -87,11 +103,25 @@ function update(varargin)
     end
 
     % Resolve and validate each argument. Any error here (not installed,
-    % missing source_path, missing source dir) is raised before we touch
-    % anything on disk.
-    toProcess = cell(1, length(args));
+    % missing source dir) is raised before we touch anything on disk.
+    resolved = cell(1, length(args));
     for i = 1:length(args)
-        toProcess{i} = resolvePackage(args{i});
+        resolved{i} = resolvePackage(args{i});
+    end
+
+    % Skip local packages with no available source (e.g. URL installs).
+    % They cannot be reinstalled, so update them is a no-op with a message.
+    toProcess = {};
+    for i = 1:length(resolved)
+        p = resolved{i};
+        if p.noSource
+            fprintf('Skipping "%s": no local source to update from.\n', p.fqn);
+        else
+            toProcess{end+1} = p; %#ok<AGROW>
+        end
+    end
+    if isempty(toProcess)
+        return
     end
 
     % --no-compile only applies to editable local installs. Error if any
@@ -200,6 +230,12 @@ function update(varargin)
             if exist(backupDir, 'dir')
                 rmdir(backupDir, 's');
             end
+
+            % Unpin if this was a forced update of a pinned package
+            if force && mip.state.is_pinned(p.fqn)
+                mip.state.remove_pinned(p.fqn);
+                fprintf('Unpinned "%s".\n', p.fqn);
+            end
         end
 
         % --- Remote packages: update via staging, install missing deps, prune ---
@@ -215,6 +251,12 @@ function update(varargin)
                     mip.unload(p.fqn);
                 end
                 downloadAndReplace(p);
+
+                % Unpin if this was a forced update of a pinned package
+                if force && mip.state.is_pinned(p.fqn)
+                    mip.state.remove_pinned(p.fqn);
+                    fprintf('Unpinned "%s".\n', p.fqn);
+                end
             end
 
             % Install any missing dependencies that the updated packages require
@@ -259,13 +301,17 @@ function p = resolvePackage(packageArg)
     isLocal = strcmp(r.org, 'local') && strcmp(r.channel, 'local');
     sourcePath = '';
     editable = false;
+    noSource = false;
     if isLocal
-        if ~isfield(pkgInfo, 'source_path')
-            error('mip:update:noSourcePath', ...
-                  'Local package "%s" does not have a source_path in mip.json. Cannot update.', r.fqn);
+        if isfield(pkgInfo, 'source_path')
+            sourcePath = pkgInfo.source_path;
         end
-        sourcePath = pkgInfo.source_path;
-        if ~isfolder(sourcePath)
+        % No source_path at all, or an empty one, means there is no local
+        % source to reinstall from (e.g. URL installs clear it after
+        % extracting into a temp dir). The main flow skips such packages
+        % with a message rather than erroring.
+        noSource = isempty(sourcePath);
+        if ~noSource && ~isfolder(sourcePath)
             error('mip:update:sourceNotFound', ...
                   'Source directory "%s" for package "%s" no longer exists.', sourcePath, r.fqn);
         end
@@ -281,7 +327,8 @@ function p = resolvePackage(packageArg)
         'pkgInfo', pkgInfo, ...
         'isLocal', isLocal, ...
         'sourcePath', sourcePath, ...
-        'editable', editable ...
+        'editable', editable, ...
+        'noSource', noSource ...
     );
 end
 

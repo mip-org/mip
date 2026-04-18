@@ -15,16 +15,24 @@ function load(varargin)
 %   2. First alphabetically by org/channel
 %
 % Options:
-%   --sticky      Mark the package(s) as sticky (prevents unload with 'mip unload --all')
-%   --install     Automatically install the package(s) if not already installed
-%   --channel <c> Channel to install from when using --install (e.g. 'mip-org/staging')
-%   --transitive  (internal) Load as a transitive dependency, not a direct load
+%   --sticky        Mark the package(s) as sticky (prevents unload with 'mip unload --all')
+%   --install       Automatically install the package(s) if not already installed
+%   --channel <c>   Channel to install from when using --install
+%   --addpath <rel> Add this source-relative subpath to the MATLAB path AFTER
+%                   load_package.m runs. May be repeated. Only valid with a
+%                   single positional package; applies only to direct loads
+%                   (not transitive dependencies).
+%   --rmpath  <rel> Remove this source-relative subpath from the MATLAB path
+%                   AFTER load_package.m runs. Same constraints as --addpath.
+%   --transitive    (internal) Load as a transitive dependency, not a direct load
 
     % Parse flags and package names from arguments
     installIfMissing = false;
     stickyPackage = false;
     isDirect = true;
     channel = '';
+    addPathRels = {};
+    rmPathRels = {};
     packageArgs = {};
     i = 1;
     while i <= length(varargin)
@@ -42,8 +50,22 @@ function load(varargin)
             else
                 error('mip:load:missingChannel', '--channel requires a value');
             end
+        elseif ischar(arg) && strcmp(arg, '--addpath')
+            if i < length(varargin)
+                i = i + 1;
+                addPathRels{end+1} = varargin{i}; %#ok<*AGROW>
+            else
+                error('mip:load:missingAddpathValue', '--addpath requires a value');
+            end
+        elseif ischar(arg) && strcmp(arg, '--rmpath')
+            if i < length(varargin)
+                i = i + 1;
+                rmPathRels{end+1} = varargin{i};
+            else
+                error('mip:load:missingRmpathValue', '--rmpath requires a value');
+            end
         elseif ischar(arg) && ~startsWith(arg, '--')
-            packageArgs{end+1} = arg; %#ok<*AGROW>
+            packageArgs{end+1} = arg;
         end
         i = i + 1;
     end
@@ -52,14 +74,32 @@ function load(varargin)
         error('mip:noPackage', 'No package specified for load command.');
     end
 
-    % Load each package
+    if (~isempty(addPathRels) || ~isempty(rmPathRels)) && length(packageArgs) > 1
+        error('mip:load:addpathSinglePackage', ...
+              ['--addpath / --rmpath require exactly one positional package; ' ...
+               'got %d. The flags resolve relative to that package''s source ' ...
+               'directory.'], length(packageArgs));
+    end
+
+    % Load each package. --addpath/--rmpath only flow into direct loads;
+    % they are intentionally not propagated to transitive dependencies.
     for i = 1:length(packageArgs)
-        loadSingle(packageArgs{i}, installIfMissing, stickyPackage, channel, isDirect, {});
+        if isDirect
+            loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
+                       channel, isDirect, {}, addPathRels, rmPathRels);
+        else
+            loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
+                       channel, isDirect, {}, {}, {});
+        end
     end
 end
 
-function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDirect, loadingStack)
+function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDirect, loadingStack, addPathRels, rmPathRels)
 % Load a single package (and its dependencies recursively).
+%
+% addPathRels / rmPathRels: cell arrays of source-relative paths to
+% addpath / rmpath after load_package.m runs. Only honored for direct
+% loads (the recursive call for dependencies passes empty).
 
     % Resolve the FQN for this package, installing first if requested
     try
@@ -122,6 +162,9 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
                 fprintf('Package "%s" is now sticky\n', fqn);
             end
         end
+        % Apply --addpath/--rmpath even when already loaded so the user
+        % can adjust the path of an existing load without re-loading.
+        applyPathAdjustments(packageDir, fqn, addPathRels, rmPathRels);
         return
     end
 
@@ -148,7 +191,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
             dep = deps{i};
             depFqn = mip.resolve.resolve_dependency(dep);
             if ~mip.state.is_loaded(depFqn)
-                loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack);
+                loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack, {}, {});
             else
                 fprintf('  Dependency "%s" is already loaded\n', depFqn);
             end
@@ -181,6 +224,9 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     clear restoreDir;
     fprintf('Loaded package "%s"\n', fqn);
 
+    % Apply --addpath / --rmpath after load_package.m has run.
+    applyPathAdjustments(packageDir, fqn, addPathRels, rmPathRels);
+
     % Mark package as loaded
     mip.state.key_value_append('MIP_LOADED_PACKAGES', fqn);
 
@@ -196,14 +242,53 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
     end
 end
 
+function applyPathAdjustments(packageDir, fqn, addPathRels, rmPathRels)
+% Apply --addpath / --rmpath relative to the package's source directory.
+% No-op if both lists are empty.
+
+    if isempty(addPathRels) && isempty(rmPathRels)
+        return
+    end
+
+    pkgInfo = mip.config.read_package_json(packageDir);
+    srcDir = mip.paths.get_source_dir(packageDir, pkgInfo);
+
+    for i = 1:length(addPathRels)
+        rel = addPathRels{i};
+        target = fullfile(srcDir, rel);
+        % addpath emits MATLAB:addpath:DirNotFound if the target is missing.
+        addpath(target);
+        fprintf('  +addpath %s\n', target);
+    end
+
+    for i = 1:length(rmPathRels)
+        rel = rmPathRels{i};
+        target = fullfile(srcDir, rel);
+        % rmpath warns (not errors) if the path is not on the search path.
+        rmpath(target);
+        fprintf('  -rmpath %s\n', target);
+    end
+end
+
 function fqn = resolveToFqn(packageArg)
 % Resolve a package argument to a fully qualified name.
-% If already FQN, return as-is. If bare name, look up installed packages.
+% If already FQN, canonicalize the name component to its on-disk form.
+% If bare name, look up installed packages.
 
     result = mip.parse.parse_package_arg(packageArg);
 
     if result.is_fqn
-        fqn = packageArg;
+        % Canonicalize: find the actual on-disk name (case- and
+        % dash/underscore-insensitive) so the rest of load uses the
+        % canonical form, matching what's already in the loaded/sticky
+        % state lists.
+        onDisk = mip.resolve.installed_dir(result.org, result.channel, result.name);
+        if isempty(onDisk)
+            error('mip:packageNotFound', ...
+                  'Package "%s" is not installed. Run "mip install %s" first.', ...
+                  packageArg, packageArg);
+        end
+        fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
     else
         % Resolve bare name to installed FQN
         fqn = mip.resolve.resolve_bare_name(result.name);

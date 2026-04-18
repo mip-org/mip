@@ -5,22 +5,22 @@ function set_directly_installed(packages)
 %   packages - Cell array of package names that are directly installed
 
     packagesDir = mip.paths.get_packages_dir();
-    
-    % Create packages directory if it doesn't exist
+
     if ~exist(packagesDir, 'dir')
         mkdir(packagesDir);
     end
-    
+
     directFile = fullfile(packagesDir, 'directly_installed.txt');
-    
+    tmpFile = [directFile '.tmp'];
+
     % Sort packages for consistent ordering
     packages = sort(packages);
-    
-    fid = fopen(directFile, 'w');
+
+    fid = fopen(tmpFile, 'w');
     if fid == -1
-        error('mip:fileError', 'Could not write to directly_installed.txt');
+        error('mip:fileError', 'Could not write to directly_installed.txt.tmp');
     end
-    
+
     try
         for i = 1:length(packages)
             fprintf(fid, '%s\n', packages{i});
@@ -28,6 +28,17 @@ function set_directly_installed(packages)
         fclose(fid);
     catch ME
         fclose(fid);
+        if exist(tmpFile, 'file')
+            delete(tmpFile);
+        end
         rethrow(ME);
+    end
+
+    [ok, msg] = movefile(tmpFile, directFile, 'f');
+    if ~ok
+        if exist(tmpFile, 'file')
+            delete(tmpFile);
+        end
+        error('mip:fileError', 'Could not rename tmp file into place: %s', msg);
     end
 end
