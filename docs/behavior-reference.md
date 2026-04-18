@@ -55,11 +55,40 @@ The package `mip-org/core/mip` is the package manager itself. It has special pro
 
 - It is **always** marked as loaded and sticky when any `mip` command runs.
 - It **cannot** be unloaded via `mip unload` (raises `mip:cannotUnloadMip`).
-- It **cannot** be uninstalled via `mip uninstall` (prints instructions instead).
 - It survives `mip unload --all --force`.
 - It is never pruned during dependency pruning.
+- `mip uninstall mip-org/core/mip` triggers a full self-uninstall (see [§6.4](#64-self-uninstall-mip-uninstall-mip)) rather than an ordinary package removal.
 
-**Important**: These protections apply **only** to the exact FQN `mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`, `local/local/mip`) is treated as a normal package.
+**Important**: These protections apply **only** to the exact FQN `mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`, `local/local/mip`) is treated as a normal package. The match is by name equivalence (see [§1.8](#18-name-equivalence)), so `mip-org/core/MIP`, `mip-org/core/Mip`, etc. all refer to the same protected identity.
+
+### 1.8 Name Equivalence
+
+Two package names refer to the same package iff their **normalized** forms are equal, where normalization is:
+
+```
+normalize(name) = lowercase(name) with '-' replaced by '_'
+```
+
+So `My-Pkg`, `my_pkg`, `MY-PKG`, and `My_Pkg` all refer to the same package. `mypkg` (no separator) is a *different* name — normalization equates `-` with `_`, but does not remove them.
+
+This rule applies **only to the name component** of an FQN. The `org` and `channel` components compare strictly (case-sensitive, no separator equivalence) because they map to GitHub paths. So `mip-org/core/My-Pkg` and `mip-org/core/my_pkg` refer to the same package, but `MIP-ORG/core/my_pkg` does not.
+
+#### 1.8.1 Canonical Form
+
+Internally, mip stores names in a single **canonical** form per install. The canonical form is:
+
+- **For an installed package**: the actual on-disk directory name under `<root>/packages/<org>/<channel>/`. Whatever case/separators the directory uses is the canonical form for that install.
+- **For a not-yet-installed package being installed**: the name as published by its source — the `name` field in the channel index entry, the `name` field in `mip.yaml` (local install), or the `name` field in `mip.json` (mhl install). The on-disk directory is named to match.
+
+This means the on-disk name is always the canonical name, and stored FQNs (`MIP_LOADED_PACKAGES`, `directly_installed.txt`, etc.) are always in canonical form. User input that differs from the canonical form is canonicalized at command entry by case-insensitive lookup against the on-disk directory or the channel index.
+
+#### 1.8.2 Consequences
+
+- `mip install MyPkg` followed by `mip load MY_PKG` works — bare-name resolution finds the on-disk directory case-insensitively.
+- `mip install mip-org/core/MyPkg` when the package is already installed as `mip-org/core/my-pkg` is treated as already-installed (no-op), regardless of which form was used originally.
+- The channel index lookup is case-insensitive: `mip install MyPkg` will match an entry named `mypkg` in the channel index, and the install uses the channel's published form (`mypkg`) as the on-disk dir name.
+- If a channel publishes two entries with names that differ only in case/separator (e.g. `MyPkg` and `my_pkg`), they are treated as the same package and the first encountered is canonical.
+- The mip identity check ([§1.7](#17-the-mip-orgcoremip-identity)) uses name equivalence, so any case variant of `mip` on the `mip-org/core` channel is protected.
 
 ---
 
@@ -187,6 +216,8 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 3. Also fetch indexes for any channels referenced by FQN arguments.
 4. During dependency resolution, if a cross-channel FQN dependency is missing, fetch its channel lazily (up to 10 retry attempts).
 
+Channel index fetches go through an on-disk cache (see [§11.6](#116-channel-index-cache)). Repeat fetches of the same channel within the cache TTL are served from the cache without hitting the network.
+
 #### 3.1.3 Version Selection (`select_best_version`)
 
 Given all available versions for a package:
@@ -244,10 +275,10 @@ If a package is already installed, `mip install` prints a message and skips it. 
 
 ### 3.2 Local Installation
 
-An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory containing a `mip.yaml` file:
+An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory:
 
 - If the path is not a directory, raises `mip:install:notADirectory`.
-- If the directory does not contain `mip.yaml`, raises `mip:install:noMipYaml`.
+- If the directory does not contain `mip.yaml`, mip prompts the user (`Auto-generate mip.yaml? (y/n):`) to auto-generate one via `mip init`. On `y`/`yes`, init runs and the install continues. Otherwise, raises `mip:install:abortedNoMipYaml` and no install work is done. The `MIP_CONFIRM` environment variable overrides the prompt (`y` to auto-confirm, anything else to decline) for non-interactive use. This applies to both editable and non-editable local installs.
 
 Bare names without a path prefix are **never** dispatched to local install, even if a directory of the same name exists in the current folder ([§3.0](#30-argument-categorization), [#107](https://github.com/mip-org/mip/issues/107)).
 
@@ -314,7 +345,29 @@ If the package is already installed at `local/local/<name>`, prints a message an
 6. The org/channel is determined by the `--channel` flag (default `mip-org/core`).
 7. Mark as directly installed.
 
-### 3.4 Load Hint After Install
+### 3.4 Installation from a Remote `.zip` URL
+
+`mip install <name> --url <zip-url>` installs a package from a remote `.zip` archive, using the positional `<name>` as the package name:
+
+1. Download the archive to a temporary directory.
+2. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
+3. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No prompt is issued -- the user opted in by specifying `--url`.
+4. Run a non-editable local install (`mip.build.install_local`) on the extracted source.
+5. Clear `source_path` in the installed `mip.json` to an empty string. `install_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
+6. Clean up the temp directory regardless of success or failure.
+
+Constraints:
+
+- The URL must point to a `.zip` archive: the URL's path component (before `?` or `#`) ends in `.zip`, case-insensitive. Otherwise raises `mip:install:urlMustBeZip`.
+- Exactly one positional argument is required when `--url` is given, and it must be a bare name (not an FQN, URL, or path). Otherwise raises `mip:install:urlRequiresName` / `mip:install:urlTakesSingleName`.
+- `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
+- `--editable` / `-e` is rejected (the source dir is temporary; raises `mip:install:editableRequiresLocal`).
+
+**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`.
+
+Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. `mip update <name>` (or `mip update --all`) prints a skip message for URL-installed packages and moves on. To pull in an updated archive, re-run `mip install <name> --url <zip-url>` (uninstall first if needed).
+
+### 3.5 Load Hint After Install
 
 After installation, a hint is printed showing how to load the package:
 - If the package name is unique across all installed packages, the bare name is shown.
@@ -373,7 +426,26 @@ A loading stack tracks the current dependency chain. If a package appears in its
 
 `mip load pkg1 pkg2 --sticky` loads all listed packages. Each is marked as directly loaded. The `--sticky` flag applies to all of them. Packages are loaded in argument order; if any package errors, loading stops and remaining packages on the command line are not attempted.
 
-### 4.7 `load_package.m` Execution
+### 4.7 The `--addpath` and `--rmpath` Flags
+
+`mip load <pkg> --addpath <relpath>` adds `fullfile(srcDir, relpath)` to the MATLAB path **after** `load_package.m` has run. `--rmpath <relpath>` removes the same. **Both flags may be repeated** to specify multiple paths in one call (e.g. `mip load foo --addpath src/a --addpath src/b --rmpath src/legacy`); each occurrence is accumulated and applied in argument order.
+
+The `srcDir` resolution is the same one used elsewhere ([`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m)):
+- **Editable installs**: `srcDir = source_path` (the user's original source directory).
+- **Non-editable installs**: `srcDir = pkgDir/<name>/` (the copied source subdir, *not* the load-script wrapper dir above it).
+
+Constraints:
+- Only valid with a single positional package argument. With multiple packages, raises `mip:load:addpathSinglePackage`.
+- Applied **only** to the directly-named package, not to transitively-loaded dependencies.
+- Applied even when the package is already loaded (lets the user adjust path entries on an existing load without unload+reload).
+- `--addpath` still calls `addpath` if the target directory does not exist; MATLAB emits its native `MATLAB:mpath:nameNonexistentOrNotADirectory` warning.
+- `--rmpath` does not error if the target is not currently on the path (matches MATLAB's `rmpath` behavior, which emits `MATLAB:rmpath:DirNotFound`).
+- `--addpath` / `--rmpath` are **transient**: they are applied at this load and not persisted. A subsequent `mip load` (or reload after `mip update`) without the flags will not re-apply them.
+- The relative path is **not sandboxed**: `fullfile(srcDir, relpath)` is passed to `addpath` / `rmpath` as-is, so `..` segments escape `srcDir`. Entries outside `srcDir` will also not be caught by the unload sweep (§5.8), so the user is responsible for cleaning them up.
+
+These adjustments are not separately tracked because the unload sweep (§5.8) removes everything under `srcDir` regardless.
+
+### 4.8 `load_package.m` Execution
 
 The load script is executed by `cd`-ing to the package directory and calling `run(loadFile)`. For:
 - **Non-editable installs**: paths are relative, computed from the package directory.
@@ -444,6 +516,14 @@ If two directly-loaded packages share a dependency:
 
 Executed by `cd`-ing to the package directory and calling `run(unloadFile)`. If the file doesn't exist, a warning is issued (`mip:unloadNotFound`) but the package is still removed from tracking.
 
+**Defensive path sweep**: after `unload_package.m` returns (and regardless of whether it existed), mip walks the current MATLAB path and `rmpath`s every entry that equals `srcDir` or starts with `srcDir<filesep>`. The `srcDir` is resolved via [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the same base used for `mip load --addpath`/`--rmpath`. The sweep handles three cases:
+
+- Paths added via `mip load --addpath` (which `unload_package.m` doesn't know about).
+- Paths added by `load_package.m` that the matching `unload_package.m` failed to remove (e.g. user-edited scripts that drift out of sync).
+- Packages with no `unload_package.m` at all — the `mip:unloadNotFound` warning still fires, but the path is at least swept clean.
+
+Each swept entry is reported (`swept residual path entry for "<fqn>": <path>`). Because the sweep matches only entries beginning with `srcDir<filesep>` (or exactly equal to `srcDir`), a sibling directory whose name happens to share a prefix is never touched.
+
 ### 5.9 Broken Dependency Warning
 
 After unloading (and pruning), the system checks all still-loaded packages. If any loaded package has a dependency that is no longer loaded, a warning (`mip:brokenDependencies`) is printed.
@@ -457,7 +537,7 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
 1. Resolve each argument to an FQN:
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
-2. Filter out `mip-org/core/mip` (prints manual uninstall instructions).
+2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
 3. Unload any packages that are currently loaded.
 4. Remove each package directory (`rmdir`).
 5. Remove from `directly_installed.txt`.
@@ -482,6 +562,18 @@ If a bare name matches packages in multiple channels:
 
 Using an FQN bypasses this check entirely.
 
+### 6.4 Self-Uninstall (`mip uninstall mip`)
+
+When `mip-org/core/mip` is among the resolved uninstall targets, the command delegates to a self-uninstall flow:
+
+1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
+2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
+3. If the user declines, the self-uninstall is aborted. `mip uninstall` then drops `mip-org/core/mip` from its argument list and proceeds normally with any remaining packages.
+4. If the user confirms, mip runs `mip.reset()`, removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.root(), 's')`).
+5. A reinstall hint is printed.
+
+If the packages directory is missing when self-uninstall is invoked, the flow raises `mip:uninstall:corrupted` and aborts without touching anything.
+
 ---
 
 ## 7. Updating
@@ -492,20 +584,20 @@ Using an FQN bypasses this check entirely.
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
 2. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
-3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable)` tuple. Validation errors are raised **before** any destructive action:
+3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
-   - Local package without `source_path` in `mip.json` → `mip:update:noSourcePath`.
-   - Local package whose source directory is missing → `mip:update:sourceNotFound`.
-   - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable`.
-4. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
-5. For each remaining package, decide whether it needs updating:
+   - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
+   - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable` (checked after the `noSource` filter in step 4).
+4. **Skip** local packages whose `source_path` is absent or empty in `mip.json` (`noSource = true`) -- these have no local source to reinstall from (URL installs being the primary case, see [§3.4](#34-installation-from-a-remote-zip-url)). A "Skipping" message is printed and they are dropped from the batch. If every requested package is skipped, `mip update` returns without error. `--force` does not override this skip.
+5. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
+6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
    - Remote package: fetch the channel index and compare installed version + commit hash with latest:
      - Same version **and** same commit hash (or no hash available): "already up to date", skip.
      - Same version but different commit hash: update (content changed within the same version).
      - Different version: update.
-6. If no packages need updating, return. Otherwise:
+7. If no packages need updating, return. Otherwise:
    - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
    - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable, noCompile)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
    - **Remote packages** are updated via staging: unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any missing dependencies that the updated packages require, and prune any orphaned packages.
@@ -543,7 +635,7 @@ Special flow for `mip-org/core/mip`:
 3. Replace the installed package in-place.
 4. Re-run `load_package.m` to reload.
 
-Does not go through the normal update flow since mip cannot be uninstalled. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages.
+Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
 
 ### 7.8 Load State Preservation
 
@@ -629,7 +721,7 @@ Displays information about a package from two sources:
 
 ### 9.3 `mip avail`
 
-Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`).
+Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`). Always re-downloads the channel index, bypassing the on-disk cache (see [§11.6](#116-channel-index-cache)) so the displayed list reflects the current state of the channel.
 
 ### 9.4 `mip version`
 
@@ -803,6 +895,17 @@ The `MIP_ROOT` environment variable overrides the location of the mip root direc
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
 
+### 11.6 Channel Index Cache
+
+Channel index downloads are cached on disk under `<root>/cache/index/<org>/<channel>.json`. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
+
+- **TTL**: 30 seconds. A cache entry whose age is `< 30s` is served without contacting the network.
+- **Bypass**: `mip avail` always re-downloads, bypassing the cache, so the displayed list reflects the current state of the channel. All other commands (`mip install`, `mip update`, `mip info`, etc.) use the cache.
+- **Successes only**: only successful downloads are cached. A failed fetch (`mip:indexFetchFailed`) does not write a cache entry, so the next call retries immediately.
+- **Corrupt cache**: if a cache file exists but cannot be read or parsed, it is treated as a miss and a fresh download is attempted.
+- **Cache write failure**: if the cache write itself fails (read-only filesystem, etc.), the fetched index is still returned -- caching is best-effort.
+- The cache directory is created on first write and is not pruned automatically.
+
 ---
 
 ## 12. Architecture Detection
@@ -840,20 +943,32 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:cannotUnloadMip` | Attempt to unload `mip-org/core/mip` |
 | `mip:loadNotFound` | `load_package.m` missing |
 | `mip:loadError` | `load_package.m` threw an error during execution |
+| `mip:load:missingChannel` | `--channel` flag without a value in `mip load` |
+| `mip:load:missingAddpathValue` | `--addpath` flag without a value |
+| `mip:load:missingRmpathValue` | `--rmpath` flag without a value |
+| `mip:load:addpathSinglePackage` | `--addpath` / `--rmpath` used with multiple positional packages |
 | `mip:mipYamlNotFound` | `mip.yaml` missing in source directory |
 | `mip:invalidMipYaml` | `mip.yaml` missing required `name` field |
 | `mip:mipJsonNotFound` | `mip.json` missing in package directory |
 | `mip:unknownPackage` | Package not installed and not found in any channel |
 | `mip:install:noPackage` | No package specified for install |
-| `mip:install:noMipYaml` | Directory doesn't contain `mip.yaml` |
+| `mip:install:abortedNoMipYaml` | Local install aborted because user declined to auto-generate `mip.yaml` |
+| `mip:install:urlRequiresName` | `--url` given without a positional package name |
+| `mip:install:urlTakesSingleName` | `--url` given with 0 or 2+ positional args, or a non-bare-name positional |
+| `mip:install:urlMustBeZip` | `--url` value does not point to a `.zip` archive |
+| `mip:install:multipleUrls` | `--url` passed more than once |
+| `mip:install:missingUrlValue` | `--url` flag provided without a value |
+| `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
+| `mip:install:zipExtractFailed` | Extraction of a downloaded `.zip` failed |
+| `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
 | `mip:update:notInstalled` | Package not installed |
-| `mip:update:noSourcePath` | Local package missing `source_path` in `mip.json` |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
 | `mip:compile:notInstalled` | Package not installed |
 | `mip:compile:noCompileScript` | Package has no `compile_script` |
 | `mip:uninstall:noPackage` | No package specified for uninstall |
+| `mip:uninstall:corrupted` | Self-uninstall invoked but packages directory is missing |
 
 ---
 

@@ -20,8 +20,12 @@ end
 currentArch = mip.arch();
 packages = index.packages;
 
-% Group packages by name, then by version
-% nameMap: name -> containers.Map(version -> cell array of variants)
+% Group packages by name, then by version. Names that differ only in case
+% or in `-` vs `_` are merged (mip.name.match equivalence). The first
+% form encountered wins as the display form for that name.
+% normalizedToDisplay: normalized name -> display name used as nameMap key
+% nameMap: display name -> containers.Map(version -> cell array of variants)
+normalizedToDisplay = containers.Map('KeyType', 'char', 'ValueType', 'char');
 nameMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
 for i = 1:length(packages)
     if iscell(packages)
@@ -36,11 +40,19 @@ for i = 1:length(packages)
 
     pkgName = pkg.name;
     pkgVersion = pkg.version;
+    normName = mip.name.normalize(pkgName);
 
-    if ~nameMap.isKey(pkgName)
-        nameMap(pkgName) = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    if normalizedToDisplay.isKey(normName)
+        displayName = normalizedToDisplay(normName);
+    else
+        displayName = pkgName;
+        normalizedToDisplay(normName) = displayName;
     end
-    versionMap = nameMap(pkgName);
+
+    if ~nameMap.isKey(displayName)
+        nameMap(displayName) = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    end
+    versionMap = nameMap(displayName);
 
     if ~versionMap.isKey(pkgVersion)
         versionMap(pkgVersion) = {};
@@ -59,9 +71,11 @@ for i = 1:length(packageNames)
     versionMap = nameMap(pkgName);
     allVersions = keys(versionMap);
 
-    % Select version
-    if requestedVersions.isKey(pkgName)
-        chosenVersion = requestedVersions(pkgName);
+    % Select version. requestedVersions may be keyed by a name with
+    % different case/separators than pkgName, so look up case-insensitively.
+    requestedVersion = lookup_requested_version(requestedVersions, pkgName);
+    if ~isempty(requestedVersion)
+        chosenVersion = requestedVersion;
         if ~versionMap.isKey(chosenVersion)
             error('mip:versionNotFound', ...
                   'Version "%s" not found for package "%s". Available versions: %s', ...
@@ -88,4 +102,24 @@ for i = 1:length(packageNames)
     end
 end
 
+end
+
+function v = lookup_requested_version(requestedVersions, pkgName)
+% Case-insensitive (mip.name.match equivalence) lookup of pkgName in
+% requestedVersions. Returns '' if no matching key exists.
+v = '';
+if isempty(requestedVersions) || requestedVersions.Count == 0
+    return
+end
+if requestedVersions.isKey(pkgName)
+    v = requestedVersions(pkgName);
+    return
+end
+ks = keys(requestedVersions);
+for i = 1:length(ks)
+    if mip.name.match(ks{i}, pkgName)
+        v = requestedVersions(ks{i});
+        return
+    end
+end
 end
