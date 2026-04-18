@@ -457,7 +457,7 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
 1. Resolve each argument to an FQN:
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
-2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow returns after tearing everything down and the remaining arguments (if any) are not processed. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
+2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
 3. Unload any packages that are currently loaded.
 4. Remove each package directory (`rmdir`).
 5. Remove from `directly_installed.txt`.
