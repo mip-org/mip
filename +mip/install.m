@@ -506,11 +506,13 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
 
     try
         mhlPath = mip.channel.download_mhl(packageInfo.mhl_url, tempDir);
+        stagingDir = fullfile(tempDir, 'staging');
+        mip.channel.extract_mhl(mhlPath, stagingDir);
         parentDir = fileparts(pkgDir);
         if ~exist(parentDir, 'dir')
             mkdir(parentDir);
         end
-        mip.channel.extract_mhl(mhlPath, pkgDir);
+        movefile(stagingDir, pkgDir);
         fprintf('Successfully installed "%s"\n', fqn);
     catch ME
         if exist(pkgDir, 'dir')

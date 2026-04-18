@@ -16,6 +16,14 @@ if ~exist(mhlPath, 'file')
     error('mip:mhlNotFound', '.mhl file not found: %s', mhlPath);
 end
 
+% Validate all archive entry names BEFORE extracting, so a malicious
+% archive cannot write files outside destDir. Rejects entries with
+% ".." escapes, absolute paths, drive letters, or null bytes, and
+% rejects symlink entries whose target (resolved relative to the
+% link's own directory) would escape destDir. Errors with
+% mip:pathTraversal if any entry is unsafe.
+mip.channel.assert_mhl_safe(mhlPath);
+
 % Ensure destination directory exists
 if ~exist(destDir, 'dir')
     mkdir(destDir);
@@ -23,7 +31,6 @@ end
 
 try
     fprintf('Extracting package...\n');
-    % unzip() returns a cell array of extracted file paths
     extractedFiles = unzip(mhlPath, destDir);
 
     if isempty(extractedFiles)
