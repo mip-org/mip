@@ -1,5 +1,5 @@
-classdef TestDownloadMhlSha256 < matlab.unittest.TestCase
-%TESTDOWNLOADMHLSHA256   Tests for SHA-256 verification in download_mhl.
+classdef TestDownloadMhl < matlab.unittest.TestCase
+%TESTDOWNLOADMHL   Tests for mip.channel.download_mhl.
 
     properties
         TempDir
@@ -30,10 +30,9 @@ classdef TestDownloadMhlSha256 < matlab.unittest.TestCase
     methods (Test)
 
         function testMatchingDigest_Succeeds(testCase)
-            % Compute the true digest via the same code path the production
-            % code uses, then supply it — so the test does not depend on a
-            % hardcoded hex string.
-            actualSha = localSha256(testCase.SrcFile);
+            % Happy path: passing the correct digest lets the download
+            % complete and leaves the file in place.
+            actualSha = mip.channel.sha256(testCase.SrcFile);
             testCase.assumeNotEmpty(actualSha, 'JVM unavailable — skipping');
             localPath = mip.channel.download_mhl( ...
                 testCase.SrcFile, testCase.DestDir, actualSha);
@@ -41,7 +40,10 @@ classdef TestDownloadMhlSha256 < matlab.unittest.TestCase
         end
 
         function testMismatchedDigest_ErrorsAndDeletes(testCase)
-            actualSha = localSha256(testCase.SrcFile);
+            % Tamper-detection path: a wrong digest must raise
+            % mip:digestMismatch AND scrub the local copy, so a poisoned
+            % archive can't be picked up by a later caller.
+            actualSha = mip.channel.sha256(testCase.SrcFile);
             testCase.assumeNotEmpty(actualSha, 'JVM unavailable — skipping');
             wrongSha = repmat('0', 1, 64);
             testCase.verifyError( ...
@@ -54,39 +56,20 @@ classdef TestDownloadMhlSha256 < matlab.unittest.TestCase
         end
 
         function testEmptyDigest_SkipsVerification(testCase)
+            % Empty string means "no digest available" (e.g. channel
+            % index omitted mhl_sha256): download must still succeed.
             localPath = mip.channel.download_mhl( ...
                 testCase.SrcFile, testCase.DestDir, '');
             testCase.verifyTrue(exist(localPath, 'file') > 0);
         end
 
         function testNoDigestArg_SkipsVerification(testCase)
+            % Legacy two-arg call sites (pre-SHA-256 feature) must keep
+            % working without modification.
             localPath = mip.channel.download_mhl( ...
                 testCase.SrcFile, testCase.DestDir);
             testCase.verifyTrue(exist(localPath, 'file') > 0);
         end
 
     end
-end
-
-function hex = localSha256(filePath)
-hex = '';
-if ~usejava('jvm')
-    return
-end
-try
-    md = java.security.MessageDigest.getInstance('SHA-256');
-    fid = fopen(filePath, 'r');
-    while true
-        chunk = fread(fid, 65536, '*uint8');
-        if isempty(chunk)
-            break
-        end
-        md.update(chunk);
-    end
-    fclose(fid);
-    digest = typecast(md.digest(), 'uint8');
-    hex = lower(sprintf('%02x', digest));
-catch
-    hex = '';
-end
 end

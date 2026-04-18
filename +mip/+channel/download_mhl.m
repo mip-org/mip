@@ -4,7 +4,7 @@ function localPath = download_mhl(source, destDir, expectedSha256)
 % Args:
 %   source          - URL (http:// or https://) or local file path
 %   destDir         - Destination directory for the downloaded file
-%   expectedSha256  - (Optional) Expected lowercase-hex SHA-256 of the file.
+%   expectedSha256  - (Optional) Expected hex SHA-256 of the file (case-insensitive).
 %                     If provided and nonempty, the downloaded/copied file is
 %                     verified against this digest. On mismatch the local
 %                     copy is deleted and an error is raised. If the JVM is
@@ -72,7 +72,7 @@ else
 end
 
 if ~isempty(expectedSha256)
-    actual = computeFileSha256(localPath);
+    actual = mip.channel.sha256(localPath);
     if isempty(actual)
         % JVM unavailable (e.g. numbl) — skip verification.
         return
@@ -88,38 +88,4 @@ if ~isempty(expectedSha256)
     end
 end
 
-end
-
-
-function hex = computeFileSha256(filePath)
-% Compute SHA-256 of filePath as a lowercase hex string. Returns '' if the
-% JVM is not available, which signals the caller to skip verification.
-hex = '';
-if ~usejava('jvm')
-    return
-end
-fid = -1;
-try
-    md = java.security.MessageDigest.getInstance('SHA-256');
-    fid = fopen(filePath, 'r');
-    if fid == -1
-        return
-    end
-    while true
-        chunk = fread(fid, 65536, '*uint8');
-        if isempty(chunk)
-            break
-        end
-        md.update(chunk);
-    end
-    fclose(fid);
-    fid = -1;
-    digest = typecast(md.digest(), 'uint8');
-    hex = lower(sprintf('%02x', digest));
-catch
-    if fid ~= -1
-        fclose(fid);
-    end
-    hex = '';
-end
 end
