@@ -1,17 +1,16 @@
-function create_mip_json(outputDir, mipConfig, resolvedConfig, architecture, opts)
+function create_mip_json(outputDir, mipConfig, architecture, opts)
 %CREATE_MIP_JSON   Generate mip.json metadata file.
 %
 % Args:
 %   outputDir      - Directory to write mip.json into
 %   mipConfig      - Struct from read_mip_yaml
-%   resolvedConfig - Struct from resolve_build_config
 %   architecture   - Effective architecture string
 %   opts           - (Optional) Struct with fields:
 %     .editable    - true for editable installs
 %     .source_path - original source path (for editable installs)
 %     .install_type - install type string (default: 'local')
 
-if nargin < 5
+if nargin < 4
     opts = struct();
 end
 
@@ -23,12 +22,6 @@ if isfield(mipConfig, 'description')
     mipData.description = mipConfig.description;
 else
     mipData.description = '';
-end
-
-if isfield(resolvedConfig, 'release_number')
-    mipData.release_number = resolvedConfig.release_number;
-else
-    mipData.release_number = 1;
 end
 
 mipData.dependencies = mipConfig.dependencies;

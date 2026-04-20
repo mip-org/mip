@@ -170,7 +170,7 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
     if ~isempty(testScript)
         jsonOpts.test_script = testScript;
     end
-    mip.build.create_mip_json(pkgDir, mipConfig, resolvedConfig, effectiveArch, jsonOpts);
+    mip.build.create_mip_json(pkgDir, mipConfig, effectiveArch, jsonOpts);
 
     fprintf('Editable install complete. Changes in %s will be reflected immediately.\n', sourceDir);
 

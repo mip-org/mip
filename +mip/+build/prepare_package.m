@@ -95,6 +95,6 @@ end
 if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
     jsonOpts.compile_script = resolvedConfig.compile_script;
 end
-mip.build.create_mip_json(stagingDir, mipConfig, resolvedConfig, effectiveArch, jsonOpts);
+mip.build.create_mip_json(stagingDir, mipConfig, effectiveArch, jsonOpts);
 
 end
