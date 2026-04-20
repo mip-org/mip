@@ -40,6 +40,11 @@ if ~exist(mhlPath, 'file')
     error('mip:invalidPackage', 'Archive not found: %s', mhlPath);
 end
 
+% if numbl, then we're not going to do this check
+if exist('isnumbl', 'builtin') && isnumbl
+    return
+end
+
 fid = fopen(mhlPath, 'r');
 if fid < 0
     error('mip:invalidPackage', 'Cannot open archive: %s', mhlPath);
