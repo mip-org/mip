@@ -45,6 +45,24 @@ classdef TestBundleCommand < matlab.unittest.TestCase
                 sprintf('Expected file %s to exist', expected));
         end
 
+        function testBundle_HyphenInNameEncodedAsUnderscoreInFilename(testCase)
+            % Canonical names may contain '-', but the filename uses '-'
+            % as a field separator, so the name is encoded with '_' in
+            % the filename. The canonical name is preserved in mip.json.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'foo-bar', 'version', '1.0.0');
+            mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');
+
+            expected = 'foo_bar-1.0.0-any.mhl';
+            testCase.verifyTrue(exist(fullfile(testCase.OutputDir, expected), 'file') > 0, ...
+                sprintf('Expected file %s to exist', expected));
+
+            jsonFiles = dir(fullfile(testCase.OutputDir, '*.mip.json'));
+            jsonText = fileread(fullfile(testCase.OutputDir, jsonFiles(1).name));
+            jsonData = jsondecode(jsonText);
+            testCase.verifyEqual(jsonData.name, 'foo-bar', ...
+                'Canonical name must be preserved in mip.json');
+        end
+
         function testBundle_ProducesMipJson(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
             mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');

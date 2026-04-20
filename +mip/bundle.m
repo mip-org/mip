@@ -89,9 +89,12 @@ function bundle(varargin)
         mipJson = jsondecode(mipJsonText);
         effectiveArch = mipJson.architecture;
 
-        % Build output filename
+        % Build output filename. Canonical package names may contain '-',
+        % but the filename uses '-' as a field separator, so encode the
+        % name with '_' in the filename.
+        nameForFilename = strrep(mipConfig.name, '-', '_');
         mhlFilename = sprintf('%s-%s-%s.mhl', ...
-            mipConfig.name, num2str(mipConfig.version), effectiveArch);
+            nameForFilename, num2str(mipConfig.version), effectiveArch);
         mhlPath = fullfile(outputDir, mhlFilename);
 
         % Create .mhl (zip) from staging directory contents
