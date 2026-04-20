@@ -257,7 +257,9 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 1. For each package in topological order:
    - If already installed (directory exists), skip it.
    - Download the `.mhl` file from the URL in the index.
-   - Extract to `~/.mip/packages/<org>/<channel>/<name>/`.
+   - If the channel index entry includes `mhl_sha256`, verify the downloaded file against it. Mismatch raises `mip:digestMismatch` and deletes the corrupted file. Missing digest (legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips verification. See [§3.6](#36-mhl-archive-integrity).
+   - Validate the `.mhl` archive against path-traversal attacks before extraction (see [§3.6](#36-mhl-archive-integrity)).
+   - Extract to `<root>/packages/<org>/<channel>/<name>/`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
 3. Print a summary with load hints.
 
@@ -296,7 +298,7 @@ This is the default when installing from a local directory without `-e`/`--edita
 8. Generate `unload_package.m`.
 9. Run compile script if specified.
 10. Create `mip.json` with metadata.
-11. Move staging directory to `~/.mip/packages/local/local/<name>/`.
+11. Move staging directory to `<root>/packages/local/local/<name>/`.
 12. Store `source_path` in `mip.json` (for `mip update`).
 13. Mark as directly installed.
 
@@ -304,7 +306,7 @@ This is the default when installing from a local directory without `-e`/`--edita
 
 1. Read `mip.yaml` from the source directory.
 2. Match build and compute addpaths.
-3. Create a thin wrapper directory at `~/.mip/packages/local/local/<name>/`.
+3. Create a thin wrapper directory at `<root>/packages/local/local/<name>/`.
 4. Generate `load_package.m` with **absolute** paths pointing to the source directory.
 5. Generate `unload_package.m` with absolute paths.
 6. Create `mip.json` with `editable: true` and `source_path`.
@@ -337,13 +339,13 @@ If the package is already installed at `local/local/<name>`, prints a message an
 
 `mip install /path/to/file.mhl` or `mip install https://example.com/package.mhl`:
 
-1. Download or copy the `.mhl` file to a temp directory.
-2. Extract and read `mip.json` to get the package name.
+1. Download or copy the `.mhl` file to a temp directory. When this install is being driven by a channel index entry that includes `mhl_sha256`, the file is verified against that digest (see [§3.6](#36-mhl-archive-integrity)). Direct `.mhl` installs from a path or URL have no digest source, so this check is not performed for them.
+2. Validate the archive for path-traversal safety (see [§3.6](#36-mhl-archive-integrity)), then extract and read `mip.json` to get the package name.
 3. If already installed, skip.
-4. Install any dependencies from the remote repository first.
-5. Move extracted files to `~/.mip/packages/<org>/<channel>/<name>/`.
+4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
+5. Move extracted files to `<root>/packages/<org>/<channel>/<name>/`.
 6. The org/channel is determined by the `--channel` flag (default `mip-org/core`).
-7. Mark as directly installed.
+7. Mark the top-level `.mhl` package as directly installed.
 
 ### 3.4 Installation from a Remote `.zip` URL
 
@@ -372,6 +374,20 @@ Limitation: because the source directory is deleted after install, `mip update` 
 After installation, a hint is printed showing how to load the package:
 - If the package name is unique across all installed packages, the bare name is shown.
 - If the package name exists in multiple channels, the FQN is shown.
+
+### 3.6 `.mhl` Archive Integrity
+
+Every `.mhl` downloaded from a channel is checked in two ways before extraction:
+
+**SHA-256 digest verification.** Channel index entries may include an `mhl_sha256` hex digest. When present, the downloaded (or locally copied) file's SHA-256 is compared against the index value (case-insensitive). On mismatch, the file is deleted and `mip:digestMismatch` is raised. If the index entry has no digest (e.g. legacy releases) or the MATLAB JVM is unavailable (e.g. `numbl_wasm`), verification is silently skipped -- the absence of a digest is not itself an error. Digest verification is performed by both `mip install` and `mip update` when they download `.mhl` files from a channel. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so no verification is performed in those cases.
+
+**Path-traversal validation.** Before `unzip` is ever called, the `.mhl` archive is parsed in pure MATLAB (central directory + each local file header) and every entry name is validated. Any of the following rejects the archive with `mip:pathTraversal`:
+
+- an entry name containing an absolute path, a Windows drive letter, a null byte, or a `..` component that resolves outside the extraction root (benign in-tree `..` such as `foo/../bar` is allowed);
+- a disagreement between the central directory name and the local file header name for the same entry (spec violation, likely malicious);
+- a symlink entry whose target, resolved relative to the link's own directory, escapes the extraction root; or a symlink with a compressed payload (rejected as a safe fallback).
+
+Validation happens *before* extraction so that a malicious entry can never write to disk in the first place.
 
 ---
 
@@ -580,10 +596,12 @@ If the packages directory is missing when self-uninstall is invoked, the flow ra
 
 `mip update X Y Z` updates only the named packages. Existing dependencies are **not** updated (unless `--deps` is specified). After replacing each package with the latest version from its channel, any missing dependencies that the updated packages require are installed and any orphaned packages (old dependencies no longer needed by any directly installed package) are pruned. Packages that do **not** need updating are left entirely alone unless `--force` is specified.
 
+Packages can be **pinned** to protect them from `mip update --all`; see [§7.11](#711-pinned-packages).
+
 ### 7.1 Update Flow (`mip update X Y Z`)
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
-2. If `--all` is specified, expand the argument list to all installed packages. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
+2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` bypasses the pin filter and auto-unpins each forced package after a successful update (see [§7.11](#711-pinned-packages)). If every installed package is pinned and `--force` is not set, a message is printed and `mip update --all` returns without error. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
 3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
@@ -659,7 +677,30 @@ To update a dependency, name it explicitly (`mip update dep`) or use `--deps` to
 
 The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 
-### 7.8 Build Matching (`match_build`)
+### 7.11 Pinned Packages
+
+A package can be **pinned** to protect it from sweeping updates. Pin state is stored persistently in `<root>/packages/pinned.txt` (one FQN per line) -- it survives MATLAB restarts and is separate from the loaded/sticky/directly-installed state.
+
+#### 7.11.1 `mip pin <package> [...]`
+
+Pins one or more installed packages. Each argument is resolved to an FQN against installed packages; not-installed arguments raise `mip:pin:notInstalled`. Already-pinned packages print a "already pinned" message and are otherwise a no-op. At least one argument is required (raises `mip:pin:noPackage`). Accepts both bare names and FQNs.
+
+#### 7.11.2 `mip unpin <package> [...]`
+
+Removes a pin. Each argument is resolved against installed packages; not-installed arguments raise `mip:unpin:notInstalled`. Arguments that are installed but not pinned print a "not pinned" message and are otherwise a no-op. At least one argument is required (raises `mip:unpin:noPackage`).
+
+#### 7.11.3 Pin Behavior
+
+- **`mip update --all`**: pinned packages are dropped from the batch with a "Skipping pinned package" message. If every package is pinned, the command prints a message and returns. See [§7.1](#71-update-flow-mip-update-x-y-z).
+- **`mip update --all --force`**: pinned packages *are* updated, and each is **automatically unpinned** after a successful update. A follow-up "Unpinned" message is printed.
+- **`mip update <name>`** (explicit name, no `--force`): the pin is **not** honored -- naming a package explicitly updates it. This is intentional; pinning protects against sweeps, not against deliberate updates.
+- **`mip update <name> --force`**: the named package is forced and then auto-unpinned (same mechanism as `--all --force`).
+- **`mip uninstall <name>`**: the pin for `<name>` is cleared automatically so a reinstall starts unpinned.
+- **`mip list`**: pinned packages display a `[pinned]` marker alongside any other markers (`[sticky]`, `[editable]`, etc.).
+
+The `mip-org/core/mip` identity is not special-cased: it can be pinned and unpinned like any other package, but note that `mip update mip` runs the self-update flow ([§7.7](#77-self-update-mip-update-mip)) which does not consult the pin list.
+
+### 7.12 Build Matching (`match_build`)
 
 When installing or compiling a package, MIP selects a build entry from the `builds` array in `mip.yaml` using a two-pass scan:
 
@@ -700,7 +741,7 @@ This guarantees an exact architecture match is always preferred over `any`, rega
 
 ### 9.1 `mip list`
 
-Lists all installed packages. Default sort is by reverse load order (most recently loaded first). `--sort-by-name` sorts alphabetically.
+Lists all installed packages. Default sort is by reverse load order (most recently loaded first). `--sort-by-name` sorts alphabetically. Status markers shown per package: `[sticky]` ([§4.2](#42-the---sticky-flag)), `[pinned]` ([§7.11](#711-pinned-packages)), and `[editable: <source>]` ([§3.2.2](#322-editable-install--e----editable)). An asterisk (`*`) marks directly loaded packages.
 
 ### 9.2 `mip info <package>`
 
@@ -747,11 +788,34 @@ Builds a `.mhl` archive from a local package directory containing `mip.yaml`. Op
 - `--output <dir>` -- output directory (default: current directory)
 - `--arch <arch>` -- override architecture (default: auto-detect)
 
-Output filename: `<name>-<version>-<architecture>.mhl`. See [§11.3](#113-mhl-file-format) for the archive format.
+Output filename: `<name>-<version>-<architecture>.mhl`. Because `-` is the field separator in this scheme, any `-` in the canonical package name is encoded as `_` in the filename only (e.g. `foo-bar` version `1.0` on `linux_x86_64` becomes `foo_bar-1.0-linux_x86_64.mhl`). The canonical name is preserved verbatim inside the bundled `mip.json`, and name normalization ([§1.8](#18-name-equivalence)) treats `-` and `_` as equivalent, so this encoding is transparent at install time. See [§11.3](#113-mhl-file-format) for the archive format.
 
 ### 9.9 `mip test <package>`
 
 Loads the package (if not already loaded) and runs its `test_script` (defined in `mip.yaml`). If no test script is defined, prints a message and returns.
+
+### 9.10 `mip init`
+
+Scaffolds a new mip package by generating a `mip.yaml` in a target directory.
+
+```
+mip init [<path>] [--name <packagename>] [--repository <url>]
+```
+
+- **`<path>`** (optional positional) -- directory to initialize. Defaults to the current directory (`.`) when omitted. Must already exist; otherwise raises `mip:init:notADirectory`.
+- **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the target directory's basename. Names must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` (letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override.
+- **`--repository <url>`** (optional) -- fills in the generated `mip.yaml`'s `repository` field. Omit to leave it blank.
+
+Behavior:
+
+1. If the target directory already contains a `mip.yaml`, `mip init` prints a message and exits without modifying anything.
+2. `addpaths` is auto-populated by walking the directory and identifying folders that contain runtime MATLAB code. The walk happens **before** the placeholder test script is created, so the root is not auto-included just because of that new file.
+3. A blank `test_<name>.m` is created at the target root (unless one already exists), and the generated `mip.yaml`'s `test_script` field points at it.
+4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. `version` defaults to `"unknown"`. A single `builds: [{ architectures: [any] }]` entry is emitted.
+
+`mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)).
+
+Error identifiers: `mip:init:notADirectory`, `mip:init:invalidName`, `mip:init:missingNameValue`, `mip:init:missingRepositoryValue`, `mip:init:unexpectedArg`, `mip:init:writeFailed`.
 
 ---
 
@@ -771,7 +835,8 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 
 | File | Contents | Purpose |
 |---|---|---|
-| `~/.mip/packages/directly_installed.txt` | One FQN per line | Tracks which packages were directly installed (vs. installed as dependencies). Used for pruning. |
+| `<root>/packages/directly_installed.txt` | One FQN per line | Tracks which packages were directly installed (vs. installed as dependencies). Used for pruning. |
+| `<root>/packages/pinned.txt` | One FQN per line | Tracks which packages are pinned against `mip update --all`. See [§7.11](#711-pinned-packages). |
 
 ### 10.3 Key-Value Storage Operations
 
@@ -788,6 +853,14 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 - `get_directly_installed()`: Returns current list.
 
 This tracking is critical for dependency pruning: only directly installed packages are "roots" in the dependency graph. Packages installed only as dependencies can be pruned when no root needs them.
+
+Writes to `directly_installed.txt` are performed atomically: the new contents are written to `directly_installed.txt.tmp` and then moved into place via `movefile`. If the temp write fails, the existing `directly_installed.txt` is left untouched and the temp file is deleted. A stale `.tmp` from a previous crashed write is overwritten on the next write, not appended to.
+
+### 10.5 Pinned Packages Tracking
+
+Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. The file is sorted on every write and created on first pin. See [§7.11](#711-pinned-packages) for the behavioral effect of pinning.
+
+- `add_pinned(fqn)`, `remove_pinned(fqn)`, `is_pinned(fqn)`, `get_pinned()`, `set_pinned(list)`.
 
 ---
 
@@ -963,12 +1036,24 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
+| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest |
+| `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
 | `mip:update:notInstalled` | Package not installed |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
 | `mip:compile:notInstalled` | Package not installed |
 | `mip:compile:noCompileScript` | Package has no `compile_script` |
 | `mip:uninstall:noPackage` | No package specified for uninstall |
 | `mip:uninstall:corrupted` | Self-uninstall invoked but packages directory is missing |
+| `mip:pin:noPackage` | No package specified for `mip pin` |
+| `mip:pin:notInstalled` | Package named in `mip pin` is not installed |
+| `mip:unpin:noPackage` | No package specified for `mip unpin` |
+| `mip:unpin:notInstalled` | Package named in `mip unpin` is not installed |
+| `mip:init:notADirectory` | `mip init` target path does not exist or is not a directory |
+| `mip:init:invalidName` | Package name for `mip init` contains invalid characters |
+| `mip:init:missingNameValue` | `mip init --name` given without a value |
+| `mip:init:missingRepositoryValue` | `mip init --repository` given without a value |
+| `mip:init:unexpectedArg` | `mip init` received an unrecognized argument |
+| `mip:init:writeFailed` | `mip init` could not write the generated `mip.yaml` or test script |
 
 ---
 
@@ -978,7 +1063,7 @@ This section collects unresolved design questions and untested behaviors. Items 
 
 ### 14.4 No Lock File
 
-There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk (`~/.mip/packages/` and `directly_installed.txt`) is the only record, so installs are not reproducible across machines or over time. Lock file support is **not planned for the first release**.
+There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk (`<root>/packages/` and `directly_installed.txt`) is the only record, so installs are not reproducible across machines or over time. Lock file support is **not planned for the first release**.
 
 ### 14.5 Ambiguous Unload Uses Load Order
 
@@ -992,7 +1077,7 @@ When multiple loaded packages share a bare name, `mip unload <bare>` unloads the
 
 ### 14.7 Concurrent MATLAB Sessions
 
-Running multiple MATLAB sessions that share the same `~/.mip` directory is **not supported**. In-memory state (`setappdata`) is per-session, while file state (`directly_installed.txt`, installed packages on disk) is shared with no file locking. Concurrent `mip install`/`mip uninstall` operations can race on `directly_installed.txt` (read-modify-write without locking) and one session's `mip uninstall` can remove packages another session has loaded. Users should avoid running `mip` commands that modify state from multiple sessions simultaneously.
+Running multiple MATLAB sessions that share the same mip root directory is **not supported**. In-memory state (`setappdata`) is per-session, while file state (`directly_installed.txt`, installed packages on disk) is shared with no file locking. Concurrent `mip install`/`mip uninstall` operations can race on `directly_installed.txt` (read-modify-write without locking) and one session's `mip uninstall` can remove packages another session has loaded. Users should avoid running `mip` commands that modify state from multiple sessions simultaneously.
 
 ### 14.8 Missing Test Coverage
 
