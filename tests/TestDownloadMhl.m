@@ -39,20 +39,19 @@ classdef TestDownloadMhl < matlab.unittest.TestCase
             testCase.verifyTrue(exist(localPath, 'file') > 0);
         end
 
-        function testMismatchedDigest_ErrorsAndDeletes(testCase)
-            % Tamper-detection path: a wrong digest must raise
-            % mip:digestMismatch AND scrub the local copy, so a poisoned
-            % archive can't be picked up by a later caller.
+        function testMismatchedDigest_SkipsVerification(testCase)
+            % SHA-256 verification is currently disabled (see
+            % mip-org/mip#201) because channel publishing isn't atomic
+            % and the index/asset can briefly disagree. A wrong digest
+            % must therefore NOT error — the download succeeds and the
+            % file is kept. Re-flip to verifyError('mip:digestMismatch')
+            % once publishing is made atomic.
             actualSha = mip.channel.sha256(testCase.SrcFile);
             testCase.assumeNotEmpty(actualSha, 'JVM unavailable — skipping');
             wrongSha = repmat('0', 1, 64);
-            testCase.verifyError( ...
-                @() mip.channel.download_mhl( ...
-                    testCase.SrcFile, testCase.DestDir, wrongSha), ...
-                'mip:digestMismatch');
-            expectedLocal = fullfile(testCase.DestDir, 'pkg.mhl');
-            testCase.verifyFalse(exist(expectedLocal, 'file') > 0, ...
-                'Local copy should be deleted on digest mismatch');
+            localPath = mip.channel.download_mhl( ...
+                testCase.SrcFile, testCase.DestDir, wrongSha);
+            testCase.verifyTrue(exist(localPath, 'file') > 0);
         end
 
         function testEmptyDigest_SkipsVerification(testCase)

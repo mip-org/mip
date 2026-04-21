@@ -71,21 +71,27 @@ else
     end
 end
 
-if ~isempty(expectedSha256)
-    actual = mip.channel.sha256(localPath);
-    if isempty(actual)
-        % JVM unavailable (e.g. numbl) — skip verification.
-        return
-    end
-    if ~strcmpi(actual, expectedSha256)
-        if exist(localPath, 'file')
-            delete(localPath);
-        end
-        error('mip:digestMismatch', ...
-              ['SHA-256 mismatch for %s\n' ...
-               '  expected: %s\n' ...
-               '  actual:   %s'], source, expectedSha256, actual);
-    end
-end
+% SHA-256 verification disabled — see mip-org/mip#201.
+% Channel publishing is not atomic: the .mhl asset is uploaded before the
+% index.json is redeployed, so clients fetching during the window get an
+% old digest with a new archive and trip mip:digestMismatch. Re-enable
+% once channel publishing is made atomic (content-addressed asset names
+% or staging→promote).
+% if ~isempty(expectedSha256)
+%     actual = mip.channel.sha256(localPath);
+%     if isempty(actual)
+%         % JVM unavailable (e.g. numbl) — skip verification.
+%         return
+%     end
+%     if ~strcmpi(actual, expectedSha256)
+%         if exist(localPath, 'file')
+%             delete(localPath);
+%         end
+%         error('mip:digestMismatch', ...
+%               ['SHA-256 mismatch for %s\n' ...
+%                '  expected: %s\n' ...
+%                '  actual:   %s'], source, expectedSha256, actual);
+%     end
+% end
 
 end
