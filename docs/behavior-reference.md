@@ -269,7 +269,7 @@ If any package in step 1 fails (download error, extraction failure, etc.), the i
 
 If a package is already installed, `mip install` prints a message and skips it. It does **not** error. It does **not** reinstall or upgrade. Use `mip update` for that.
 
-**Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` silently replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package). The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place.
+**Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package) and prints `Replacing "<name>" <old> with requested version <new>...`. The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place.
 
 #### 3.1.8 Multiple Packages
 
@@ -280,7 +280,7 @@ If a package is already installed, `mip install` prints a message and skips it. 
 An argument is treated as a local install only when it begins with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (see [§3.0](#30-argument-categorization)). Examples: `./mypkg`, `../mypkg`, `.`, `~/proj/mypkg`, `/abs/path/mypkg`, `C:\path\mypkg`, `D:/path/mypkg`. The path must point to an existing directory:
 
 - If the path is not a directory, raises `mip:install:notADirectory`.
-- If the directory does not contain `mip.yaml`, mip prompts the user (`Auto-generate mip.yaml? (y/n):`) to auto-generate one via `mip init`. On `y`/`yes`, init runs and the install continues. Otherwise, raises `mip:install:abortedNoMipYaml` and no install work is done. The `MIP_CONFIRM` environment variable overrides the prompt (`y` to auto-confirm, anything else to decline) for non-interactive use. This applies to both editable and non-editable local installs.
+- If the directory does not contain `mip.yaml`, mip prompts the user (`Auto-generate mip.yaml? (y/n):`) to auto-generate one via `mip init`. On `y`/`yes` (case-insensitive), init runs and the install continues. Otherwise, raises `mip:install:abortedNoMipYaml` and no install work is done. The `MIP_CONFIRM` environment variable overrides the prompt for non-interactive use: a value of `y` or `yes` (case-insensitive) auto-confirms; any other non-empty value declines. An unset or empty `MIP_CONFIRM` is ignored and the interactive prompt runs as usual. This applies to both editable and non-editable local installs.
 
 Bare names without a path prefix are **never** dispatched to local install, even if a directory of the same name exists in the current folder ([§3.0](#30-argument-categorization), [#107](https://github.com/mip-org/mip/issues/107)).
 
@@ -293,26 +293,22 @@ This is the default when installing from a local directory without `-e`/`--edita
 3. Copy source into a staging directory under `<name>/`.
 4. Remove `.git` directory if present.
 5. Strip pre-existing MEX binaries.
-6. Compute addpaths from `mip.yaml`.
-7. Generate `load_package.m` with **relative** paths (using `pkg_dir` computed at load time).
-8. Generate `unload_package.m`.
-9. Run compile script if specified.
-10. Create `mip.json` with metadata.
-11. Move staging directory to `<root>/packages/local/local/<name>/`.
-12. Store `source_path` in `mip.json` (for `mip update`).
-13. Mark as directly installed.
+6. Compute addpaths from `mip.yaml` relative to the source subdir.
+7. Run compile script if specified.
+8. Create `mip.json` with metadata, including the `paths` field (list of addpath entries, relative to the package source subdir). `mip.load` resolves these against the installed package dir at load time.
+9. Move staging directory to `<root>/packages/local/local/<name>/`.
+10. Store `source_path` in `mip.json` (for `mip update`).
+11. Mark as directly installed.
 
 #### 3.2.2 Editable Install (`-e` / `--editable`)
 
 1. Read `mip.yaml` from the source directory.
-2. Match build and compute addpaths.
+2. Match build and compute addpaths relative to the source directory.
 3. Create a thin wrapper directory at `<root>/packages/local/local/<name>/`.
-4. Generate `load_package.m` with **absolute** paths pointing to the source directory.
-5. Generate `unload_package.m` with absolute paths.
-6. Create `mip.json` with `editable: true` and `source_path`.
-7. Store `compile_script` in `mip.json` if present.
-8. **Compile by default** (unless `--no-compile`).
-9. Mark as directly installed.
+4. Create `mip.json` with `editable: true`, `source_path`, and the `paths` field (addpath entries relative to the source dir). `mip.load` resolves these against `source_path` at load time.
+5. Store `compile_script` and `test_script` in `mip.json` if present.
+6. If a `compile_script` is defined, **compile by default** (unless `--no-compile`). Packages with no `compile_script` skip this step silently.
+7. Mark as directly installed.
 
 Source file changes are reflected immediately without reinstalling.
 
@@ -339,7 +335,7 @@ If the package is already installed at `local/local/<name>`, prints a message an
 
 `mip install /path/to/file.mhl` or `mip install https://example.com/package.mhl`:
 
-1. Download or copy the `.mhl` file to a temp directory. When this install is being driven by a channel index entry that includes `mhl_sha256`, the file is verified against that digest (see [§3.6](#36-mhl-archive-integrity)). Direct `.mhl` installs from a path or URL have no digest source, so this check is not performed for them.
+1. Download or copy the `.mhl` file to a temp directory. Direct `.mhl` installs from a path or URL have no digest source, so SHA-256 verification is not performed (see [§3.6](#36-mhl-archive-integrity)).
 2. Validate the archive for path-traversal safety (see [§3.6](#36-mhl-archive-integrity)), then extract and read `mip.json` to get the package name.
 3. If already installed, skip.
 4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
@@ -404,7 +400,7 @@ Validation happens *before* extraction so that a malicious entry can never write
    - If `--sticky` is specified, add to sticky packages.
    - Return early.
 6. Read `mip.json` and load dependencies first (recursively, as non-direct loads).
-7. Execute `load_package.m` in the package directory (changes `pwd` temporarily). If it errors, raise `mip:loadError` and stop -- the package is **not** marked as loaded (see [§4.7](#47-load_packagem-execution)).
+7. Execute `load_package.m` in the package directory (changes `pwd` temporarily). If it errors, raise `mip:loadError` and stop -- the package is **not** marked as loaded (see [§4.8](#48-load_packagem-execution)).
 8. Add to `MIP_LOADED_PACKAGES`.
 9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES`.
 10. If `--sticky`, add to `MIP_STICKY_PACKAGES`.
@@ -454,7 +450,7 @@ Constraints:
 - Only valid with a single positional package argument. With multiple packages, raises `mip:load:addpathSinglePackage`.
 - Applied **only** to the directly-named package, not to transitively-loaded dependencies.
 - Applied even when the package is already loaded (lets the user adjust path entries on an existing load without unload+reload).
-- `--addpath` still calls `addpath` if the target directory does not exist; MATLAB emits its native `MATLAB:mpath:nameNonexistentOrNotADirectory` warning.
+- `--addpath` still calls `addpath` if the target directory does not exist; MATLAB emits its native `MATLAB:addpath:DirNotFound` warning.
 - `--rmpath` does not error if the target is not currently on the path (matches MATLAB's `rmpath` behavior, which emits `MATLAB:rmpath:DirNotFound`).
 - `--addpath` / `--rmpath` are **transient**: they are applied at this load and not persisted. A subsequent `mip load` (or reload after `mip update`) without the flags will not re-apply them.
 - The relative path is **not sandboxed**: `fullfile(srcDir, relpath)` is passed to `addpath` / `rmpath` as-is, so `..` segments escape `srcDir`. Entries outside `srcDir` will also not be caught by the unload sweep (§5.8), so the user is responsible for cleaning them up.
@@ -530,13 +526,18 @@ If two directly-loaded packages share a dependency:
 
 ### 5.8 `unload_package.m` Execution
 
-Executed by `cd`-ing to the package directory and calling `run(unloadFile)`. If the file doesn't exist, a warning is issued (`mip:unloadNotFound`) but the package is still removed from tracking.
+Unload proceeds in two stages:
 
-**Defensive path sweep**: after `unload_package.m` returns (and regardless of whether it existed), mip walks the current MATLAB path and `rmpath`s every entry that equals `srcDir` or starts with `srcDir<filesep>`. The `srcDir` is resolved via [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the same base used for `mip load --addpath`/`--rmpath`. The sweep handles three cases:
+1. **Declarative unload via `mip.json` `paths`**: if `mip.json` contains a `paths` field (the modern layout — see [§3.2.1](#321-non-editable-copy-install), [§3.2.2](#322-editable-install--e----editable)), each entry is `rmpath`'d against `srcDir`. MATLAB's `MATLAB:rmpath:DirNotFound` warning is suppressed during this pass.
+2. **Legacy `unload_package.m`**: if the file exists, it is executed by `cd`-ing to the package directory and calling `run(unloadFile)`.
 
-- Paths added via `mip load --addpath` (which `unload_package.m` doesn't know about).
+The `mip:unloadNotFound` warning is issued **only when both** the `paths` field and `unload_package.m` are absent — i.e. the package has no authoritative list of path entries to remove. Packages that ship either one (or both) unload cleanly without the warning. Either way, the package is still removed from tracking.
+
+**Defensive path sweep**: after the stages above (regardless of outcome), mip walks the current MATLAB path and `rmpath`s every entry that equals `srcDir` or starts with `srcDir<filesep>`. The `srcDir` is resolved via [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the same base used for `mip load --addpath`/`--rmpath`. The sweep handles three cases:
+
+- Paths added via `mip load --addpath` (which neither the `paths` field nor `unload_package.m` knows about).
 - Paths added by `load_package.m` that the matching `unload_package.m` failed to remove (e.g. user-edited scripts that drift out of sync).
-- Packages with no `unload_package.m` at all — the `mip:unloadNotFound` warning still fires, but the path is at least swept clean.
+- Packages with no `paths` field and no `unload_package.m` at all — the `mip:unloadNotFound` warning fires, but the path is at least swept clean.
 
 Each swept entry is reported (`swept residual path entry for "<fqn>": <path>`). Because the sweep matches only entries beginning with `srcDir<filesep>` (or exactly equal to `srcDir`), a sibling directory whose name happens to share a prefix is never touched.
 
@@ -557,8 +558,9 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
 3. Unload any packages that are currently loaded.
 4. Remove each package directory (`rmdir`).
 5. Remove from `directly_installed.txt`.
-6. Clean up empty parent directories (channel dir, then org dir).
-7. **Prune** packages that are no longer needed.
+6. Clear the pin entry for the package, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
+7. Clean up empty parent directories (channel dir, then org dir).
+8. **Prune** packages that are no longer needed.
 
 ### 6.2 Dependency Pruning After Uninstall
 
@@ -651,7 +653,7 @@ Special flow for `mip-org/core/mip`:
 1. Fetch the latest from the `mip-org/core` channel.
 2. Download the new `.mhl`, extract to staging.
 3. Replace the installed package in-place.
-4. Re-run `load_package.m` to reload.
+4. Reload: `addpath` each entry from the new `mip.json` `paths` field (resolved against the new package dir), then `run` `load_package.m` if present.
 
 Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
 
@@ -675,7 +677,12 @@ To update a dependency, name it explicitly (`mip update dep`) or use `--deps` to
 
 ### 7.10 Directly Installed Tracking
 
-The `directly_installed.txt` entry for each updated package is preserved across the update (the entry is never removed). Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
+Each updated package remains directly installed after the update. The mechanism differs by install type:
+
+- **Remote packages** preserve the `directly_installed.txt` entry in place — the entry is never removed.
+- **Local packages** go through `remove_directly_installed` + `install_local` (see [§7.1](#71-update-flow-mip-update-x-y-z) step 7); `install_local` re-adds the entry, so the net effect is the same but there is a brief window during the update where the entry is absent.
+
+Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 
 ### 7.11 Pinned Packages
 
@@ -788,7 +795,7 @@ Builds a `.mhl` archive from a local package directory containing `mip.yaml`. Op
 - `--output <dir>` -- output directory (default: current directory)
 - `--arch <arch>` -- override architecture (default: auto-detect)
 
-Output filename: `<name>-<version>-<architecture>.mhl`. Because `-` is the field separator in this scheme, any `-` in the canonical package name is encoded as `_` in the filename only (e.g. `foo-bar` version `1.0` on `linux_x86_64` becomes `foo_bar-1.0-linux_x86_64.mhl`). The canonical name is preserved verbatim inside the bundled `mip.json`, and name normalization ([§1.8](#18-name-equivalence)) treats `-` and `_` as equivalent, so this encoding is transparent at install time. See [§11.3](#113-mhl-file-format) for the archive format.
+Output filename: `<name>-<version>-<architecture>.mhl`. Because `-` is the field separator in this scheme, any `-` in the canonical package name is encoded as `_` in the filename only (e.g. `foo-bar` version `1.0` on `linux_x86_64` becomes `foo_bar-1.0-linux_x86_64.mhl`). The canonical name is preserved verbatim inside the bundled `mip.json`, and name normalization ([§1.8](#18-name-equivalence)) treats `-` and `_` as equivalent, so this encoding is transparent at install time. The **version** string, by contrast, is written verbatim; versions containing `-` (e.g. `1.0-beta`) are not encoded and will produce an ambiguous-looking filename. Nothing in mip currently parses the filename back out (installs read `mip.json` for the canonical metadata), so the ambiguity is cosmetic, but package authors should prefer dot-separated versions. See [§11.3](#113-mhl-file-format) for the archive format.
 
 ### 9.9 `mip test <package>`
 
@@ -911,17 +918,21 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
   "description": "...",
   "architecture": "linux_x86_64",
   "dependencies": ["dep1", "org/chan/dep2"],   // bare or FQN names only; no @version or constraints
+  "paths": ["src", "lib"],                     // addpath entries, relative to srcDir (see §4.8)
   "editable": false,
   "source_path": "/path/to/source",
   "compile_script": "do_compile.m",
   "test_script": "run_tests.m",
   "commit_hash": "abc123...",
   "source_hash": "def456...",
+  "install_type": "local",
   "timestamp": "2026-04-06T12:00:00"
 }
 ```
 
 Required: `name`. All other fields have defaults or are optional.
+
+The `paths` field is the authoritative list of directories that `mip load` adds to the MATLAB path. Each entry is interpreted relative to `srcDir` (see [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m)): the installed package's source subdir for copy installs, or `source_path` for editable installs. Entries are `rmpath`'d in matching fashion by `mip unload` (see [§5.8](#58-unload_packagem-execution)). Legacy `load_package.m` / `unload_package.m` scripts, if present, are still honored for back-compat but are not generated by modern installs.
 
 ### 11.2 `mip.yaml` Schema
 
@@ -946,12 +957,12 @@ builds:                         # Optional
 
 A ZIP archive containing:
 ```
-load_package.m
-unload_package.m
 mip.json
 <package_name>/
   [source files]
 ```
+
+Legacy `.mhl` archives may additionally contain `load_package.m` and/or `unload_package.m` at the top level; these are still honored for back-compat (see [§4.8](#48-load_packagem-execution) and [§5.8](#58-unload_packagem-execution)) but are not produced by `mip bundle`.
 
 ### 11.4 Empty Directory Cleanup
 
@@ -963,7 +974,7 @@ After removing a package, empty channel and org directories are cleaned up:
 
 The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.root()`](../+mip/root.m) according to these rules:
 
-- **Unset**: `mip.root()` falls back to path-based detection (navigating up from the installed `+mip/root.m` location).
+- **Unset**: `mip.root()` first tries path-based detection (navigating up from the installed `+mip/root.m` location, assuming `<root>/packages/mip-org/core/mip/mip/+mip/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
 - **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
@@ -996,7 +1007,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<org>/<chan
 | MATLAB Numerics macOS x86_64 | `numbl_macos_x86_64` |
 | MATLAB Numerics WASM/Browser | `numbl_wasm` |
 
-The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platforms.
+`mip.arch()` itself only performs **detection** and always returns the exact platform tag (e.g. `numbl_linux_x86_64`). The `numbl_wasm` tag serves as a cross-`numbl_*` fallback during **variant selection** (see [§3.1.4](#314-architecture-selection-select_best_variant)), not at detection time.
 
 ---
 
@@ -1054,6 +1065,58 @@ The `numbl_wasm` tag serves as a fallback architecture for all `numbl_*` platfor
 | `mip:init:missingRepositoryValue` | `mip init --repository` given without a value |
 | `mip:init:unexpectedArg` | `mip init` received an unrecognized argument |
 | `mip:init:writeFailed` | `mip init` could not write the generated `mip.yaml` or test script |
+| `mip:noPackage` | Generic "no package specified" from CLI dispatch (command-specific variants are preferred) |
+| `mip:noDirectory` | No directory specified where one was required |
+| `mip:unknownCommand` | `mip <cmd>` where `<cmd>` is not a recognized subcommand |
+| `mip:notAFileOrDirectory` | A path argument resolves to neither a file nor a directory |
+| `mip:invalidPackageFormat` | Package argument has a structurally invalid format (distinct from §2.1 spec violations) |
+| `mip:rootNotFound` | `MIP_ROOT` unset and both path-based detection and the `<userpath>/mip` fallback lack a `packages/` subdir (see [§11.5](#115-mip_root-environment-variable)) |
+| `mip:indexFetchFailed` | Channel index could not be fetched (network failure or non-2xx) |
+| `mip:availFailed` | `mip avail` failed to fetch the channel index |
+| `mip:downloadFailed` | Download of a file (e.g. `.mhl`) failed |
+| `mip:fileNotFound` | A required file does not exist |
+| `mip:fileError` | Generic file I/O failure (open/read/write) |
+| `mip:copyFailed` | `copyfile` operation failed |
+| `mip:noBuild` | `mip.yaml` has no `builds` entries |
+| `mip:noMatchingBuild` | No `builds` entry matches the current architecture (and no `any` fallback) |
+| `mip:mhlNotFound` | `.mhl` archive is missing where expected |
+| `mip:extractFailed` | `.mhl` or `.zip` extraction failed |
+| `mip:invalidPackage` | Extracted archive is not a well-formed mip package |
+| `mip:invalidMipJson` | `mip.json` has an invalid structure |
+| `mip:jsonParseFailed` | `mip.json` could not be parsed as JSON |
+| `mip:yamlParseFailed` | `mip.yaml` could not be parsed (see `mip:parse_yaml:*` for the low-level cause) |
+| `mip:parse_yaml:*` | Low-level YAML parser errors: `type`, `trailing`, `unterminatedString`, `noProgress`, `expectColon`, `expectKey`, `keyNewline`, `unterminatedFlow`, `flowSeparator`, `badEscape` |
+| `mip:name:invalidInput` | Input passed to `mip.name.normalize` / `mip.name.match` is not a valid string |
+| `mip:version:noMipYaml` | `mip version` cannot locate `mip.yaml` in the package root |
+| `mip:install:invalidPackageSpec` | Install argument has 2 or 4+ slash-separated parts (see [§3.0](#30-argument-categorization)) |
+| `mip:install:notADirectory` | Local install target exists but is not a directory |
+| `mip:update:noPackage` | `mip update` called with no arguments and no `--all` |
+| `mip:update:allWithPackages` | `mip update --all foo` — `--all` cannot be combined with explicit package names |
+| `mip:update:noCompileRequiresEditable` | `mip update --no-compile` used with a package that is not an editable local install |
+| `mip:update:unavailable` | Updated package has no build available for the current architecture |
+| `mip:update:notInIndex` | Updated package is not present in its channel index |
+| `mip:compile:noPackage` | `mip compile` called with no package argument |
+| `mip:compile:sourceMissing` | Compile target's source directory does not exist |
+| `mip:compileScriptNotFound` | The configured `compile_script` file is missing on disk |
+| `mip:compileFailed` | Compile script threw an error |
+| `mip:uninstallFailed` | Uninstall failed while removing package files |
+| `mip:bundle:noDirectory` | `mip bundle` called with no directory argument |
+| `mip:bundle:noMipYaml` | `mip bundle` target directory has no `mip.yaml` |
+| `mip:bundle:missingOutput` | `mip bundle --output` given without a value |
+| `mip:bundle:missingArch` | `mip bundle --arch` given without a value |
+| `mip:bundle:unexpectedArg` | `mip bundle` received an unrecognized argument |
+| `mip:test:noPackage` | `mip test` called with no package argument |
+| `mip:test:notInstalled` | `mip test` target is not installed |
+| `mip:test:dirMissing` | `mip test` target's source directory does not exist |
+| `mip:test:scriptNotFound` | `mip test` target's configured `test_script` is missing on disk |
+| `mip:test:failed` | Test script threw an error |
+
+The following **warning** identifiers are also issued:
+
+| Warning ID | Trigger |
+|---|---|
+| `mip:unloadNotFound` | `mip unload <pkg>` on a package whose `mip.json` has no `paths` field **and** has no `unload_package.m` (see [§5.8](#58-unload_packagem-execution)) |
+| `mip:brokenDependencies` | After an unload/uninstall, at least one still-loaded or still-installed package has a dependency that is no longer loaded/installed |
 
 ---
 
