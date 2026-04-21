@@ -342,11 +342,24 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     % If a user-requested @version differs from what's installed, replace it
     reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageInfoMap);
 
-    % Determine which packages need installing vs already installed
+    % Determine which packages need installing vs already installed.
+    % Reject equivalent-but-different on-disk names (e.g. user asks for
+    % "some-packagE" while "some_package" is already installed): their
+    % FQNs share a normalized form, so letting both coexist would give
+    % two parallel installs for one logical package.
     toInstallFqns = {};
     for i = 1:length(allPackagesToInstall)
         fqn = allPackagesToInstall{i};
         result = mip.parse.parse_package_arg(fqn);
+        existingName = mip.resolve.installed_dir(result.org, result.channel, result.name);
+        if ~isempty(existingName) && ~strcmp(existingName, result.name)
+            existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
+            error('mip:install:equivalentAlreadyInstalled', ...
+                  ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
+                   'Package names are equivalent when they match after lowercasing and ' ...
+                   'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
+                  fqn, existingFqn, existingFqn);
+        end
         pkgDir = mip.paths.get_package_dir(result.org, result.channel, result.name);
         if exist(pkgDir, 'dir')
             fprintf('Package "%s" is already installed\n', fqn);
@@ -473,6 +486,16 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
         pkgInfo = mip.config.read_package_json(extractDir);
         packageName = pkgInfo.name;
         fqn = mip.parse.make_fqn(org, channelName, packageName);
+
+        existingName = mip.resolve.installed_dir(org, channelName, packageName);
+        if ~isempty(existingName) && ~strcmp(existingName, packageName)
+            existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+            error('mip:install:equivalentAlreadyInstalled', ...
+                  ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
+                   'Package names are equivalent when they match after lowercasing and ' ...
+                   'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
+                  fqn, existingFqn, existingFqn);
+        end
 
         pkgDir = mip.paths.get_package_dir(org, channelName, packageName);
         if exist(pkgDir, 'dir')

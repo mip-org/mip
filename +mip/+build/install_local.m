@@ -28,7 +28,20 @@ org = 'local';
 channelName = 'local';
 fqn = mip.parse.make_fqn(org, channelName, packageName);
 
-% Check if already installed
+% Check if already installed. If an equivalent but differently-cased/
+% separator-punctuated name is on disk, reject rather than silently skip:
+% allowing the install would create a parallel directory for the same
+% logical package.
+existingName = mip.resolve.installed_dir(org, channelName, packageName);
+if ~isempty(existingName) && ~strcmp(existingName, packageName)
+    existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+    error('mip:install:equivalentAlreadyInstalled', ...
+          ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
+           'Package names are equivalent when they match after lowercasing and ' ...
+           'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
+          fqn, existingFqn, existingFqn);
+end
+
 pkgDir = mip.paths.get_package_dir(org, channelName, packageName);
 if exist(pkgDir, 'dir')
     fprintf('Package "%s" is already installed. Uninstall first to reinstall.\n', fqn);
