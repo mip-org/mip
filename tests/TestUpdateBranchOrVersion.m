@@ -42,7 +42,7 @@ classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
             % and report up-to-date — not switch to 0.5.0.
             fqn = 'mip-org/test-channel-bt/alpha';
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'mip-org', 'test-channel-bt', 'alpha');
+                'gh', 'mip-org', 'test-channel-bt', 'alpha');
             writeInstalledPackage(pkgDir, 'alpha', 'main', 'abc123');
             mip.state.add_directly_installed(fqn);
 
@@ -65,7 +65,7 @@ classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
             % Same rule applies to 'unspecified'.
             fqn = 'mip-org/test-channel-bt/beta';
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'mip-org', 'test-channel-bt', 'beta');
+                'gh', 'mip-org', 'test-channel-bt', 'beta');
             writeInstalledPackage(pkgDir, 'beta', 'unspecified', 'abc123');
             mip.state.add_directly_installed(fqn);
 
@@ -88,7 +88,7 @@ classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
             % version explicitly.
             fqn = 'mip-org/test-channel-bt/gamma';
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'mip-org', 'test-channel-bt', 'gamma');
+                'gh', 'mip-org', 'test-channel-bt', 'gamma');
             writeInstalledPackage(pkgDir, 'gamma', 'main', 'abc123');
             mip.state.add_directly_installed(fqn);
 
@@ -109,7 +109,7 @@ classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
             % update should still want to go to 2.0.0.
             fqn = 'mip-org/test-channel-bt/delta';
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'mip-org', 'test-channel-bt', 'delta');
+                'gh', 'mip-org', 'test-channel-bt', 'delta');
             writeInstalledPackage(pkgDir, 'delta', '1.0.0', 'aaa');
             mip.state.add_directly_installed(fqn);
 

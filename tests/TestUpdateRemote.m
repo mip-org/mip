@@ -86,7 +86,7 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             mip.install(fqn);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'mip-org', 'hello', 'hello_mip');
+                'gh', 'mip-org', 'hello', 'hello_mip');
             info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info1.version, 'main');
             realHash = info1.commit_hash;
