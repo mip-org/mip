@@ -230,6 +230,11 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, 'fex/testpkg');
         end
 
+        function testMakeWebFqn(testCase)
+            fqn = mip.parse.make_web_fqn('testpkg');
+            testCase.verifyEqual(fqn, 'web/testpkg');
+        end
+
         function testMakeFqnRoundTrip(testCase)
             fqn = mip.parse.make_fqn('mip-org', 'core', 'chebfun');
             r = mip.parse.parse_package_arg(fqn);
@@ -256,6 +261,11 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
         function testDisplayFqnFexUnchanged(testCase)
             testCase.verifyEqual( ...
                 mip.parse.display_fqn('fex/bar'), 'fex/bar');
+        end
+
+        function testDisplayFqnWebUnchanged(testCase)
+            testCase.verifyEqual( ...
+                mip.parse.display_fqn('web/bar'), 'web/bar');
         end
 
     end

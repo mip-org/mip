@@ -664,7 +664,8 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
     % If the URL is a File Exchange landing page, resolve it to the
     % underlying .zip download URL. The resolved URL (with query string
     % stripped) is what gets baked into the generated mip.yaml.
-    if isFileExchangeUrl(zipUrl)
+    isFex = isFileExchangeUrl(zipUrl);
+    if isFex
         fprintf('Resolving File Exchange URL %s...\n', zipUrl);
         zipUrl = resolveFileExchangeUrl(zipUrl);
         fprintf('Resolved to %s\n', zipUrl);
@@ -710,18 +711,23 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
         fprintf('\n');
     end
 
-    mip.build.install_local(sourceDir, false, noCompile, 'fex');
+    if isFex
+        sourceType = 'fex';
+    else
+        sourceType = 'web';
+    end
+    mip.build.install_local(sourceDir, false, noCompile, sourceType);
 
     % Clear source_path in the installed mip.json. `install_local` records
     % the extracted source dir, but that temp dir is deleted when this
     % function returns, so the stored path would be stale. An empty
     % source_path signals "no source available to reinstall from";
     % `mip update` skips such packages.
-    clearSourcePath(pkgName);
+    clearSourcePath(pkgName, sourceType);
 end
 
-function clearSourcePath(pkgName)
-    mipJsonPath = fullfile(mip.paths.get_package_dir(mip.parse.make_fex_fqn(pkgName)), 'mip.json');
+function clearSourcePath(pkgName, sourceType)
+    mipJsonPath = fullfile(mip.paths.get_package_dir([sourceType '/' pkgName]), 'mip.json');
     if ~isfile(mipJsonPath)
         return
     end

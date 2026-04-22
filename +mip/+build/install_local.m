@@ -3,13 +3,13 @@ function install_local(sourceDir, editable, noCompile, sourceType)
 %
 % Non-channel packages live under a top-level source-type directory
 % (no org/channel). 'local' is used for directory and editable installs;
-% 'fex' is used for File Exchange and --url zip installs.
+% 'fex' for File Exchange installs; 'web' for generic remote .zip installs.
 %
 % Args:
 %   sourceDir  - Path to the directory containing mip.yaml
 %   editable   - If true, create an editable install (no copy)
 %   noCompile  - If true, skip compilation (editable installs only)
-%   sourceType - Source type ('local' or 'fex'). Default: 'local'.
+%   sourceType - Source type ('local', 'fex', or 'web'). Default: 'local'.
 
 if nargin < 2
     editable = false;

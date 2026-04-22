@@ -22,14 +22,15 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
 - **FQN (Fully Qualified Name)**: variable-length, source-type prefixed.
   - GitHub channel packages: `gh/<org>/<channel>/<package>` (e.g., `gh/mip-org/core/chebfun`)
   - Local directory / editable installs: `local/<package>`
-  - File Exchange / --url zip installs: `fex/<package>`
-- **Display form**: strips the `gh/` prefix only (`mip-org/core/chebfun`, `local/foo`, `fex/bar`). See `mip.parse.display_fqn`.
+  - File Exchange installs: `fex/<package>`
+  - Generic remote .zip installs: `web/<package>`
+- **Display form**: strips the `gh/` prefix only (`mip-org/core/chebfun`, `local/foo`, `fex/bar`, `web/baz`). See `mip.parse.display_fqn`.
 - **User input**: `gh/` is optional. The parser accepts bare names, `category/name` (non-gh), `org/channel/name` (implicit gh), and `gh/org/channel/name` (explicit).
 - **Bare name**: Just `package` — resolved via priority: `gh/mip-org/core` first, then alphabetical
 - **Channels**: Package repositories hosted on GitHub Pages (e.g., `mip-org/mip-core`). Channel identifiers remain 2-part `org/channel` — `gh/` is a source-type prefix in FQNs, not part of the channel.
 - **Packages installed at**:
   - `<root>/packages/gh/<org>/<channel>/<package>/` (gh)
-  - `<root>/packages/local/<package>/` or `<root>/packages/fex/<package>/` (non-gh)
+  - `<root>/packages/local/<package>/`, `<root>/packages/fex/<package>/`, or `<root>/packages/web/<package>/` (non-gh)
 - **Editable installs**: Thin wrapper at `local/<pkg>/` pointing to source directory
 - **Persistent state**: Uses `setappdata(0, key, value)` for loaded/sticky/directly-loaded package tracking; `directly_installed.txt` for install tracking
 
