@@ -351,7 +351,29 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
             displayFqn, installedVersion, channelStr);
 
     index = mip.channel.fetch_index(channelStr);
-    [packageInfoMap, unavailablePackages] = mip.resolve.build_package_info_map(index, p.org, p.channel);
+
+    % If the installed version is non-numeric (e.g. 'main', 'master',
+    % 'unspecified'), pin the update lookup to that branch or version.
+    % Otherwise the default select_best_version would silently switch to
+    % a higher-ranked numeric release the first time one appears in the
+    % channel. Switching to a different branch or version requires an
+    % explicit `mip install X@...`.
+    requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    if ~isempty(installedVersion) && ~mip.resolve.is_numeric_version(installedVersion)
+        requestedVersions(p.name) = installedVersion;
+    end
+    try
+        [packageInfoMap, unavailablePackages] = mip.resolve.build_package_info_map( ...
+            index, p.org, p.channel, requestedVersions);
+    catch err
+        if strcmp(err.identifier, 'mip:versionNotFound')
+            error('mip:update:versionNotInChannel', ...
+                  ['Installed version "%s" of "%s" no longer exists in channel "%s". ' ...
+                   'To switch to a different branch or version, run: mip install %s@<version>'], ...
+                  installedVersion, fqn, channelStr, fqn);
+        end
+        rethrow(err);
+    end
 
     currentArch = mip.arch();
     if ~packageInfoMap.isKey(fqn)
@@ -523,7 +545,22 @@ function updateSelf(p, force)
     fprintf('Checking for updates to mip (installed: %s)...\n', installedVersion);
 
     index = mip.channel.fetch_index(channelStr);
-    [packageInfoMap, ~] = mip.resolve.build_package_info_map(index, 'mip-org', 'core');
+    requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    if ~isempty(installedVersion) && ~mip.resolve.is_numeric_version(installedVersion)
+        requestedVersions(p.name) = installedVersion;
+    end
+    try
+        [packageInfoMap, ~] = mip.resolve.build_package_info_map( ...
+            index, 'mip-org', 'core', requestedVersions);
+    catch err
+        if strcmp(err.identifier, 'mip:versionNotFound')
+            error('mip:update:versionNotInChannel', ...
+                  ['Installed mip version "%s" no longer exists in mip-org/core. ' ...
+                   'To switch to a different branch or version, run: mip install mip@<version>'], ...
+                  installedVersion);
+        end
+        rethrow(err);
+    end
 
     if ~packageInfoMap.isKey(fqn)
         error('mip:update:notInIndex', 'mip not found in the mip-org/core channel index.');

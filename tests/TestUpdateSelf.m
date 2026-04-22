@@ -44,10 +44,14 @@ classdef TestUpdateSelf < matlab.unittest.TestCase
         function testUpdateSelf_ForceReplacesFakeWithReal(testCase)
             % Seed a fake mip-org/core/mip in the test root so that
             % resolve_to_installed finds it and updateSelf has a target.
+            % The marker version must be numeric so it doesn't trigger
+            % the non-numeric-version pinning in updateSelf (see
+            % specification §7.1.1) — this test exercises the force-swap
+            % mechanics, not the branch-or-version rule.
             pkgDir = createTestPackage(testCase.TestRoot, ...
-                'mip-org', 'core', 'mip', 'version', '0.0.0-fake');
+                'mip-org', 'core', 'mip', 'version', '0.0.0');
             info1 = mip.config.read_package_json(pkgDir);
-            testCase.verifyEqual(info1.version, '0.0.0-fake');
+            testCase.verifyEqual(info1.version, '0.0.0');
 
             % Force self-update. This hits the real mip-org/core channel,
             % downloads the mip mhl, unloads+rmdirs the fake, and
@@ -70,7 +74,7 @@ classdef TestUpdateSelf < matlab.unittest.TestCase
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
                 'mip-org/core/mip should still exist after self-update');
             info2 = mip.config.read_package_json(pkgDir);
-            testCase.verifyNotEqual(info2.version, '0.0.0-fake', ...
+            testCase.verifyNotEqual(info2.version, '0.0.0', ...
                 'version should be replaced with real mip version from channel');
             testCase.verifyEqual(info2.name, 'mip', ...
                 'mip.json name should be "mip"');

@@ -21,17 +21,8 @@ end
 % Separate numeric and non-numeric versions
 numericVersions = {};
 for i = 1:length(versions)
-    v = versions{i};
-    parts = strsplit(v, '.');
-    isNumeric = true;
-    for j = 1:length(parts)
-        if isnan(str2double(parts{j}))
-            isNumeric = false;
-            break
-        end
-    end
-    if isNumeric
-        numericVersions{end+1} = v; %#ok<AGROW>
+    if mip.resolve.is_numeric_version(versions{i})
+        numericVersions{end+1} = versions{i}; %#ok<AGROW>
     end
 end
 

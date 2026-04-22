@@ -74,8 +74,8 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
 
             % install.m always fetches mip-org/core first, so give it an
             % empty cached index to avoid hitting the network.
-            writeChannelCache(testCase.TestRoot, 'mip-org/core', {});
-            writeChannelCache(testCase.TestRoot, 'mylab/custom', {'some-packagE'});
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
+            writeChannelIndex(testCase.TestRoot, 'mylab/custom', {'some-packagE'});
 
             testCase.verifyError( ...
                 @() mip.install('mylab/custom/some-packagE'), ...
@@ -93,8 +93,8 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
             % Sanity check: installing an already-installed exact name
             % still reports "already installed" without erroring.
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'some_package');
-            writeChannelCache(testCase.TestRoot, 'mip-org/core', {});
-            writeChannelCache(testCase.TestRoot, 'mylab/custom', {'some_package'});
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
+            writeChannelIndex(testCase.TestRoot, 'mylab/custom', {'some_package'});
             mip.install('mylab/custom/some_package');
         end
 

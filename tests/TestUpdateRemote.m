@@ -72,6 +72,42 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
                 'Timestamp should not change when already up to date');
         end
 
+        %% --- Non-numeric version hash refresh ---
+
+        function testUpdate_NonNumericHashRefresh_StaysOnSameVersion(testCase)
+            % hello_mip is published only as 'main' in the mip-hello
+            % channel and tracks the hello_mip repo's main branch.
+            % Install it, corrupt the installed commit_hash on disk, then
+            % `mip update`. The update must detect the hash mismatch,
+            % refresh the package, and leave the version on 'main' (per
+            % specification §7.1.1 — non-numeric versions stay on their
+            % branch or version).
+            fqn = 'mip-org/hello/hello_mip';
+            mip.install(fqn);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', ...
+                'gh', 'mip-org', 'hello', 'hello_mip');
+            info1 = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info1.version, 'main');
+            realHash = info1.commit_hash;
+            testCase.verifyNotEmpty(realHash, ...
+                'Expected a non-empty commit_hash from the real channel.');
+
+            % Corrupt the installed commit_hash so update sees a mismatch.
+            info1.commit_hash = '0000000000000000000000000000000000000000';
+            fid = fopen(fullfile(pkgDir, 'mip.json'), 'w');
+            fwrite(fid, jsonencode(info1));
+            fclose(fid);
+
+            mip.update(fqn);
+
+            info2 = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info2.version, 'main', ...
+                'Update must not switch from main to any other version.');
+            testCase.verifyEqual(info2.commit_hash, realHash, ...
+                'Update must refresh commit_hash to match the channel.');
+        end
+
         %% --- Force update ---
 
         function testUpdate_ForceReinstallsLatest(testCase)
