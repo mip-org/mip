@@ -661,6 +661,17 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
     parsed = mip.parse.parse_package_arg(pkgName);  % validates name chars
     pkgName = parsed.name;
 
+    % With --url, the positional arg defines the canonical name that gets
+    % used as the install directory and FQN, so require canonical form
+    % (lowercase, no leading/trailing separators).
+    if ~mip.name.is_valid_canonical(pkgName)
+        error('mip:install:invalidName', ...
+              ['"%s" is not a valid canonical package name. Canonical names ' ...
+               'must consist of lowercase letters, digits, hyphens, and ' ...
+               'underscores, and must start and end with a letter or digit.'], ...
+              pkgName);
+    end
+
     % If the URL is a File Exchange landing page, resolve it to the
     % underlying .zip download URL. The resolved URL (with query string
     % stripped) is what gets baked into the generated mip.yaml.

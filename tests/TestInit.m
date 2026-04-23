@@ -144,6 +144,31 @@ classdef TestInit < matlab.unittest.TestCase
                 'mip:init:invalidName');
         end
 
+        function testInit_RejectsUppercaseName(testCase)
+            % Canonical names must be lowercase.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.init(pkgDir, '--name', 'MyPkg'), ...
+                'mip:init:invalidName');
+        end
+
+        function testInit_LowercasesUppercaseDirBasename(testCase)
+            % When --name is omitted and the directory basename contains
+            % uppercase letters, init lowercases the basename to produce
+            % a canonical package name. (Directory basenames with other
+            % non-canonical characters — dots, spaces, etc. — still
+            % error; the user can use --name to override.)
+            pkgDir = fullfile(testCase.TestDir, 'MyPkg');
+            mkdir(pkgDir);
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'mypkg');
+        end
+
         function testInit_AcceptsSingleCharName(testCase)
             % A single letter/digit is a valid name (exercises the
             % optional middle+tail group in the regex).

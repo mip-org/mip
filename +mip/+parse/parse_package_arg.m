@@ -111,13 +111,15 @@ switch length(parts)
                'or "gh/org/channel/name[@version]".'], arg);
 end
 
-% Validate components: alphanumeric, hyphens, underscores, periods.
-% Reject '.' and '..' which are reserved filesystem names.
-validName = @(s) ~isempty(regexp(s, '^[-a-zA-Z0-9_.]+$', 'once')) && ...
-                  ~strcmp(s, '.') && ~strcmp(s, '..');
+% Validate each component: letters, digits, hyphens, underscores; must
+% start and end with a letter or digit. Mixed case is accepted — lookup
+% is case-insensitive and hyphens/underscores are interchangeable in
+% user input (see mip.name.normalize). The canonical form written to
+% disk / mip.yaml is stricter (lowercase) and is enforced separately by
+% mip.name.is_valid_canonical.
 allParts = {result.name, result.type, result.org, result.channel};
 for k = 1:length(allParts)
-    if ~isempty(allParts{k}) && ~validName(allParts{k})
+    if ~isempty(allParts{k}) && ~mip.name.is_valid(allParts{k})
         error('mip:invalidPackageSpec', ...
               'Invalid package spec "%s".', arg);
     end

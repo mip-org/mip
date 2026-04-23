@@ -213,9 +213,10 @@ classdef TestInstallPromptInit < matlab.unittest.TestCase
 
         function testMultiplePathsBothInitialized(testCase)
             % Two local paths, neither has mip.yaml. User says yes (via
-            % MIP_CONFIRM); both are init'd and installed.
-            pkgA = fullfile(testCase.SourceDir, 'pkgA');
-            pkgB = fullfile(testCase.SourceDir, 'pkgB');
+            % MIP_CONFIRM); both are init'd and installed. Directory names
+            % are canonical (lowercase) so init accepts them.
+            pkgA = fullfile(testCase.SourceDir, 'pkga');
+            pkgB = fullfile(testCase.SourceDir, 'pkgb');
             mkdir(pkgA);
             mkdir(pkgB);
             fid = fopen(fullfile(pkgA, 'a.m'), 'w');
@@ -231,8 +232,8 @@ classdef TestInstallPromptInit < matlab.unittest.TestCase
             testCase.verifyTrue(exist(fullfile(pkgA, 'mip.yaml'), 'file') > 0);
             testCase.verifyTrue(exist(fullfile(pkgB, 'mip.yaml'), 'file') > 0);
 
-            installedA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgA');
-            installedB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgB');
+            installedA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkga');
+            installedB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgb');
             testCase.verifyTrue(exist(installedA, 'dir') > 0);
             testCase.verifyTrue(exist(installedB, 'dir') > 0);
         end

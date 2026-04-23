@@ -93,6 +93,16 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
                 'mip:invalidPackageSpec');
         end
 
+        function testUrl_UppercaseNameRejected(testCase)
+            % With --url, the positional name becomes the canonical install
+            % dir / FQN, so it must be lowercase (canonical form). Parse
+            % accepts mixed-case user input, but --url specifically
+            % requires canonical.
+            testCase.verifyError( ...
+                @() mip.install('MyPkg', '--url', 'https://example.com/x.zip'), ...
+                'mip:install:invalidName');
+        end
+
         %% --- URL validation (must be a .zip) ---
 
         function testUrl_RejectsNonZipUrl(testCase)

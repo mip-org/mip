@@ -69,14 +69,18 @@ function init(varargin)
     else
         normalizedDir = regexprep(targetDir, '[/\\]+$', '');
         [~, baseName, ext] = fileparts(normalizedDir);
-        pkgName = [baseName, ext];  % preserve names that contain a '.'
+        % Lowercase the directory basename to produce a canonical name.
+        % Other non-canonical characters (dots, spaces, leading/trailing
+        % separators) still cause a failure below — use --name for those.
+        pkgName = lower([baseName, ext]);
     end
 
-    if ~is_valid_package_name(pkgName)
+    if ~mip.name.is_valid_canonical(pkgName)
         error('mip:init:invalidName', ...
-              ['"%s" is not a valid package name. Names must contain only ' ...
-               'letters, digits, hyphens, and underscores, and must start ' ...
-               'and end with a letter or digit. Use --name to override.'], pkgName);
+              ['"%s" is not a valid canonical package name. Canonical names ' ...
+               'must consist of lowercase letters, digits, hyphens, and ' ...
+               'underscores, and must start and end with a letter or digit. ' ...
+               'Use --name to override.'], pkgName);
     end
 
     % Discover addpaths before creating the test script so the new file
@@ -101,11 +105,6 @@ function init(varargin)
     fprintf('\nNext steps:\n');
     fprintf('  - Edit %s to fill in description, version, license, etc.\n', mipYamlPath);
     fprintf('  - Add tests to %s\n', testScript);
-end
-
-
-function tf = is_valid_package_name(name)
-    tf = ~isempty(regexp(name, '^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$', 'once'));
 end
 
 

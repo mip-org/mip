@@ -334,84 +334,84 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             % source package that depends on it. Load the main package
             % (which transitively loads the dep). Update the main package
             % and verify both are still loaded afterward.
-            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
-            mip.state.add_directly_installed('mip-org/core/depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depa');
+            mip.state.add_directly_installed('mip-org/core/depa');
 
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'depA'});
+                'dependencies', {'depa'});
             mip.install(srcDir);
 
             mip.load('local/mypkg');
             testCase.verifyTrue(mip.state.is_loaded('local/mypkg'));
-            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'), ...
-                'depA should be transitively loaded');
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depa'), ...
+                'depa should be transitively loaded');
 
             mip.update('local/mypkg');
 
             testCase.verifyTrue(mip.state.is_loaded('local/mypkg'), ...
                 'Main package should be reloaded after update');
-            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depa'), ...
                 'Dependency should still be loaded after update');
         end
 
         function testUpdate_PreservesDirectlyLoadedDistinction(testCase)
             % A package loaded only as a transitive dep should not be
             % promoted to directly loaded after update.
-            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
-            mip.state.add_directly_installed('mip-org/core/depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depa');
+            mip.state.add_directly_installed('mip-org/core/depa');
 
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'depA'});
+                'dependencies', {'depa'});
             mip.install(srcDir);
 
             mip.load('local/mypkg');
 
-            % depA should be transitively loaded (not directly loaded)
-            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
-            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'), ...
-                'depA should only be transitively loaded before update');
+            % depa should be transitively loaded (not directly loaded)
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depa'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depa'), ...
+                'depa should only be transitively loaded before update');
 
             mip.update('local/mypkg');
 
-            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
-            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'), ...
-                'depA should remain transitively loaded (not promoted to directly loaded)');
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depa'));
+            testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depa'), ...
+                'depa should remain transitively loaded (not promoted to directly loaded)');
             testCase.verifyTrue(mip.state.is_directly_loaded('local/mypkg'), ...
                 'Main package should remain directly loaded');
         end
 
         function testUpdate_MultiplePackages(testCase)
             % Updating multiple local packages at once should work.
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
-            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgb');
             mip.install(srcA);
             mip.install(srcB);
 
-            mip.load('local/pkgA');
-            mip.load('local/pkgB');
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'));
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgB'));
+            mip.load('local/pkga');
+            mip.load('local/pkgb');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'));
+            testCase.verifyTrue(mip.state.is_loaded('local/pkgb'));
 
-            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgA');
-            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgB');
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkga');
+            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgb');
             infoA1 = mip.config.read_package_json(pkgDirA);
             infoB1 = mip.config.read_package_json(pkgDirB);
 
             pause(1.1);
 
-            mip.update('local/pkgA', 'local/pkgB');
+            mip.update('local/pkga', 'local/pkgb');
 
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'), ...
-                'pkgA should be reloaded');
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgB'), ...
-                'pkgB should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'), ...
+                'pkga should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkgb'), ...
+                'pkgb should be reloaded');
 
             infoA2 = mip.config.read_package_json(pkgDirA);
             infoB2 = mip.config.read_package_json(pkgDirB);
             testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
-                'pkgA should have been reinstalled');
+                'pkga should have been reinstalled');
             testCase.verifyFalse(strcmp(infoB2.timestamp, infoB1.timestamp), ...
-                'pkgB should have been reinstalled');
+                'pkgb should have been reinstalled');
         end
 
         %% --- Rollback on failure (issue #145) ---
@@ -469,13 +469,13 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         %% --- --all flag ---
 
         function testUpdateAll_UpdatesAllLocalPackages(testCase)
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
-            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgb');
             mip.install(srcA);
             mip.install(srcB);
 
-            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgA');
-            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgB');
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkga');
+            pkgDirB = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgb');
             infoA1 = mip.config.read_package_json(pkgDirA);
             infoB1 = mip.config.read_package_json(pkgDirB);
 
@@ -486,34 +486,34 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             infoA2 = mip.config.read_package_json(pkgDirA);
             infoB2 = mip.config.read_package_json(pkgDirB);
             testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
-                'pkgA should have been reinstalled');
+                'pkga should have been reinstalled');
             testCase.verifyFalse(strcmp(infoB2.timestamp, infoB1.timestamp), ...
-                'pkgB should have been reinstalled');
+                'pkgb should have been reinstalled');
         end
 
         function testUpdateAll_PreservesLoadState(testCase)
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
-            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgb');
             mip.install(srcA);
             mip.install(srcB);
 
-            mip.load('local/pkgA');
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'));
-            testCase.verifyFalse(mip.state.is_loaded('local/pkgB'));
+            mip.load('local/pkga');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'));
+            testCase.verifyFalse(mip.state.is_loaded('local/pkgb'));
 
             mip.update('--all');
 
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'), ...
-                'pkgA should be reloaded after update --all');
-            testCase.verifyFalse(mip.state.is_loaded('local/pkgB'), ...
-                'pkgB should remain unloaded after update --all');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'), ...
+                'pkga should be reloaded after update --all');
+            testCase.verifyFalse(mip.state.is_loaded('local/pkgb'), ...
+                'pkgb should remain unloaded after update --all');
         end
 
         function testUpdateAll_ErrorsWithPackageNames(testCase)
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
             mip.install(srcA);
 
-            testCase.verifyError(@() mip.update('--all', 'local/pkgA'), ...
+            testCase.verifyError(@() mip.update('--all', 'local/pkga'), ...
                 'mip:update:allWithPackages');
         end
 
@@ -523,10 +523,10 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         end
 
         function testUpdateAll_WithForce(testCase)
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
             mip.install(srcA);
 
-            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkgA');
+            pkgDirA = fullfile(testCase.TestRoot, 'packages', 'local', 'pkga');
             infoA1 = mip.config.read_package_json(pkgDirA);
 
             pause(1.1);
@@ -535,21 +535,21 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
 
             infoA2 = mip.config.read_package_json(pkgDirA);
             testCase.verifyFalse(strcmp(infoA2.timestamp, infoA1.timestamp), ...
-                'pkgA should have been reinstalled with --all --force');
+                'pkga should have been reinstalled with --all --force');
         end
 
         %% --- --deps flag ---
 
         function testUpdateDeps_UpdatesPackageAndDependency(testCase)
-            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depa');
             mip.install(srcDep);
 
             srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'local/depA'});
+                'dependencies', {'local/depa'});
             mip.install(srcMain);
 
             pkgDirMain = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
-            pkgDirDep = fullfile(testCase.TestRoot, 'packages', 'local', 'depA');
+            pkgDirDep = fullfile(testCase.TestRoot, 'packages', 'local', 'depa');
             infoMain1 = mip.config.read_package_json(pkgDirMain);
             infoDep1 = mip.config.read_package_json(pkgDirDep);
 
@@ -566,31 +566,31 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         end
 
         function testUpdateDeps_PreservesLoadState(testCase)
-            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depa');
             mip.install(srcDep);
 
             srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'local/depA'});
+                'dependencies', {'local/depa'});
             mip.install(srcMain);
 
             mip.load('local/mypkg');
             testCase.verifyTrue(mip.state.is_loaded('local/mypkg'));
-            testCase.verifyTrue(mip.state.is_loaded('local/depA'));
+            testCase.verifyTrue(mip.state.is_loaded('local/depa'));
 
             mip.update('--deps', 'local/mypkg');
 
             testCase.verifyTrue(mip.state.is_loaded('local/mypkg'), ...
                 'Main package should be reloaded after --deps update');
-            testCase.verifyTrue(mip.state.is_loaded('local/depA'), ...
+            testCase.verifyTrue(mip.state.is_loaded('local/depa'), ...
                 'Dependency should be reloaded after --deps update');
         end
 
         function testUpdateDeps_WithForce(testCase)
-            srcDep = createTestSourcePackage(testCase.SourceDir, 'depA');
+            srcDep = createTestSourcePackage(testCase.SourceDir, 'depa');
             mip.install(srcDep);
 
             srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'local/depA'});
+                'dependencies', {'local/depa'});
             mip.install(srcMain);
 
             pkgDirMain = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
@@ -606,84 +606,84 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         end
 
         function testUpdateDeps_TransitiveDeps(testCase)
-            % depB depends on depC. mypkg depends on depB.
-            % --deps should update mypkg, depB, and depC.
-            srcC = createTestSourcePackage(testCase.SourceDir, 'depC');
+            % depb depends on depc. mypkg depends on depb.
+            % --deps should update mypkg, depb, and depc.
+            srcC = createTestSourcePackage(testCase.SourceDir, 'depc');
             mip.install(srcC);
 
-            srcB = createTestSourcePackage(testCase.SourceDir, 'depB', ...
-                'dependencies', {'local/depC'});
+            srcB = createTestSourcePackage(testCase.SourceDir, 'depb', ...
+                'dependencies', {'local/depc'});
             mip.install(srcB);
 
             srcMain = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
-                'dependencies', {'local/depB'});
+                'dependencies', {'local/depb'});
             mip.install(srcMain);
 
             mip.load('local/mypkg');
-            testCase.verifyTrue(mip.state.is_loaded('local/depC'));
+            testCase.verifyTrue(mip.state.is_loaded('local/depc'));
 
             mip.update('--deps', 'local/mypkg');
 
             testCase.verifyTrue(mip.state.is_loaded('local/mypkg'), ...
                 'Main package should be reloaded');
-            testCase.verifyTrue(mip.state.is_loaded('local/depB'), ...
-                'depB should be reloaded');
-            testCase.verifyTrue(mip.state.is_loaded('local/depC'), ...
-                'depC (transitive) should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/depb'), ...
+                'depb should be reloaded');
+            testCase.verifyTrue(mip.state.is_loaded('local/depc'), ...
+                'depc (transitive) should be reloaded');
         end
 
         %% --- Partial batch failure reloads earlier packages (issue #146) ---
 
         function testUpdate_BatchFailureReloadsEarlierPackages(testCase)
-            % When updating pkgA and pkgB, if pkgB fails, pkgA should
+            % When updating pkga and pkgb, if pkgb fails, pkga should
             % still be reloaded (not left unloaded).
-            % Local packages are processed in argument order, so pkgA
-            % (listed first) succeeds before pkgB fails.
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
-            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            % Local packages are processed in argument order, so pkga
+            % (listed first) succeeds before pkgb fails.
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgb');
             mip.install(srcA);
             mip.install(srcB);
 
-            mip.load('local/pkgA');
-            mip.load('local/pkgB');
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'));
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgB'));
+            mip.load('local/pkga');
+            mip.load('local/pkgb');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'));
+            testCase.verifyTrue(mip.state.is_loaded('local/pkgb'));
 
-            % Break pkgB's source so its update fails
+            % Break pkgb's source so its update fails
             delete(fullfile(srcB, 'mip.yaml'));
 
-            % Update both — pkgB should fail but pkgA should still reload
+            % Update both — pkgb should fail but pkga should still reload
             testCase.verifyError( ...
-                @() mip.update('local/pkgA', 'local/pkgB'), ...
+                @() mip.update('local/pkga', 'local/pkgb'), ...
                 'mip:mipYamlNotFound');
 
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'), ...
-                'pkgA should be reloaded even though pkgB failed');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'), ...
+                'pkga should be reloaded even though pkgb failed');
         end
 
         function testUpdate_BatchFailureReloadsLaterPackages(testCase)
-            % Reverse ordering: pkgA fails first, pkgB (listed second)
+            % Reverse ordering: pkga fails first, pkgb (listed second)
             % should still be reloaded.
-            srcA = createTestSourcePackage(testCase.SourceDir, 'pkgA');
-            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgB');
+            srcA = createTestSourcePackage(testCase.SourceDir, 'pkga');
+            srcB = createTestSourcePackage(testCase.SourceDir, 'pkgb');
             mip.install(srcA);
             mip.install(srcB);
 
-            mip.load('local/pkgA');
-            mip.load('local/pkgB');
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgA'));
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgB'));
+            mip.load('local/pkga');
+            mip.load('local/pkgb');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkga'));
+            testCase.verifyTrue(mip.state.is_loaded('local/pkgb'));
 
-            % Break pkgA's source so its update fails
+            % Break pkga's source so its update fails
             delete(fullfile(srcA, 'mip.yaml'));
 
-            % Update both — pkgA fails first but pkgB should still reload
+            % Update both — pkga fails first but pkgb should still reload
             testCase.verifyError( ...
-                @() mip.update('local/pkgA', 'local/pkgB'), ...
+                @() mip.update('local/pkga', 'local/pkgb'), ...
                 'mip:mipYamlNotFound');
 
-            testCase.verifyTrue(mip.state.is_loaded('local/pkgB'), ...
-                'pkgB should be reloaded even though pkgA failed');
+            testCase.verifyTrue(mip.state.is_loaded('local/pkgb'), ...
+                'pkgb should be reloaded even though pkga failed');
         end
 
     end

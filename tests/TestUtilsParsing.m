@@ -134,9 +134,36 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 'mip:invalidPackageSpec');
         end
 
-        function testParseAcceptsDotInName(testCase)
-            r = mip.parse.parse_package_arg('.github');
-            testCase.verifyEqual(r.name, '.github');
+        function testParseRejectsDotInName(testCase)
+            % Dots are not allowed in package names (canonical or input).
+            testCase.verifyError(@() mip.parse.parse_package_arg('.github'), ...
+                'mip:invalidPackageSpec');
+            testCase.verifyError(@() mip.parse.parse_package_arg('my.pkg'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseRejectsLeadingHyphenOrUnderscore(testCase)
+            % Names must start with a letter or digit.
+            testCase.verifyError(@() mip.parse.parse_package_arg('-foo'), ...
+                'mip:invalidPackageSpec');
+            testCase.verifyError(@() mip.parse.parse_package_arg('_foo'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseRejectsTrailingHyphenOrUnderscore(testCase)
+            % Names must end with a letter or digit.
+            testCase.verifyError(@() mip.parse.parse_package_arg('foo-'), ...
+                'mip:invalidPackageSpec');
+            testCase.verifyError(@() mip.parse.parse_package_arg('foo_'), ...
+                'mip:invalidPackageSpec');
+        end
+
+        function testParseAcceptsMixedCase(testCase)
+            % User input allows mixed case — the canonical form produced
+            % by init/channel is lowercase, but the parser for user input
+            % is permissive.
+            r = mip.parse.parse_package_arg('MyPkg');
+            testCase.verifyEqual(r.name, 'MyPkg');
         end
 
         %% parse_channel_spec tests

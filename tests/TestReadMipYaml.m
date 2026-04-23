@@ -65,6 +65,14 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
                 'mip:invalidMipYaml');
         end
 
+        function testReadYamlRejectsNonCanonicalName(testCase)
+            % mip.yaml's "name" field must be in canonical form (lowercase).
+            writeYaml(testCase.TestDir, 'name: MyPkg\nversion: "1.0.0"\n');
+
+            testCase.verifyError(@() mip.config.read_mip_yaml(testCase.TestDir), ...
+                'mip:invalidMipYaml');
+        end
+
         function testReadYamlMissingFile(testCase)
             emptyDir = fullfile(testCase.TestDir, 'empty');
             mkdir(emptyDir);
