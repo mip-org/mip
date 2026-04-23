@@ -6,7 +6,8 @@ function mipConfig = read_mip_yaml(packageDir)
 %
 % Returns:
 %   mipConfig - Struct with fields: name, version, description,
-%               dependencies, addpaths, license, homepage, repository, builds
+%               dependencies, paths, extra_paths, license, homepage,
+%               repository, builds
 
 mipYamlPath = fullfile(packageDir, 'mip.yaml');
 
@@ -47,13 +48,35 @@ elseif ~iscell(mipConfig.dependencies)
     mipConfig.dependencies = {mipConfig.dependencies};
 end
 
-% Normalize addpaths to cell array
-if ~isfield(mipConfig, 'addpaths')
-    mipConfig.addpaths = {};
-elseif isempty(mipConfig.addpaths)
-    mipConfig.addpaths = {};
-elseif ~iscell(mipConfig.addpaths)
-    mipConfig.addpaths = {mipConfig.addpaths};
+% Normalize paths to cell array
+if ~isfield(mipConfig, 'paths')
+    mipConfig.paths = {};
+elseif isempty(mipConfig.paths)
+    mipConfig.paths = {};
+elseif ~iscell(mipConfig.paths)
+    mipConfig.paths = {mipConfig.paths};
+end
+
+% Normalize extra_paths: a mapping of group name -> list of path entries
+% (same shape as top-level paths). Each group's list is normalized to a
+% cell array.
+if ~isfield(mipConfig, 'extra_paths') || isempty(mipConfig.extra_paths)
+    mipConfig.extra_paths = struct();
+elseif ~isstruct(mipConfig.extra_paths)
+    error('mip:invalidMipYaml', ...
+          ['extra_paths must be a mapping of group name to list of path ' ...
+           'entries (e.g. extra_paths.examples).']);
+else
+    groups = fieldnames(mipConfig.extra_paths);
+    for gi = 1:length(groups)
+        key = groups{gi};
+        val = mipConfig.extra_paths.(key);
+        if isempty(val)
+            mipConfig.extra_paths.(key) = {};
+        elseif ~iscell(val)
+            mipConfig.extra_paths.(key) = {val};
+        end
+    end
 end
 
 % Normalize builds to cell array of structs

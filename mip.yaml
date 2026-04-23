@@ -6,7 +6,7 @@ homepage: "https://mip.sh"
 repository: "https://github.com/mip-org/mip"
 dependencies: []
 
-addpaths:
+paths:
   - path: "."
 
 test_script: test_mip.m

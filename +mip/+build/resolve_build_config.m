@@ -14,7 +14,7 @@ function resolved = resolve_build_config(mipConfig, buildEntry)
 resolved = struct();
 
 % Top-level defaults
-mergeFields = {'addpaths', 'compile_script', 'test_script', 'build_on'};
+mergeFields = {'paths', 'extra_paths', 'compile_script', 'test_script', 'build_on'};
 for i = 1:length(mergeFields)
     key = mergeFields{i};
     if isfield(mipConfig, key)
@@ -34,9 +34,12 @@ if ~isempty(buildEntry) && isstruct(buildEntry)
     end
 end
 
-% Ensure addpaths defaults to empty cell
-if ~isfield(resolved, 'addpaths')
-    resolved.addpaths = {};
+% Ensure paths defaults to empty cell
+if ~isfield(resolved, 'paths')
+    resolved.paths = {};
+end
+if ~isfield(resolved, 'extra_paths')
+    resolved.extra_paths = struct();
 end
 
 end

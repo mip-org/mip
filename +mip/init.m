@@ -10,7 +10,7 @@ function init(varargin)
 % directory's basename and can be overridden with --name. Optional
 % string fields (description, version, license, homepage, repository)
 % are emitted blank for the user to fill in (--repository fills in that
-% field instead of leaving it blank). The list of addpaths is determined
+% field instead of leaving it blank). The list of paths is determined
 % automatically by walking the directory and identifying folders that
 % contain runtime MATLAB code.
 %
@@ -79,9 +79,9 @@ function init(varargin)
                'and end with a letter or digit. Use --name to override.'], pkgName);
     end
 
-    % Discover addpaths before creating the test script so the new file
+    % Discover paths before creating the test script so the new file
     % doesn't cause the root to be auto-included.
-    addpaths = mip.init.auto_add_paths(targetDir);
+    [pathsList, extraPaths] = mip.init.auto_add_paths(targetDir);
 
     testScript = sprintf('test_%s.m', pkgName);
     testScriptPath = fullfile(targetDir, testScript);
@@ -94,7 +94,7 @@ function init(varargin)
         fclose(fid);
     end
 
-    write_mip_yaml(mipYamlPath, pkgName, addpaths, testScript, repository);
+    write_mip_yaml(mipYamlPath, pkgName, pathsList, extraPaths, testScript, repository);
 
     fprintf('Created %s\n', mipYamlPath);
     fprintf('Created %s\n', testScriptPath);
@@ -109,7 +109,7 @@ function tf = is_valid_package_name(name)
 end
 
 
-function write_mip_yaml(yamlPath, pkgName, addpaths, testScript, repository)
+function write_mip_yaml(yamlPath, pkgName, pathsList, extraPaths, testScript, repository)
     fid = fopen(yamlPath, 'w');
     if fid == -1
         error('mip:init:writeFailed', ...
@@ -126,15 +126,26 @@ function write_mip_yaml(yamlPath, pkgName, addpaths, testScript, repository)
     fprintf(fid, 'dependencies: []\n');
     fprintf(fid, '\n');
 
-    if isempty(addpaths)
-        fprintf(fid, 'addpaths: []\n');
+    if isempty(pathsList)
+        fprintf(fid, 'paths: []\n');
     else
-        fprintf(fid, 'addpaths:\n');
-        for k = 1:numel(addpaths)
-            fprintf(fid, '  - path: "%s"\n', addpaths{k});
+        fprintf(fid, 'paths:\n');
+        for k = 1:numel(pathsList)
+            fprintf(fid, '  - path: "%s"\n', pathsList{k});
         end
     end
     fprintf(fid, '\n');
+
+    if ~isempty(fieldnames(extraPaths))
+        fprintf(fid, 'extra_paths:\n');
+        for g = fieldnames(extraPaths)'
+            fprintf(fid, '  %s:\n', g{1});
+            for k = 1:numel(extraPaths.(g{1}))
+                fprintf(fid, '    - path: "%s"\n', extraPaths.(g{1}){k});
+            end
+        end
+        fprintf(fid, '\n');
+    end
 
     fprintf(fid, 'test_script: %s\n', testScript);
     fprintf(fid, '\n');

@@ -30,6 +30,14 @@ if isfield(opts, 'paths')
     mipData.paths = ensureCellColumn(opts.paths);
 end
 
+if isfield(opts, 'extra_paths') && ~isempty(fieldnames(opts.extra_paths))
+    extraPaths = struct();
+    for key = fieldnames(opts.extra_paths)'
+        extraPaths.(key{1}) = ensureCellColumn(opts.extra_paths.(key{1}));
+    end
+    mipData.extra_paths = extraPaths;
+end
+
 if isfield(mipConfig, 'license')
     mipData.license = mipConfig.license;
 else

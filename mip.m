@@ -21,6 +21,7 @@ function varargout = mip(command, varargin)
 %   mip load <package> [...]  [--sticky]     - Load one or more packages into MATLAB path
 %   mip load <package> --addpath <relpath>   - Add a source-relative path after loading
 %   mip load <package> --rmpath  <relpath>   - Remove a source-relative path after loading
+%   mip load <package> --with <group>        - Also load the named extra path group (e.g. examples, tests)
 %   mip unload <package> [...]               - Unload one or more packages from MATLAB path
 %   mip unload --all                         - Unload all non-sticky packages
 %   mip unload --all --force                 - Unload all packages (including sticky)

@@ -129,7 +129,7 @@ Only the named packages are updated -- existing dependencies are left as-is unle
 name: mypackage
 version: "1.0.0"
 dependencies: [dep1, org/chan/dep2]
-addpaths:
+paths:
   - path: "src"
 builds:
   - architectures: [any]

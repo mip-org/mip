@@ -277,23 +277,28 @@ classdef TestInit < matlab.unittest.TestCase
             mip.init(pkgDir);
 
             cfg = mip.config.read_mip_yaml(pkgDir);
-            paths = cellfun(@(s) s.path, cfg.addpaths, 'UniformOutput', false);
+            paths = cellfun(@(s) s.path, cfg.paths, 'UniformOutput', false);
             testCase.verifyTrue(any(strcmp(paths, '.')));
         end
 
-        function testInit_AutoAddPathsSkipsTestsAndDocs(testCase)
-            % auto_add_paths includes runtime dirs like `src/` but skips
-            % well-known non-runtime dirs like `tests/` and `docs/`.
+        function testInit_AutoAddPathsRoutesTestsAndExamples(testCase)
+            % auto_add_paths includes runtime dirs like `src/` in the
+            % main paths list, routes tests/ and examples/ into
+            % extra_paths groups, and still skips docs/ entirely.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
             mkdir(fullfile(pkgDir, 'src'));
             mkdir(fullfile(pkgDir, 'tests'));
+            mkdir(fullfile(pkgDir, 'examples'));
             mkdir(fullfile(pkgDir, 'docs'));
             fid = fopen(fullfile(pkgDir, 'src', 'lib.m'), 'w');
             fprintf(fid, 'function y = lib(x); y = x; end\n');
             fclose(fid);
             fid = fopen(fullfile(pkgDir, 'tests', 'a_test.m'), 'w');
             fprintf(fid, '%% test\n');
+            fclose(fid);
+            fid = fopen(fullfile(pkgDir, 'examples', 'ex1.m'), 'w');
+            fprintf(fid, '%% example\n');
             fclose(fid);
             fid = fopen(fullfile(pkgDir, 'docs', 'something.m'), 'w');
             fprintf(fid, '%% doc\n');
@@ -302,14 +307,57 @@ classdef TestInit < matlab.unittest.TestCase
             mip.init(pkgDir);
 
             cfg = mip.config.read_mip_yaml(pkgDir);
-            paths = cellfun(@(s) s.path, cfg.addpaths, 'UniformOutput', false);
+            paths = cellfun(@(s) s.path, cfg.paths, 'UniformOutput', false);
+
+            % src/ is main runtime; docs/ is skipped; tests/ and
+            % examples/ move to extra_paths.
             testCase.verifyTrue(any(strcmp(paths, 'src')));
             testCase.verifyFalse(any(strcmp(paths, 'tests')));
+            testCase.verifyFalse(any(strcmp(paths, 'examples')));
             testCase.verifyFalse(any(strcmp(paths, 'docs')));
+
+            testCase.verifyTrue(isfield(cfg.extra_paths, 'tests'));
+            testCase.verifyTrue(isfield(cfg.extra_paths, 'examples'));
+            testCase.verifyFalse(isfield(cfg.extra_paths, 'docs'));
+            testCase.verifyEqual(cfg.extra_paths.tests{1}.path, 'tests');
+            testCase.verifyEqual(cfg.extra_paths.examples{1}.path, 'examples');
         end
 
-        function testInit_EmptyAddpathsRendersAsEmptyList(testCase)
-            % Directory with no runtime .m files -> addpaths should be [].
+        function testInit_AutoAddPathsBenchmarksGroup(testCase)
+            % Benchmarks is its own third group (not lumped with
+            % examples or tests) because benchmarks can be heavy and
+            % users often want examples without them or vice versa.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            mkdir(fullfile(pkgDir, 'benchmarks'));
+            fid = fopen(fullfile(pkgDir, 'benchmarks', 'bench_a.m'), 'w');
+            fprintf(fid, '%% bench\n');
+            fclose(fid);
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyTrue(isfield(cfg.extra_paths, 'benchmarks'));
+            testCase.verifyEqual(cfg.extra_paths.benchmarks{1}.path, 'benchmarks');
+        end
+
+        function testInit_NoExtraPathsOmitsSection(testCase)
+            % A package with no tests/examples/benchmarks dirs should
+            % not get an `extra_paths:` section in the generated yaml.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            fid = fopen(fullfile(pkgDir, 'lib.m'), 'w');
+            fprintf(fid, 'function y = lib(x); y = x; end\n');
+            fclose(fid);
+
+            mip.init(pkgDir);
+
+            yamlText = fileread(fullfile(pkgDir, 'mip.yaml'));
+            testCase.verifyFalse(contains(yamlText, 'extra_paths:'));
+        end
+
+        function testInit_EmptyPathsRendersAsEmptyList(testCase)
+            % Directory with no runtime .m files -> paths should be [].
             % auto_add_paths runs *before* the boilerplate test script is
             % created, so the test script does not bring '.' onto the path.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
@@ -319,14 +367,14 @@ classdef TestInit < matlab.unittest.TestCase
             mip.init(pkgDir);
 
             cfg = mip.config.read_mip_yaml(pkgDir);
-            testCase.verifyEqual(cfg.addpaths, {});
+            testCase.verifyEqual(cfg.paths, {});
 
             yamlText = fileread(fullfile(pkgDir, 'mip.yaml'));
-            testCase.verifyTrue(contains(yamlText, 'addpaths: []'));
+            testCase.verifyTrue(contains(yamlText, 'paths: []'));
         end
 
-        function testInit_AddpathsListMatchesAutoUtil(testCase)
-            % The addpaths written into mip.yaml agree with what
+        function testInit_PathsListMatchesAutoUtil(testCase)
+            % The paths written into mip.yaml agree with what
             % mip.init.auto_add_paths returns for the same tree.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
@@ -345,7 +393,7 @@ classdef TestInit < matlab.unittest.TestCase
             mip.init(pkgDir);
 
             cfg = mip.config.read_mip_yaml(pkgDir);
-            paths = cellfun(@(s) s.path, cfg.addpaths, 'UniformOutput', false);
+            paths = cellfun(@(s) s.path, cfg.paths, 'UniformOutput', false);
             for k = 1:numel(expected)
                 testCase.verifyTrue(any(strcmp(paths, expected{k})), ...
                     sprintf('expected path "%s" missing', expected{k}));

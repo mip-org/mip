@@ -61,8 +61,13 @@ if numStripped > 0
     fprintf('Stripping pre-existing MEX binaries...\n');
 end
 
-% Compute addpaths relative to the source subdir
-addpathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.addpaths);
+% Compute resolved path lists relative to the source subdir
+pathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.paths);
+extraPaths = struct();
+for key = fieldnames(resolvedConfig.extra_paths)'
+    extraPaths.(key{1}) = mip.build.compute_addpaths( ...
+        pkgSubdir, resolvedConfig.extra_paths.(key{1}));
+end
 
 % Run compilation if specified
 if isfield(resolvedConfig, 'compile_script') && ...
@@ -74,7 +79,10 @@ end
 % Create mip.json
 fprintf('Creating mip.json...\n');
 jsonOpts = struct();
-jsonOpts.paths = addpathsList;
+jsonOpts.paths = pathsList;
+if ~isempty(fieldnames(extraPaths))
+    jsonOpts.extra_paths = extraPaths;
+end
 sourceHashFile = fullfile(pkgSubdir, '.source_hash');
 if exist(sourceHashFile, 'file')
     fid = fopen(sourceHashFile, 'r');
