@@ -52,6 +52,11 @@ A **bare name** is just the package name without org/channel (e.g., `chebfun`). 
 
 Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`, `unspecified`). Numeric versions use dot-separated components that are each parseable as numbers.
 
+A version can live in two places:
+
+- **Channel release directory** (`packages/<name>/<version>/`) — the authoritative version for a channel-published package. May be numeric or non-numeric (e.g., a branch name like `main`).
+- **`mip.yaml`'s `version` field** — optional; when present, must be blank or numeric. Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`. See [§11.2.1](#1121-channel-version-rules) for how the two relate.
+
 ### 1.4 The `@version` Suffix
 
 Any package argument passed to a `mip` command (bare or FQN) can include `@version` to pin a specific version:
@@ -811,7 +816,7 @@ Lists packages available in the channel index. Uses `--channel` to specify which
 
 ### 9.4 `mip version`
 
-Prints the mip version string, read from `mip.yaml` in the package root.
+Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, `"unknown"` is printed (see [§11.2](#112-mipyaml-schema)).
 
 ### 9.5 `mip index`
 
