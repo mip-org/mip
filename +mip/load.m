@@ -116,8 +116,8 @@ function load(varargin)
         g = withGroups{k};
         if ~ismember(g, matchedGroups)
             warning('mip:load:unknownGroup', ...
-                    ['no loaded package declares extra_paths.%s; ' ...
-                     '"--with %s" had no effect'], g, g);
+                    ['No loaded package declares the extra path group "%s". ' ...
+                     '"--with %s" had no effect.'], g, g);
         end
     end
 end
