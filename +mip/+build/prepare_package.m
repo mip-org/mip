@@ -29,8 +29,18 @@ end
 mipConfig = mip.config.read_mip_yaml(sourceDir);
 packageName = mipConfig.name;
 
+% If the channel build supplied a .release_version override, use it for
+% the status message and mip.json. Falls back to mip.yaml's version.
+effectiveVersion = num2str(mipConfig.version);
+sourceReleaseVersionFile = fullfile(sourceDir, '.release_version');
+if exist(sourceReleaseVersionFile, 'file')
+    fid = fopen(sourceReleaseVersionFile, 'r');
+    effectiveVersion = strtrim(fread(fid, '*char')');
+    fclose(fid);
+end
+
 fprintf('Preparing package "%s" (version %s)\n', packageName, ...
-        num2str(mipConfig.version));
+        effectiveVersion);
 
 % Match build for current architecture
 [buildEntry, effectiveArch] = mip.build.match_build(mipConfig, architecture);
@@ -61,8 +71,13 @@ if numStripped > 0
     fprintf('Stripping pre-existing MEX binaries...\n');
 end
 
-% Compute addpaths relative to the source subdir
-addpathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.addpaths);
+% Compute resolved path lists relative to the source subdir
+pathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.paths);
+extraPaths = struct();
+for key = fieldnames(resolvedConfig.extra_paths)'
+    extraPaths.(key{1}) = mip.build.compute_addpaths( ...
+        pkgSubdir, resolvedConfig.extra_paths.(key{1}));
+end
 
 % Run compilation if specified
 if isfield(resolvedConfig, 'compile_script') && ...
@@ -74,7 +89,10 @@ end
 % Create mip.json
 fprintf('Creating mip.json...\n');
 jsonOpts = struct();
-jsonOpts.paths = addpathsList;
+jsonOpts.paths = pathsList;
+if ~isempty(fieldnames(extraPaths))
+    jsonOpts.extra_paths = extraPaths;
+end
 sourceHashFile = fullfile(pkgSubdir, '.source_hash');
 if exist(sourceHashFile, 'file')
     fid = fopen(sourceHashFile, 'r');
@@ -88,6 +106,14 @@ if exist(commitHashFile, 'file')
     jsonOpts.commit_hash = strtrim(fread(fid, '*char')');
     fclose(fid);
     delete(commitHashFile);
+end
+% The channel build drops .release_version next to .source_hash when the
+% release-directory name should override mip.yaml's version (e.g. a branch
+% name like "main" for a blank/numeric mip.yaml version).
+releaseVersionFile = fullfile(pkgSubdir, '.release_version');
+if exist(releaseVersionFile, 'file')
+    jsonOpts.version = effectiveVersion;
+    delete(releaseVersionFile);
 end
 if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
     jsonOpts.test_script = resolvedConfig.test_script;

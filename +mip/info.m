@@ -183,6 +183,13 @@ function showLocalInstallInfo(fqn)
         fprintf('    Dependencies: None\n');
     end
 
+    % Extra path groups (opt-in via `mip load --with <group>`)
+    if isfield(pkgInfo, 'extra_paths') && isstruct(pkgInfo.extra_paths) ...
+            && ~isempty(fieldnames(pkgInfo.extra_paths))
+        groupNames = fieldnames(pkgInfo.extra_paths);
+        fprintf('    Extra paths: %s\n', strjoin(groupNames, ', '));
+    end
+
     fprintf('\n');
 end
 

@@ -1,4 +1,4 @@
-function paths = auto_add_paths(pkgDir)
+function [paths, extraPaths] = auto_add_paths(pkgDir)
 %AUTO_ADD_PATHS   Heuristically determine which directories of a package
 %should be added to the MATLAB path.
 %
@@ -6,19 +6,19 @@ function paths = auto_add_paths(pkgDir)
 %   pkgDir - Absolute or relative path to the package root directory.
 %
 % Returns:
-%   paths - Cell array of directory paths relative to pkgDir, in walk
-%           order. The root itself is included as '.' if it contains
-%           runtime .m files or a +namespace/@class/private folder.
+%   paths      - Cell array of directory paths relative to pkgDir, in walk
+%                order. The root itself is included as '.' if it contains
+%                runtime .m files or a +namespace/@class/private folder.
+%   extraPaths - Struct mapping group name ('tests', 'examples',
+%                'benchmarks') to a cell array of directory paths for
+%                top-level folders that look like that group. Used to
+%                populate mip.yaml's `extra_paths` field.
 
 pkgDir = char(pkgDir);
 pkgDir = regexprep(pkgDir, '[/\\]+$', '');
 
 % Directory names that should never be added to the path.
 skipNames = { ...
-    'test', 'tests', 'testing', 'unittest', 'unittests', ...
-    'demo', 'demos', ...
-    'example', 'examples', 'tutorial', 'tutorials', ...
-    'benchmark', 'benchmarks', ...
     'doc', 'docs', 'documentation', 'man', ...
     'html', 'website', ...
     'build', 'buildutils', 'bin', 'obj', 'dist', 'target', ...
@@ -27,12 +27,55 @@ skipNames = { ...
     'dev', 'sandbox', 'scratch', ...
     '.git', '.github', '.svn', '.hg', '.circleci', '.vscode', '.idea'};
 
-paths = {};
-paths = walk(pkgDir, pkgDir, skipNames, paths);
+% Top-level directory names that route to extra_paths groups instead of
+% the main paths list. Matching is case-insensitive and exact.
+groupDirs = struct();
+groupDirs.tests      = {'test', 'tests', 'testing', 'unittest', 'unittests'};
+groupDirs.examples   = {'example', 'examples', 'demo', 'demos', ...
+                        'tutorial', 'tutorials'};
+groupDirs.benchmarks = {'benchmark', 'benchmarks'};
+
+% Nested walks still skip group dirs so deeper copies (e.g. src/tests/)
+% don't pollute any bucket.
+allGroupNames = {};
+for g = fieldnames(groupDirs)'
+    allGroupNames = [allGroupNames, groupDirs.(g{1})]; %#ok<AGROW>
+end
+nestedSkip = [skipNames, allGroupNames];
+
+paths = walk(pkgDir, pkgDir, nestedSkip, {});
+
+groupPaths = struct();
+entries = dir(pkgDir);
+for k = 1:numel(entries)
+    e = entries(k);
+    if ~e.isdir, continue; end
+    if strcmp(e.name, '.') || strcmp(e.name, '..'), continue; end
+    nlow = lower(e.name);
+    for g = fieldnames(groupDirs)'
+        if any(strcmp(nlow, groupDirs.(g{1})))
+            if ~isfield(groupPaths, g{1})
+                groupPaths.(g{1}) = {};
+            end
+            groupPaths.(g{1}) = walk(pkgDir, fullfile(pkgDir, e.name), ...
+                                     nestedSkip, groupPaths.(g{1}));
+            break;
+        end
+    end
+end
 
 % De-duplicate while preserving order.
 [~, idx] = unique(paths, 'stable');
 paths = paths(idx);
+
+extraPaths = struct();
+for g = fieldnames(groupPaths)'
+    collected = groupPaths.(g{1});
+    if ~isempty(collected)
+        [~, idx] = unique(collected, 'stable');
+        extraPaths.(g{1}) = collected(idx);
+    end
+end
 
 end
 

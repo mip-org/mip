@@ -25,6 +25,11 @@ function load(varargin)
 %   --rmpath  <rel> Remove this source-relative subpath from the MATLAB path
 %                   AFTER the paths from mip.json are added. Same constraints
 %                   as --addpath.
+%   --with <group>  Also add to the MATLAB path the directories declared
+%                   under extra_paths.<group> in the package's mip.yaml
+%                   (e.g. --with examples, --with tests). May be repeated.
+%                   Applies only to direct loads. Warns at end if no loaded
+%                   package declared the requested group.
 %   --transitive    (internal) Load as a transitive dependency, not a direct load
 
     % Parse flags and package names from arguments
@@ -34,6 +39,7 @@ function load(varargin)
     channel = '';
     addPathRels = {};
     rmPathRels = {};
+    withGroups = {};
     packageArgs = {};
     i = 1;
     while i <= length(varargin)
@@ -65,6 +71,13 @@ function load(varargin)
             else
                 error('mip:load:missingRmpathValue', '--rmpath requires a value');
             end
+        elseif ischar(arg) && strcmp(arg, '--with')
+            if i < length(varargin)
+                i = i + 1;
+                withGroups{end+1} = varargin{i};
+            else
+                error('mip:load:missingWithValue', '--with requires a group name');
+            end
         elseif ischar(arg) && ~startsWith(arg, '--')
             packageArgs{end+1} = arg;
         end
@@ -82,25 +95,46 @@ function load(varargin)
                'directory.'], length(packageArgs));
     end
 
-    % Load each package. --addpath/--rmpath only flow into direct loads;
-    % they are intentionally not propagated to transitive dependencies.
+    % Load each package. --addpath/--rmpath/--with only flow into direct
+    % loads; they are intentionally not propagated to transitive
+    % dependencies. matchedGroups accumulates the --with groups that
+    % were actually declared by at least one loaded package, so we can
+    % warn at the end about groups that matched nothing.
+    matchedGroups = {};
     for i = 1:length(packageArgs)
         if isDirect
-            loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
-                       channel, isDirect, {}, addPathRels, rmPathRels);
+            matched = loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
+                       channel, isDirect, {}, addPathRels, rmPathRels, withGroups);
+            matchedGroups = [matchedGroups, matched];
         else
             loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
-                       channel, isDirect, {}, {}, {});
+                       channel, isDirect, {}, {}, {}, {});
+        end
+    end
+
+    for k = 1:length(withGroups)
+        g = withGroups{k};
+        if ~ismember(g, matchedGroups)
+            warning('mip:load:unknownGroup', ...
+                    ['No loaded package declares the extra path group "%s". ' ...
+                     '"--with %s" had no effect.'], g, g);
         end
     end
 end
 
-function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDirect, loadingStack, addPathRels, rmPathRels)
+function matched = loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDirect, loadingStack, addPathRels, rmPathRels, withGroups)
 % Load a single package (and its dependencies recursively).
 %
 % addPathRels / rmPathRels: cell arrays of source-relative paths to
 % addpath / rmpath after the mip.json paths are applied. Only honored
 % for direct loads (the recursive call for dependencies passes empty).
+%
+% withGroups: cell array of extra_paths group names to also add to the
+% MATLAB path. Only honored for direct loads. Returns the subset that
+% this package actually declared (used by the caller to warn about
+% groups that matched nothing across the whole load).
+
+    matched = {};
 
     % Resolve the FQN for this package, installing first if requested
     try
@@ -165,9 +199,11 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
                 fprintf('Package "%s" is now sticky\n', displayFqn);
             end
         end
-        % Apply --addpath/--rmpath even when already loaded so the user
-        % can adjust the path of an existing load without re-loading.
+        % Apply --addpath/--rmpath/--with even when already loaded so
+        % the user can adjust the path of an existing load without
+        % re-loading.
         applyPathAdjustments(packageDir, addPathRels, rmPathRels);
+        matched = applyExtraPaths(packageDir, withGroups);
         return
     end
 
@@ -195,7 +231,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
             dep = deps{i};
             depFqn = mip.resolve.resolve_dependency(dep);
             if ~mip.state.is_loaded(depFqn)
-                loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack, {}, {});
+                loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack, {}, {}, {});
             else
                 fprintf('  Dependency "%s" is already loaded\n', mip.parse.display_fqn(depFqn));
             end
@@ -213,6 +249,7 @@ function loadSingle(packageArg, installIfMissing, stickyPackage, channel, isDire
 
     % Apply --addpath / --rmpath after the mip.json paths have been added.
     applyPathAdjustments(packageDir, addPathRels, rmPathRels);
+    matched = applyExtraPaths(packageDir, withGroups);
 
     % Mark package as loaded
     mip.state.key_value_append('MIP_LOADED_PACKAGES', fqn);
@@ -245,6 +282,41 @@ function applyMipJsonPaths(packageDir, pkgInfo)
             target = fullfile(srcDir, rel);
         end
         addpath(target);
+    end
+end
+
+function matched = applyExtraPaths(packageDir, withGroups)
+% For each requested group, if the package declares extra_paths.<group>
+% in its mip.json, addpath each entry relative to the source directory.
+% Returns the subset of withGroups this package actually declared.
+
+    matched = {};
+    if isempty(withGroups)
+        return
+    end
+
+    pkgInfo = mip.config.read_package_json(packageDir);
+    if ~isfield(pkgInfo, 'extra_paths') || ~isstruct(pkgInfo.extra_paths)
+        return
+    end
+    srcDir = mip.paths.get_source_dir(packageDir, pkgInfo);
+
+    for i = 1:length(withGroups)
+        group = withGroups{i};
+        if ~isfield(pkgInfo.extra_paths, group)
+            continue
+        end
+        paths = pkgInfo.extra_paths.(group);
+        for j = 1:length(paths)
+            rel = paths{j};
+            if strcmp(rel, '.')
+                target = srcDir;
+            else
+                target = fullfile(srcDir, rel);
+            end
+            addpath(target);
+        end
+        matched{end+1} = group; %#ok<AGROW>
     end
 end
 

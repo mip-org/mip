@@ -33,7 +33,7 @@ try
     end
 
     if ~isfield(pkgInfo, 'version')
-        pkgInfo.version = 'unknown';
+        pkgInfo.version = '';
     end
 
     if ~isfield(pkgInfo, 'dependencies')
@@ -52,6 +52,18 @@ try
             pkgInfo.paths = {};
         elseif ~iscell(pkgInfo.paths)
             pkgInfo.paths = {pkgInfo.paths};
+        end
+    end
+
+    % Normalize extra_paths field if present. Shape: struct mapping group
+    % name (e.g. "examples") -> cell array of source-relative paths.
+    if isfield(pkgInfo, 'extra_paths') && isstruct(pkgInfo.extra_paths)
+        for key = fieldnames(pkgInfo.extra_paths)'
+            if isempty(pkgInfo.extra_paths.(key{1}))
+                pkgInfo.extra_paths.(key{1}) = {};
+            elseif ~iscell(pkgInfo.extra_paths.(key{1}))
+                pkgInfo.extra_paths.(key{1}) = {pkgInfo.extra_paths.(key{1})};
+            end
         end
     end
 

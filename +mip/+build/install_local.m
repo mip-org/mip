@@ -158,14 +158,19 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
 
     fprintf('Installing "%s" in editable mode...\n', fqn);
 
-    % Match build and resolve config to determine addpaths
+    % Match build and resolve config to determine paths
     [buildEntry, effectiveArch] = mip.build.match_build(mipConfig);
     resolvedConfig = mip.build.resolve_build_config(mipConfig, buildEntry);
 
-    % Compute addpaths relative to the source directory. These are stored
+    % Compute paths relative to the source directory. These are stored
     % in mip.json verbatim; mip.load resolves them against source_path at
     % load time (source_path = sourceDir for editable installs).
-    addpathsList = mip.build.compute_addpaths(sourceDir, resolvedConfig.addpaths);
+    pathsList = mip.build.compute_addpaths(sourceDir, resolvedConfig.paths);
+    extraPaths = struct();
+    for key = fieldnames(resolvedConfig.extra_paths)'
+        extraPaths.(key{1}) = mip.build.compute_addpaths( ...
+            sourceDir, resolvedConfig.extra_paths.(key{1}));
+    end
 
     % Create package directory
     parentDir = fileparts(pkgDir);
@@ -188,7 +193,10 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
 
     % Create mip.json (include compile_script and test_script)
     jsonOpts = struct('editable', true, 'source_path', sourceDir);
-    jsonOpts.paths = addpathsList;
+    jsonOpts.paths = pathsList;
+    if ~isempty(fieldnames(extraPaths))
+        jsonOpts.extra_paths = extraPaths;
+    end
     if ~isempty(compileScript)
         jsonOpts.compile_script = compileScript;
     end

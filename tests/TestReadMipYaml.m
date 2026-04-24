@@ -30,7 +30,7 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.name, 'testpkg');
             testCase.verifyEqual(cfg.version, '1.0.0');
             testCase.verifyEqual(cfg.dependencies, {});
-            testCase.verifyEqual(cfg.addpaths, {});
+            testCase.verifyEqual(cfg.paths, {});
         end
 
         function testReadYamlWithDependencies(testCase)
@@ -42,12 +42,57 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             testCase.verifyEqual(sort(cfg.dependencies), sort({'depA', 'depB'}));
         end
 
-        function testReadYamlWithAddpaths(testCase)
+        function testReadYamlWithPaths(testCase)
             writeYaml(testCase.TestDir, ...
-                'name: mypkg\nversion: "1.0.0"\naddpaths:\n  - path: "."\n');
+                'name: mypkg\nversion: "1.0.0"\npaths:\n  - path: "."\n');
 
             cfg = mip.config.read_mip_yaml(testCase.TestDir);
-            testCase.verifyFalse(isempty(cfg.addpaths));
+            testCase.verifyFalse(isempty(cfg.paths));
+        end
+
+        function testReadYamlExtraPathsDefaultsToEmptyStruct(testCase)
+            % When the yaml omits extra_paths entirely, read_mip_yaml
+            % still populates the field with an empty struct so
+            % downstream code can iterate fieldnames() unconditionally.
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: "1.0.0"\n');
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyTrue(isstruct(cfg.extra_paths));
+            testCase.verifyTrue(isempty(fieldnames(cfg.extra_paths)));
+        end
+
+        function testReadYamlExtraPathsWithGroups(testCase)
+            % A populated extra_paths mapping should parse into a struct
+            % whose fields are the group names and whose values are
+            % cell arrays of entries shaped like top-level paths (each
+            % entry a struct with a .path field, for the path: "..." form).
+            writeYaml(testCase.TestDir, ...
+                ['name: mypkg\nversion: "1.0.0"\n' ...
+                 'extra_paths:\n' ...
+                 '  examples:\n' ...
+                 '    - path: "examples"\n' ...
+                 '  tests:\n' ...
+                 '    - path: "tests"\n']);
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyTrue(isfield(cfg.extra_paths, 'examples'));
+            testCase.verifyTrue(isfield(cfg.extra_paths, 'tests'));
+            testCase.verifyEqual(cfg.extra_paths.examples{1}.path, 'examples');
+            testCase.verifyEqual(cfg.extra_paths.tests{1}.path, 'tests');
+        end
+
+        function testReadYamlExtraPathsRejectsNonMapping(testCase)
+            % If the user writes `extra_paths:` as a sequence instead of
+            % a mapping, surface a clear invalidMipYaml error rather
+            % than letting a confusing downstream failure happen.
+            writeYaml(testCase.TestDir, ...
+                ['name: mypkg\nversion: "1.0.0"\n' ...
+                 'extra_paths:\n' ...
+                 '  - path: "examples"\n']);
+
+            testCase.verifyError( ...
+                @() mip.config.read_mip_yaml(testCase.TestDir), ...
+                'mip:invalidMipYaml');
         end
 
         function testReadYamlWithBuilds(testCase)
@@ -84,7 +129,14 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             writeYaml(testCase.TestDir, 'name: mypkg\n');
 
             cfg = mip.config.read_mip_yaml(testCase.TestDir);
-            testCase.verifyEqual(cfg.version, 'unknown');
+            testCase.verifyEqual(cfg.version, '');
+        end
+
+        function testReadYamlBlankVersion(testCase)
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: ""\n');
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.version, '');
         end
 
         function testReadYamlOptionalFields(testCase)

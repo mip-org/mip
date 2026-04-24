@@ -183,7 +183,7 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             output = evalc('mip.install(''-e'', srcDir)');
             testCase.verifyTrue(contains(output, 'mip load mypkg'), ...
                 'Should show bare name in load hint when name is unique');
-            testCase.verifyFalse(contains(output, 'mip load local/local/mypkg'), ...
+            testCase.verifyFalse(contains(output, 'mip load local/mypkg'), ...
                 'Should not show FQN when name is unique');
         end
 
@@ -332,7 +332,7 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             fid = fopen(fullfile(atDir, 'mip.yaml'), 'w');
             fprintf(fid, 'name: mypkg\nversion: "1.0.0"\n');
             fprintf(fid, 'description: "Test"\nlicense: MIT\n');
-            fprintf(fid, 'dependencies: []\naddpaths:\n  - path: "."\n');
+            fprintf(fid, 'dependencies: []\npaths:\n  - path: "."\n');
             fprintf(fid, 'builds:\n  - architectures: [any]\n');
             fclose(fid);
             fid = fopen(fullfile(atDir, 'mypkg.m'), 'w');
@@ -357,7 +357,7 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             fid = fopen(fullfile(atDir, 'mip.yaml'), 'w');
             fprintf(fid, 'name: myclass\nversion: "1.0.0"\n');
             fprintf(fid, 'description: "Test"\nlicense: MIT\n');
-            fprintf(fid, 'dependencies: []\naddpaths:\n  - path: "."\n');
+            fprintf(fid, 'dependencies: []\npaths:\n  - path: "."\n');
             fprintf(fid, 'builds:\n  - architectures: [any]\n');
             fclose(fid);
             fid = fopen(fullfile(atDir, 'myclass.m'), 'w');

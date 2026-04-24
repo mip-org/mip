@@ -47,10 +47,10 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
     methods (Test)
 
         function testLocalInstall_RejectsEquivalentFqn(testCase)
-            % An already-installed local/local/my_pkg must block installing
+            % An already-installed local/my_pkg must block installing
             % a source dir whose mip.yaml name is 'my-pkg' (equivalent
             % under hyphen/underscore interchange).
-            createTestPackage(testCase.TestRoot, 'local', 'local', 'my_pkg');
+            createTestPackage(testCase.TestRoot, '', '', 'my_pkg', 'type', 'local');
             srcDir = createTestSourcePackage(testCase.SourceDir, 'my-pkg');
             testCase.verifyError(@() mip.install('-e', srcDir), ...
                 'mip:install:equivalentAlreadyInstalled');
@@ -60,7 +60,7 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
             % Sanity check: exact-same name still takes the "already
             % installed" path (no error), i.e. the new check doesn't
             % regress the existing idempotent behavior.
-            createTestPackage(testCase.TestRoot, 'local', 'local', 'my_pkg');
+            createTestPackage(testCase.TestRoot, '', '', 'my_pkg', 'type', 'local');
             srcDir = createTestSourcePackage(testCase.SourceDir, 'my_pkg');
             % Should NOT throw; install_local prints a message and returns.
             mip.install('-e', srcDir);

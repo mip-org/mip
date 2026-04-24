@@ -48,7 +48,7 @@ classdef TestMipIdentity < matlab.unittest.TestCase
 
         function testCanUnloadMipLocalInstall(testCase)
             % A local/editable 'mip' package should be unloadable
-            createTestPackage(testCase.TestRoot, 'local', 'local', 'mip');
+            createTestPackage(testCase.TestRoot, '', '', 'mip', 'type', 'local');
             mip.load('local/mip');
             testCase.verifyTrue(mip.state.is_loaded('local/mip'));
 

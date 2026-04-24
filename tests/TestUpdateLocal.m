@@ -238,7 +238,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             % A local package with no source_path in mip.json has no
             % source to reinstall from; update skips it with a message
             % rather than erroring.
-            createTestPackage(testCase.TestRoot, 'local', 'local', 'nosrc');
+            createTestPackage(testCase.TestRoot, '', '', 'nosrc', 'type', 'local');
             mip.state.add_directly_installed('local/nosrc');
 
             output = evalc("mip.update('local/nosrc')");
@@ -249,7 +249,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         function testUpdateLocalPackage_EmptySourcePathSkipped(testCase)
             % Same behavior when source_path is present but empty (the
             % state produced by `mip install <name> --url <zip-url>`).
-            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            pkgDir = createTestPackage(testCase.TestRoot, '', '', 'urlpkg', 'type', 'local');
             setEmptySourcePath(pkgDir);
             mip.state.add_directly_installed('local/urlpkg');
 
@@ -260,7 +260,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
 
         function testUpdateForce_EmptySourcePathSkipped(testCase)
             % --force does not override the skip: no source means no update.
-            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            pkgDir = createTestPackage(testCase.TestRoot, '', '', 'urlpkg', 'type', 'local');
             setEmptySourcePath(pkgDir);
             mip.state.add_directly_installed('local/urlpkg');
 
@@ -275,7 +275,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             srcDir = createTestSourcePackage(testCase.SourceDir, 'normalpkg');
             mip.install(srcDir);
 
-            pkgDir = createTestPackage(testCase.TestRoot, 'local', 'local', 'urlpkg');
+            pkgDir = createTestPackage(testCase.TestRoot, '', '', 'urlpkg', 'type', 'local');
             setEmptySourcePath(pkgDir);
             mip.state.add_directly_installed('local/urlpkg');
 

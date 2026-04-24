@@ -6,6 +6,7 @@ function create_mip_json(outputDir, mipConfig, architecture, opts)
 %   mipConfig      - Struct from read_mip_yaml
 %   architecture   - Effective architecture string
 %   opts           - (Optional) Struct with fields:
+%     .version     - version string to record (overrides mipConfig.version)
 %     .editable    - true for editable installs
 %     .source_path - original source path (for editable installs)
 %     .install_type - install type string (default: 'local')
@@ -16,7 +17,11 @@ end
 
 mipData = struct();
 mipData.name = mipConfig.name;
-mipData.version = mipConfig.version;
+if isfield(opts, 'version') && ~isempty(opts.version)
+    mipData.version = opts.version;
+else
+    mipData.version = mipConfig.version;
+end
 
 if isfield(mipConfig, 'description')
     mipData.description = mipConfig.description;
@@ -28,6 +33,14 @@ mipData.dependencies = mipConfig.dependencies;
 
 if isfield(opts, 'paths')
     mipData.paths = ensureCellColumn(opts.paths);
+end
+
+if isfield(opts, 'extra_paths') && ~isempty(fieldnames(opts.extra_paths))
+    extraPaths = struct();
+    for key = fieldnames(opts.extra_paths)'
+        extraPaths.(key{1}) = ensureCellColumn(opts.extra_paths.(key{1}));
+    end
+    mipData.extra_paths = extraPaths;
 end
 
 if isfield(mipConfig, 'license')

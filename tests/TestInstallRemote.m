@@ -398,7 +398,7 @@ classdef TestInstallRemote < matlab.unittest.TestCase
             localAlpha = fullfile(scratch, 'alpha');
             mkdir(localAlpha);
             fid = fopen(fullfile(localAlpha, 'mip.yaml'), 'w');
-            fprintf(fid, 'name: alpha\nversion: "9.9.9"\naddpaths:\n  - path: "."\nbuilds:\n  - architectures: [any]\n');
+            fprintf(fid, 'name: alpha\nversion: "9.9.9"\npaths:\n  - path: "."\nbuilds:\n  - architectures: [any]\n');
             fclose(fid);
 
             mip.install('--channel', 'mip-org/test-channel1', 'alpha');

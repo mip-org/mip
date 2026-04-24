@@ -64,7 +64,7 @@ classdef TestPackageDiscovery < matlab.unittest.TestCase
         end
 
         function testResolveBareName_LocalInstall(testCase)
-            createTestPackage(testCase.TestRoot, 'local', 'local', 'devpkg');
+            createTestPackage(testCase.TestRoot, '', '', 'devpkg', 'type', 'local');
             fqn = mip.resolve.resolve_bare_name('devpkg');
             testCase.verifyEqual(fqn, 'local/devpkg');
         end
