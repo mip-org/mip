@@ -64,6 +64,15 @@ mip.state.key_value_append('MIP_STICKY_PACKAGES', 'gh/mip-org/core/mip');
 % Normalize command to lowercase
 command = lower(command);
 
+% Refresh tab-completion metadata after any command that may have
+% changed the installed / loaded / pinned package set. onCleanup
+% ensures this fires even if the command errors partway through
+% (e.g. `install a b` failing on `b` after `a` succeeded).
+if ismember(command, {'install','update','uninstall','load','unload', ...
+                     'pin','unpin','reset'})
+    refreshSignatures = onCleanup(@safe_update_signatures); %#ok<NASGU>
+end
+
 % Handle each command
 switch command
     case 'install'
@@ -179,4 +188,13 @@ if nargout > 0
     varargout{1} = [];
 end
 
+end
+
+
+function safe_update_signatures()
+% Wrapped so a write failure never breaks the command the user actually ran.
+try
+    mip.state.update_function_signatures();
+catch
+end
 end

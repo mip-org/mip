@@ -11,6 +11,9 @@ slprj/
 codegen/
 octave-workspace
 
+# Auto-generated tab-completion metadata (rewritten on every state-changing mip command)
+resources/functionSignatures.json
+
 # Python
 __pycache__/
 *.py[codz]
