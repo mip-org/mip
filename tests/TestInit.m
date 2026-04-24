@@ -177,7 +177,7 @@ classdef TestInit < matlab.unittest.TestCase
         function testInit_BlankOptionalFields(testCase)
             % Optional string fields are emitted blank and dependencies
             % defaults to an empty list, so the scaffolded config loads
-            % cleanly via read_mip_yaml. Version is set to "unknown".
+            % cleanly via read_mip_yaml.
             pkgDir = fullfile(testCase.TestDir, 'mypkg');
             mkdir(pkgDir);
 
@@ -189,7 +189,7 @@ classdef TestInit < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.homepage, '');
             testCase.verifyEqual(cfg.repository, '');
             testCase.verifyEqual(cfg.dependencies, {});
-            testCase.verifyEqual(cfg.version, 'unknown');
+            testCase.verifyEqual(cfg.version, '');
         end
 
         function testInit_RepositoryOverride(testCase)

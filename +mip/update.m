@@ -296,7 +296,7 @@ function p = resolvePackage(packageArg)
     try
         pkgInfo = mip.config.read_package_json(r.pkg_dir);
     catch
-        pkgInfo = struct('version', 'unknown', 'name', r.name);
+        pkgInfo = struct('version', '', 'name', r.name);
     end
 
     % "Local" here means any non-gh source type (local, fex, or web). Update

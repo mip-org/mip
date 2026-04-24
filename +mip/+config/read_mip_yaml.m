@@ -35,8 +35,8 @@ if ~isfield(mipConfig, 'name')
           'mip.yaml is missing required "name" field');
 end
 
-if ~isfield(mipConfig, 'version')
-    mipConfig.version = 'unknown';
+if ~isfield(mipConfig, 'version') || isempty(mipConfig.version)
+    mipConfig.version = '';
 end
 
 % Normalize dependencies to cell array

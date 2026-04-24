@@ -52,6 +52,11 @@ A **bare name** is just the package name without org/channel (e.g., `chebfun`). 
 
 Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`, `unspecified`). Numeric versions use dot-separated components that are each parseable as numbers.
 
+A version can live in two places:
+
+- **Channel release directory** (`packages/<name>/<version>/`) — the authoritative version for a channel-published package. May be numeric or non-numeric (e.g., a branch name like `main`).
+- **`mip.yaml`'s `version` field** — optional; when present, must be blank or numeric. Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`. See [§11.2.1](#1121-channel-version-rules) for how the two relate.
+
 ### 1.4 The `@version` Suffix
 
 Any package argument passed to a `mip` command (bare or FQN) can include `@version` to pin a specific version:
@@ -811,7 +816,7 @@ Lists packages available in the channel index. Uses `--channel` to specify which
 
 ### 9.4 `mip version`
 
-Prints the mip version string, read from `mip.yaml` in the package root.
+Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, an empty string is printed (see [§11.2](#112-mipyaml-schema)).
 
 ### 9.5 `mip index`
 
@@ -856,7 +861,7 @@ Behavior:
 1. If the target directory already contains a `mip.yaml`, `mip init` prints a message and exits without modifying anything.
 2. `paths` is auto-populated by walking the directory and identifying folders that contain runtime MATLAB code. The walk happens **before** the placeholder test script is created, so the root is not auto-included just because of that new file.
 3. A blank `test_<name>.m` is created at the target root (unless one already exists), and the generated `mip.yaml`'s `test_script` field points at it.
-4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. `version` defaults to `"unknown"`. A single `builds: [{ architectures: [any] }]` entry is emitted.
+4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. A single `builds: [{ architectures: [any] }]` entry is emitted.
 
 `mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)).
 
@@ -968,7 +973,7 @@ The `paths` field is the authoritative list of directories that `mip load` adds 
 
 ```yaml
 name: package_name              # Required
-version: "1.0.0"                # Optional (defaults to "unknown")
+version: "1.0.0"                # Optional; blank or numeric
 description: "..."              # Optional
 license: MIT                    # Optional
 homepage: "https://..."         # Optional
@@ -987,6 +992,18 @@ builds:                         # Optional
     compile_script: "compile.m" # Optional
     test_script: "run_tests.m"  # Optional
 ```
+
+#### 11.2.1 Channel Version Rules
+
+A channel's package layout is `packages/<name>/<version>/` where the directory name is the authoritative version. `recipe.yaml` does not carry a `version` field. `mip.yaml`'s `version` is optional; when present it must be either blank or numeric (e.g. `1.2.3`). Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`.
+
+The channel build (`prepare_packages.py`) validates that the release-directory name is one of:
+
+1. the numeric `version` in `mip.yaml`,
+2. the `source.branch` in `recipe.yaml`, or
+3. any string, when `mip.yaml`'s `version` is blank/missing.
+
+The channel build passes the release-directory name to `mip bundle` so the bundled `mip.json` carries it as the authoritative version. The source `mip.yaml` in the bundle is unchanged; its `version` may remain blank or numeric while `mip.json` records the release-directory name.
 
 ### 11.3 `.mhl` File Format
 

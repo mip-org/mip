@@ -1,6 +1,6 @@
 name: mip
 description: "MIP package manager for MATLAB"
-version: "main"
+version: ""
 license: Apache-2.0
 homepage: "https://mip.sh"
 repository: "https://github.com/mip-org/mip"

@@ -6,6 +6,7 @@ function create_mip_json(outputDir, mipConfig, architecture, opts)
 %   mipConfig      - Struct from read_mip_yaml
 %   architecture   - Effective architecture string
 %   opts           - (Optional) Struct with fields:
+%     .version     - version string to record (overrides mipConfig.version)
 %     .editable    - true for editable installs
 %     .source_path - original source path (for editable installs)
 %     .install_type - install type string (default: 'local')
@@ -16,7 +17,11 @@ end
 
 mipData = struct();
 mipData.name = mipConfig.name;
-mipData.version = mipConfig.version;
+if isfield(opts, 'version') && ~isempty(opts.version)
+    mipData.version = opts.version;
+else
+    mipData.version = mipConfig.version;
+end
 
 if isfield(mipConfig, 'description')
     mipData.description = mipConfig.description;

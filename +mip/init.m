@@ -119,7 +119,7 @@ function write_mip_yaml(yamlPath, pkgName, pathsList, extraPaths, testScript, re
 
     fprintf(fid, 'name: %s\n', pkgName);
     fprintf(fid, 'description: ""\n');
-    fprintf(fid, 'version: "unknown"\n');
+    fprintf(fid, 'version: ""\n');
     fprintf(fid, 'license: ""\n');
     fprintf(fid, 'homepage: ""\n');
     fprintf(fid, 'repository: "%s"\n', repository);
