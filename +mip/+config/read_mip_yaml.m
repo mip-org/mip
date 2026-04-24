@@ -35,7 +35,7 @@ if ~isfield(mipConfig, 'name')
 end
 
 if ~isfield(mipConfig, 'version') || isempty(mipConfig.version)
-    mipConfig.version = 'unknown';
+    mipConfig.version = '';
 end
 
 % Normalize dependencies to cell array

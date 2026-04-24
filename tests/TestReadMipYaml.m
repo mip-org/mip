@@ -76,7 +76,14 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             writeYaml(testCase.TestDir, 'name: mypkg\n');
 
             cfg = mip.config.read_mip_yaml(testCase.TestDir);
-            testCase.verifyEqual(cfg.version, 'unknown');
+            testCase.verifyEqual(cfg.version, '');
+        end
+
+        function testReadYamlBlankVersion(testCase)
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: ""\n');
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.version, '');
         end
 
         function testReadYamlOptionalFields(testCase)

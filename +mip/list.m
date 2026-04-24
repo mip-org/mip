@@ -56,7 +56,7 @@ for i = 1:n
     displayFqns{i} = mip.parse.display_fqn(fqn);
     pkgDir = mip.paths.get_package_dir(fqn);
 
-    versions{i} = 'unknown';
+    versions{i} = '';
     editablePaths{i} = '';
     try
         pkgInfo = mip.config.read_package_json(pkgDir);

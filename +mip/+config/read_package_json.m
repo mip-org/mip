@@ -33,7 +33,7 @@ try
     end
 
     if ~isfield(pkgInfo, 'version')
-        pkgInfo.version = 'unknown';
+        pkgInfo.version = '';
     end
 
     if ~isfield(pkgInfo, 'dependencies')
