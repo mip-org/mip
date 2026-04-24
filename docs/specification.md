@@ -816,7 +816,7 @@ Lists packages available in the channel index. Uses `--channel` to specify which
 
 ### 9.4 `mip version`
 
-Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, `"unknown"` is printed (see [§11.2](#112-mipyaml-schema)).
+Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, an empty string is printed (see [§11.2](#112-mipyaml-schema)).
 
 ### 9.5 `mip index`
 
@@ -861,7 +861,7 @@ Behavior:
 1. If the target directory already contains a `mip.yaml`, `mip init` prints a message and exits without modifying anything.
 2. `addpaths` is auto-populated by walking the directory and identifying folders that contain runtime MATLAB code. The walk happens **before** the placeholder test script is created, so the root is not auto-included just because of that new file.
 3. A blank `test_<name>.m` is created at the target root (unless one already exists), and the generated `mip.yaml`'s `test_script` field points at it.
-4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. An empty `version` is normalized to `"unknown"` when read back via `mip.config.read_mip_yaml`. A single `builds: [{ architectures: [any] }]` entry is emitted.
+4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. A single `builds: [{ architectures: [any] }]` entry is emitted.
 
 `mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)).
 
@@ -973,7 +973,7 @@ The `paths` field is the authoritative list of directories that `mip load` adds 
 
 ```yaml
 name: package_name              # Required
-version: "1.0.0"                # Optional; blank or numeric. Empty/missing is normalized to "unknown" internally.
+version: "1.0.0"                # Optional; blank or numeric
 description: "..."              # Optional
 license: MIT                    # Optional
 homepage: "https://..."         # Optional
@@ -998,7 +998,7 @@ The channel build (`prepare_packages.py`) validates that the release-directory n
 2. the `source.branch` in `recipe.yaml`, or
 3. any string, when `mip.yaml`'s `version` is blank/missing.
 
-When `mip.yaml`'s version is blank/missing, the channel build writes the release-directory name into `mip.yaml` before bundling, so the resulting `.mhl`'s `mip.json` carries the correct version string.
+The channel build passes the release-directory name to `mip bundle` so the bundled `mip.json` carries it as the authoritative version. The source `mip.yaml` in the bundle is unchanged; its `version` may remain blank or numeric while `mip.json` records the release-directory name.
 
 ### 11.3 `.mhl` File Format
 

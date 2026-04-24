@@ -29,8 +29,18 @@ end
 mipConfig = mip.config.read_mip_yaml(sourceDir);
 packageName = mipConfig.name;
 
+% If the channel build supplied a .release_version override, use it for
+% the status message and mip.json. Falls back to mip.yaml's version.
+effectiveVersion = num2str(mipConfig.version);
+sourceReleaseVersionFile = fullfile(sourceDir, '.release_version');
+if exist(sourceReleaseVersionFile, 'file')
+    fid = fopen(sourceReleaseVersionFile, 'r');
+    effectiveVersion = strtrim(fread(fid, '*char')');
+    fclose(fid);
+end
+
 fprintf('Preparing package "%s" (version %s)\n', packageName, ...
-        num2str(mipConfig.version));
+        effectiveVersion);
 
 % Match build for current architecture
 [buildEntry, effectiveArch] = mip.build.match_build(mipConfig, architecture);
@@ -88,6 +98,14 @@ if exist(commitHashFile, 'file')
     jsonOpts.commit_hash = strtrim(fread(fid, '*char')');
     fclose(fid);
     delete(commitHashFile);
+end
+% The channel build drops .release_version next to .source_hash when the
+% release-directory name should override mip.yaml's version (e.g. a branch
+% name like "main" for a blank/numeric mip.yaml version).
+releaseVersionFile = fullfile(pkgSubdir, '.release_version');
+if exist(releaseVersionFile, 'file')
+    jsonOpts.version = effectiveVersion;
+    delete(releaseVersionFile);
 end
 if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
     jsonOpts.test_script = resolvedConfig.test_script;

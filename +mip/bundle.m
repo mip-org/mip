@@ -81,7 +81,9 @@ function bundle(varargin)
             mipConfig = mip.build.prepare_package(sourceDir, stagingDir, architecture);
         end
 
-        % Read mip.json to get the effective architecture
+        % Read mip.json to get the effective architecture and version
+        % (mip.json's version may differ from mip.yaml's when a channel
+        % build supplied a release-dir version override).
         mipJsonPath = fullfile(stagingDir, 'mip.json');
         mipJsonText = fileread(mipJsonPath);
         mipJson = jsondecode(mipJsonText);
@@ -92,7 +94,7 @@ function bundle(varargin)
         % name with '_' in the filename.
         nameForFilename = strrep(mipConfig.name, '-', '_');
         mhlFilename = sprintf('%s-%s-%s.mhl', ...
-            nameForFilename, num2str(mipConfig.version), effectiveArch);
+            nameForFilename, num2str(mipJson.version), effectiveArch);
         mhlPath = fullfile(outputDir, mhlFilename);
 
         % Create .mhl (zip) from staging directory contents
