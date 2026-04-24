@@ -37,17 +37,11 @@ parse(p, varargin{:});
 
 sourceType = p.Results.type;
 if isempty(sourceType)
-    % Back-compat: if the caller passed 'local', 'local' or 'fex', 'fex',
-    % treat it as the corresponding non-gh source type (shorthand used by
-    % older test fixtures).
-    if strcmp(org, channel) && (strcmp(org, 'local') || strcmp(org, 'fex'))
-        sourceType = org;
-    elseif isempty(org) && isempty(channel)
+    if isempty(org) && isempty(channel)
         error('createTestPackage:invalidArgs', ...
               'org/channel must be given for gh packages, or pass type=''local''/''fex''.');
-    else
-        sourceType = 'gh';
     end
+    sourceType = 'gh';
 end
 
 if strcmp(sourceType, 'gh')
