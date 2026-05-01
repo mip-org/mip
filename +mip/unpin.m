@@ -6,7 +6,7 @@ function unpin(varargin)
 %   mip unpin org/channel/<package>
 %   mip unpin <package1> <package2> ...
 %
-% Unpinned packages will be updated normally by "mip update --all".
+% Unpinned packages will be updated normally by "mip update".
 %
 % Accepts both bare package names and fully qualified names.
 

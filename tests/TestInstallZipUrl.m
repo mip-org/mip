@@ -123,6 +123,15 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
                 'mip:install:urlMustBeZip');
         end
 
+        function testUrl_RejectsHttpScheme(testCase)
+            % Plain http:// is refused: a MITM could swap the archive
+            % and gain code execution once the package is loaded. See
+            % #229.
+            testCase.verifyError( ...
+                @() mip.install('mypkg', '--url', 'http://example.com/foo.zip'), ...
+                'mip:install:requireHttps');
+        end
+
         function testUrl_RejectsZipOnlyInQueryString(testCase)
             % .zip appears only in query string (not path) -> not a zip URL
             testCase.verifyError( ...
@@ -194,6 +203,15 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
                 % Both are acceptable; the test passes as long as it's
                 % not urlMustBeZip.
             end
+        end
+
+        function testFexUrl_AsPositional_RequiresName(testCase)
+            % `mip install <FEX URL>` (without --url) should produce a
+            % helpful message pointing to the correct syntax, rather than
+            % attempting to download the landing page as an .mhl file.
+            testCase.verifyError( ...
+                @() mip.install('https://www.mathworks.com/matlabcentral/fileexchange/26311-shadederrorbar'), ...
+                'mip:install:fexRequiresName');
         end
 
         function testWebUrl_E2EInstall(testCase)

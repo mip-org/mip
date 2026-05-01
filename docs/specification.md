@@ -50,7 +50,7 @@ A **bare name** is just the package name without org/channel (e.g., `chebfun`). 
 
 ### 1.3 Version Strings
 
-Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`, `unspecified`). Numeric versions use dot-separated components that are each parseable as numbers.
+Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`). Numeric versions use dot-separated components that are each parseable as numbers.
 
 A version can live in two places:
 
@@ -266,8 +266,7 @@ Given all available versions for a package:
 1. If any numeric versions exist (all dot-separated components are numbers), select the **highest** numeric version.
 2. Else if `main` exists, select it.
 3. Else if `master` exists, select it.
-4. Else if `unspecified` exists, select it.
-5. Else select the alphabetically first version.
+4. Else select the alphabetically first version.
 
 If a `@version` was specified, it overrides this selection. If the requested version doesn't exist, raises `mip:versionNotFound`.
 
@@ -438,12 +437,13 @@ Validation happens *before* extraction so that a malicious entry can never write
 4. Look up the package directory. If it doesn't exist, raise `mip:packageNotFound`.
 5. If already loaded:
    - If this is a direct load and the package was previously loaded as a dependency, promote it to "directly loaded".
+   - If this is a direct load, also mark the package as directly installed (idempotent; promotes a previously transitive install).
    - If `--sticky` is specified, add to sticky packages.
    - Return early.
 6. Read `mip.json` and load dependencies first (recursively, as non-direct loads).
 7. Add each entry in the `mip.json` `paths` field to the MATLAB path (see [§4.8](#48-path-addition-from-mipjson)). If the field is missing, raise `mip:loadNotFound` and stop -- the package is **not** marked as loaded.
 8. Add to `MIP_LOADED_PACKAGES`.
-9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES`.
+9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES` and mark the package as directly installed.
 10. If `--sticky`, add to `MIP_STICKY_PACKAGES`.
 
 ### 4.2 The `--sticky` Flag
@@ -467,7 +467,7 @@ When loading a package with dependencies (listed in `mip.json`):
 
 1. Each dependency is resolved using `resolve_dependency` ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)): bare names always resolve to `gh/mip-org/core/<name>`.
 2. Dependencies are loaded recursively before the package itself.
-3. Dependencies are loaded as **non-direct** (they won't appear in `MIP_DIRECTLY_LOADED_PACKAGES`).
+3. Dependencies are loaded as **non-direct** (they won't appear in `MIP_DIRECTLY_LOADED_PACKAGES`, and are not added to `directly_installed.txt`).
 4. Dependencies are loaded as **non-sticky** (even if the parent was loaded with `--sticky`).
 5. Already-loaded dependencies are skipped.
 
@@ -630,12 +630,12 @@ If the packages directory is missing when self-uninstall is invoked, the flow ra
 
 `mip update X Y Z` updates only the named packages. Existing dependencies are **not** updated (unless `--deps` is specified). After replacing each package with the latest version from its channel, any missing dependencies that the updated packages require are installed and any orphaned packages (old dependencies no longer needed by any directly installed package) are pruned. Packages that do **not** need updating are left entirely alone unless `--force` is specified.
 
-Packages can be **pinned** to protect them from `mip update --all`; see [§7.11](#711-pinned-packages).
+Packages can be **pinned** to block all `mip update` paths from upgrading them; see [§7.11](#711-pinned-packages).
 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
-2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` bypasses the pin filter and auto-unpins each forced package after a successful update (see [§7.11](#711-pinned-packages)). If every installed package is pinned and `--force` is not set, a message is printed and `mip update --all` returns without error. If `--deps` is specified, expand each package's installed transitive dependencies into the argument list.
+2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` does **not** override the pin filter (see [§7.11](#711-pinned-packages)). If every installed package is pinned, a message is printed and `mip update --all` returns without error. Otherwise (no `--all`), drop any explicitly named pinned packages from the batch with a "Skipping pinned package" message; the unpinned named packages still update. The user must `mip unpin <pkg>` first to update a pinned package. If every named package is pinned, the call returns without error. If `--deps` is specified, expand each remaining package's installed transitive dependencies into the argument list, dropping any pinned dependencies with a "Skipping pinned dependency" message.
 3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
@@ -658,7 +658,7 @@ Packages can be **pinned** to protect them from `mip update --all`; see [§7.11]
 
 #### 7.1.1 Target Version Selection for Update
 
-`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`, `unspecified`), the update stays on that branch or version — the target is the same version in the channel, and only the commit hash is refreshed. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
+`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`), the update stays on that branch or version — the target is the same version in the channel, and only the commit hash is refreshed. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
 
 Behavior by installed version:
 
@@ -729,7 +729,7 @@ Missing dependencies installed during the update are **not** added to `directly_
 
 ### 7.11 Pinned Packages
 
-A package can be **pinned** to protect it from sweeping updates. Pin state is stored persistently in `<root>/packages/pinned.txt` (one FQN per line) -- it survives MATLAB restarts and is separate from the loaded/sticky/directly-installed state.
+A package can be **pinned** to block all `mip update` paths from upgrading it. Pin state is stored persistently in `<root>/packages/pinned.txt` (one FQN per line) -- it survives MATLAB restarts and is separate from the loaded/sticky/directly-installed state.
 
 #### 7.11.1 `mip pin <package> [...]`
 
@@ -741,14 +741,15 @@ Removes a pin. Each argument is resolved against installed packages; not-install
 
 #### 7.11.3 Pin Behavior
 
-- **`mip update --all`**: pinned packages are dropped from the batch with a "Skipping pinned package" message. If every package is pinned, the command prints a message and returns. See [§7.1](#71-update-flow-mip-update-x-y-z).
-- **`mip update --all --force`**: pinned packages *are* updated, and each is **automatically unpinned** after a successful update. A follow-up "Unpinned" message is printed.
-- **`mip update <name>`** (explicit name, no `--force`): the pin is **not** honored -- naming a package explicitly updates it. This is intentional; pinning protects against sweeps, not against deliberate updates.
-- **`mip update <name> --force`**: the named package is forced and then auto-unpinned (same mechanism as `--all --force`).
+A pin blocks every `mip update` invocation from upgrading the pinned package. The only way to update a pinned package is to `mip unpin <pkg>` first; `--force` does not override the pin.
+
+- **`mip update <name>`** (explicit, with or without `--force`): if `<name>` is pinned, it is dropped from the batch with a "Skipping pinned package" message that points the user at `mip unpin <name>`. Other (unpinned) named packages in the same call still update. If every named package is pinned, the call returns without error.
+- **`mip update --all`** (with or without `--force`): pinned packages are dropped from the batch with a "Skipping pinned package" message. If every installed package is pinned, the command prints a message and returns. See [§7.1](#71-update-flow-mip-update-x-y-z).
+- **`mip update --deps <name>`**: if `<name>` itself is pinned, it is dropped from the batch with the same "Skipping pinned package" message as the explicit-name rule (its dependencies are not expanded). Pinned dependencies surfaced by the `--deps` expansion of unpinned named packages are dropped with a "Skipping pinned dependency" message and are not updated.
 - **`mip uninstall <name>`**: the pin for `<name>` is cleared automatically so a reinstall starts unpinned.
 - **`mip list`**: pinned packages display a `[pinned]` marker alongside any other markers (`[sticky]`, `[editable]`, etc.).
 
-The `mip-org/core/mip` identity is not special-cased: it can be pinned and unpinned like any other package, but note that `mip update mip` runs the self-update flow ([§7.7](#77-self-update-mip-update-mip)) which does not consult the pin list.
+The `mip-org/core/mip` identity is not special-cased: it can be pinned and unpinned like any other package. `mip update mip` is treated as an explicit named update for pin purposes — if `mip` is pinned, it is skipped from the batch with the same "Skipping pinned package" message rather than running the self-update flow ([§7.7](#77-self-update-mip-update-mip)).
 
 ### 7.12 Build Matching (`match_build`)
 
@@ -886,7 +887,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 | File | Contents | Purpose |
 |---|---|---|
 | `<root>/packages/directly_installed.txt` | One FQN per line | Tracks which packages were directly installed (vs. installed as dependencies). Used for pruning. |
-| `<root>/packages/pinned.txt` | One FQN per line | Tracks which packages are pinned against `mip update --all`. See [§7.11](#711-pinned-packages). |
+| `<root>/packages/pinned.txt` | One FQN per line | Tracks which packages are pinned against `mip update`. See [§7.11](#711-pinned-packages). |
 
 ### 10.3 Key-Value Storage Operations
 
@@ -903,6 +904,10 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 - `get_directly_installed()`: Returns current list.
 
 This tracking is critical for dependency pruning: only directly installed packages are "roots" in the dependency graph. Packages installed only as dependencies can be pruned when no root needs them.
+
+Entries are added by:
+- `mip install <pkg>` — marks the user-requested packages, even if they were already on disk as transitive dependencies (so re-installing a transitive dep promotes it to a root).
+- `mip load <pkg>` — marks any package the user loads directly (`isDirect`). This means a `mip load` of a package previously pulled in only as a transitive dependency promotes it to a root, so a later uninstall of its parent will not prune it. Loads marked `--transitive` (used internally for dependency loads) do not mark.
 
 Writes to `directly_installed.txt` are performed atomically: the new contents are written to `directly_installed.txt.tmp` and then moved into place via `movefile`. If the temp write fails, the existing `directly_installed.txt` is left untouched and the temp file is deleted. A stale `.tmp` from a previous crashed write is overwritten on the next write, not appended to.
 

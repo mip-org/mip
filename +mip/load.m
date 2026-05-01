@@ -192,6 +192,9 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
         else
             fprintf('Package "%s" is already loaded\n', displayFqn);
         end
+        if isDirect
+            mip.state.add_directly_installed(fqn);
+        end
         % If --sticky was specified, add to sticky packages
         if stickyPackage
             if ~mip.state.is_sticky(fqn)
@@ -218,6 +221,11 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
             mipConfig = mip.config.read_package_json(packageDir);
             deps = mipConfig.dependencies;
         catch ME
+            % Path-traversal failures must propagate so a malicious
+            % package cannot fall through to the addpath stage.
+            if strcmp(ME.identifier, 'mip:unsafePath')
+                rethrow(ME);
+            end
             warning('mip:jsonParseError', ...
                     'Could not parse mip.json for package "%s": %s', ...
                     displayFqn, ME.message);
@@ -257,6 +265,7 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
     % Track directly loaded packages separately
     if isDirect
         mip.state.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+        mip.state.add_directly_installed(fqn);
     end
 
     % Mark package as sticky if requested
@@ -276,6 +285,7 @@ function applyMipJsonPaths(packageDir, pkgInfo)
     srcDir = mip.paths.get_source_dir(packageDir, pkgInfo);
     for i = 1:length(pkgInfo.paths)
         rel = pkgInfo.paths{i};
+        mip.paths.assert_safe_relative(rel, sprintf('mip.json paths[%d]', i));
         if strcmp(rel, '.')
             target = srcDir;
         else
@@ -309,6 +319,8 @@ function matched = applyExtraPaths(packageDir, withGroups)
         paths = pkgInfo.extra_paths.(group);
         for j = 1:length(paths)
             rel = paths{j};
+            mip.paths.assert_safe_relative(rel, ...
+                sprintf('mip.json extra_paths.%s[%d]', group, j));
             if strcmp(rel, '.')
                 target = srcDir;
             else
@@ -333,6 +345,7 @@ function applyPathAdjustments(packageDir, addPathRels, rmPathRels)
 
     for i = 1:length(addPathRels)
         rel = addPathRels{i};
+        mip.paths.assert_safe_relative(rel, '--addpath');
         target = fullfile(srcDir, rel);
         % addpath emits MATLAB:addpath:DirNotFound if the target is missing.
         addpath(target);
@@ -341,6 +354,7 @@ function applyPathAdjustments(packageDir, addPathRels, rmPathRels)
 
     for i = 1:length(rmPathRels)
         rel = rmPathRels{i};
+        mip.paths.assert_safe_relative(rel, '--rmpath');
         target = fullfile(srcDir, rel);
         % rmpath warns (not errors) if the path is not on the search path.
         rmpath(target);

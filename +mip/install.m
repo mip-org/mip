@@ -7,13 +7,14 @@ function install(varargin)
 %   mip install --channel dev <package>
 %   mip install --channel owner/channel <package>
 %   mip install owner/channel/<package>
-%   mip install /path/to/package.mhl
-%   mip install https://example.com/package.mhl
-%   mip install /path/to/local/package                    - Install from local directory
-%   mip install . --editable                              - Editable install (like pip -e)
-%   mip install -e /path/to/package                       - Editable install (short form)
-%   mip install -e . --no-compile                         - Editable install, skip compilation
-%   mip install mypkg --url https://example.com/pkg.zip   - Install from a remote .zip URL
+%   mip install /path/to/package.mhl                          - Install under mhl/<name>
+%   mip install https://example.com/package.mhl               - Install under mhl/<name>
+%   mip install --channel org/channel /path/to/package.mhl    - Install under gh/org/channel/<name>
+%   mip install /path/to/local/package                        - Install from local directory
+%   mip install . --editable                                  - Editable install (like pip -e)
+%   mip install -e /path/to/package                           - Editable install (short form)
+%   mip install -e . --no-compile                             - Editable install, skip compilation
+%   mip install mypkg --url https://example.com/pkg.zip       - Install from a remote .zip URL
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)
@@ -104,6 +105,11 @@ function install(varargin)
     for i = 1:length(args)
         pkg = char(args{i});
         if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
+            if isFileExchangeUrl(pkg)
+                error('mip:install:fexRequiresName', ...
+                      ['To install a package from the File Exchange, you must specify a package name using the syntax\n' ...
+                       '   mip install <name> --url <url>']);
+            end
             mhlSources{end+1} = pkg; %#ok<AGROW>
         elseif isLocalPathArg(pkg)
             localPaths{end+1} = pkg; %#ok<AGROW>
@@ -347,78 +353,94 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     % Sort topologically
     allPackagesToInstall = mip.dependency.topological_sort(allRequiredFqns, packageInfoMap);
 
-    % If a user-requested @version differs from what's installed, replace it
-    reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageInfoMap);
+    % If a user-requested @version differs from what's installed, replace it.
+    % Old versions are staged to backup dirs; restored on failure below.
+    [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap);
 
-    % Determine which packages need installing vs already installed.
-    % Reject equivalent-but-different on-disk names (e.g. user asks for
-    % "some-packagE" while "some_package" is already installed): their
-    % FQNs share a normalized form, so letting both coexist would give
-    % two parallel installs for one logical package.
-    toInstallFqns = {};
-    for i = 1:length(allPackagesToInstall)
-        fqn = allPackagesToInstall{i};
-        result = mip.parse.parse_package_arg(fqn);
-        existingName = mip.resolve.installed_dir(fqn);
-        if ~isempty(existingName) && ~strcmp(existingName, result.name)
-            existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
-            error('mip:install:equivalentAlreadyInstalled', ...
-                  ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
-                   'Package names are equivalent when they match after lowercasing and ' ...
-                   'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
-                  mip.parse.display_fqn(fqn), mip.parse.display_fqn(existingFqn), ...
-                  mip.parse.display_fqn(existingFqn));
+    % From here on, any error must restore @version backups. If a download
+    % was actually attempted, also prune orphan deps installed during this
+    % call (they aren't in directly_installed.txt yet). Restore happens
+    % before prune so prune doesn't drop deps of the restored packages.
+    installAttempted = false;
+    try
+        % Determine which packages need installing vs already installed.
+        % Reject equivalent-but-different on-disk names (e.g. user asks for
+        % "some-packagE" while "some_package" is already installed): their
+        % FQNs share a normalized form, so letting both coexist would give
+        % two parallel installs for one logical package.
+        toInstallFqns = {};
+        for i = 1:length(allPackagesToInstall)
+            fqn = allPackagesToInstall{i};
+            result = mip.parse.parse_package_arg(fqn);
+            existingName = mip.resolve.installed_dir(fqn);
+            if ~isempty(existingName) && ~strcmp(existingName, result.name)
+                existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
+                error('mip:install:equivalentAlreadyInstalled', ...
+                      ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
+                       'Package names are equivalent when they match after lowercasing and ' ...
+                       'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
+                      mip.parse.display_fqn(fqn), mip.parse.display_fqn(existingFqn), ...
+                      mip.parse.display_fqn(existingFqn));
+            end
+            pkgDir = mip.paths.get_package_dir(fqn);
+            if exist(pkgDir, 'dir')
+                fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+            else
+                toInstallFqns{end+1} = fqn; %#ok<AGROW>
+            end
         end
-        pkgDir = mip.paths.get_package_dir(fqn);
-        if exist(pkgDir, 'dir')
-            fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
-        else
-            toInstallFqns{end+1} = fqn; %#ok<AGROW>
-        end
-    end
 
-    % Show installation plan and install
-    if ~isempty(toInstallFqns)
-        if length(toInstallFqns) == 1
-            fprintf('\nInstallation plan:\n');
-        else
-            fprintf('\nInstallation plan (%d packages):\n', length(toInstallFqns));
-        end
-        for i = 1:length(toInstallFqns)
-            fprintf('  - %s %s\n', mip.parse.display_fqn(toInstallFqns{i}), packageInfoMap(toInstallFqns{i}).version);
-        end
-        fprintf('\n');
+        % Show installation plan and install
+        if ~isempty(toInstallFqns)
+            if isscalar(toInstallFqns)
+                fprintf('\nInstallation plan:\n');
+            else
+                fprintf('\nInstallation plan (%d packages):\n', length(toInstallFqns));
+            end
+            for i = 1:length(toInstallFqns)
+                fprintf('  - %s %s\n', mip.parse.display_fqn(toInstallFqns{i}), packageInfoMap(toInstallFqns{i}).version);
+            end
+            fprintf('\n');
 
-        % Install each package. On failure, prune orphaned deps that were
-        % installed during this call (they aren't in directly_installed.txt yet).
-        try
+            installAttempted = true;
             for i = 1:length(toInstallFqns)
                 fqn = toInstallFqns{i};
                 pkgDir = mip.paths.get_package_dir(fqn);
                 downloadAndInstall(fqn, packageInfoMap(fqn), pkgDir);
             end
-        catch ME
-            fprintf('\nInstall failed; rolling back any orphaned dependencies...\n');
+        end
+    catch ME
+        fprintf('\nInstall failed; rolling back...\n');
+        restoreReplacementBackups(replacementBackups);
+        if installAttempted
             try
                 mip.state.prune_unused_packages();
             catch pruneErr
                 warning('mip:rollbackFailed', ...
                         'Rollback prune failed: %s', pruneErr.message);
             end
-            rethrow(ME);
         end
+        rethrow(ME);
+    end
+    cleanupReplacementBackups(replacementBackups);
 
-        % Mark requested packages as directly installed and collect their FQNs.
-        % Skip marking when this call is installing transitive dependencies
-        % (e.g. from an .mhl install) so those deps can be pruned later.
+    if ~isempty(toInstallFqns)
         for i = 1:length(resolvedPackages)
             s = resolvedPackages{i};
-            if markDirectlyInstalled
-                mip.state.add_directly_installed(s.fqn);
-            end
             if ismember(s.fqn, toInstallFqns)
                 installedFqns{end+1} = s.fqn; %#ok<AGROW>
             end
+        end
+    end
+
+    % Mark requested packages as directly installed. Runs whether or not
+    % anything new was downloaded, so that re-installing a package that
+    % was previously pulled in as a transitive dep promotes it. Skipped
+    % when this call is installing transitive dependencies (e.g. from an
+    % .mhl install) so those deps can be pruned later.
+    if markDirectlyInstalled
+        for i = 1:length(resolvedPackages)
+            mip.state.add_directly_installed(resolvedPackages{i}.fqn);
         end
     end
 
@@ -441,10 +463,14 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     end
 end
 
-function reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageInfoMap)
+function [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap)
 % Replace installed packages when the user requested a different @version.
+% Old packages are moved to backup dirs (returned in replacementBackups) so the
+% caller can restore them if a subsequent download/install fails.
 % Returns FQNs that were loaded before replacement (caller should reload them).
     reloadAfterInstall = {};
+    replacementBackups = struct('fqn', {}, 'pkgDir', {}, 'backupDir', {}, ...
+                                'wasDirectlyInstalled', {});
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
         if isempty(s.requested_version)
@@ -468,23 +494,69 @@ function reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageI
             mip.unload(s.fqn);
             reloadAfterInstall{end+1} = s.fqn; %#ok<AGROW>
         end
-        rmdir(pkgDir, 's');
-        mip.state.remove_directly_installed(s.fqn);
+        wasDirectlyInstalled = mip.state.is_directly_installed(s.fqn);
+        backupDir = [tempname '_mip_backup'];
+        movefile(pkgDir, backupDir);
+        if wasDirectlyInstalled
+            mip.state.remove_directly_installed(s.fqn);
+        end
+        replacementBackups(end+1) = struct(...
+            'fqn', s.fqn, ...
+            'pkgDir', pkgDir, ...
+            'backupDir', backupDir, ...
+            'wasDirectlyInstalled', wasDirectlyInstalled); %#ok<AGROW>
+    end
+end
+
+function restoreReplacementBackups(replacementBackups)
+% Restore packages from backup dirs after a failed replace install.
+    for i = 1:length(replacementBackups)
+        b = replacementBackups(i);
+        try
+            if exist(b.pkgDir, 'dir')
+                rmdir(b.pkgDir, 's');
+            end
+            if exist(b.backupDir, 'dir')
+                movefile(b.backupDir, b.pkgDir);
+            end
+            if b.wasDirectlyInstalled
+                mip.state.add_directly_installed(b.fqn);
+            end
+        catch restoreErr
+            warning('mip:rollbackFailed', ...
+                    'Could not restore "%s" from backup: %s', ...
+                    mip.parse.display_fqn(b.fqn), restoreErr.message);
+        end
+    end
+end
+
+function cleanupReplacementBackups(replacementBackups)
+% Remove backup dirs after a successful replace install.
+    for i = 1:length(replacementBackups)
+        b = replacementBackups(i);
+        if exist(b.backupDir, 'dir')
+            rmdir(b.backupDir, 's');
+        end
     end
 end
 
 function installedFqn = installFromMhl(mhlSource, ~, channel)
 % Install a package from a local .mhl file or URL.
+%
+% When no --channel was given, the package lands under the 'mhl/' source
+% type (e.g. 'mhl/chebfun'), so a .mhl from an arbitrary path or URL
+% cannot masquerade as a member of the default core channel. Passing
+% --channel <org>/<chan> opts in to gh-channel placement.
 
     installedFqn = '';
     tempDir = tempname;
     mkdir(tempDir);
     cleanupTemp = onCleanup(@() rmTempDir(tempDir));
 
-    if isempty(channel)
-        channel = 'mip-org/core';
+    useGhChannel = ~isempty(channel);
+    if useGhChannel
+        [org, channelName] = mip.parse.parse_channel_spec(channel);
     end
-    [org, channelName] = mip.parse.parse_channel_spec(channel);
 
     try
         mhlPath = mip.channel.download_mhl(mhlSource, tempDir);
@@ -493,11 +565,19 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
 
         pkgInfo = mip.config.read_package_json(extractDir);
         packageName = pkgInfo.name;
-        fqn = mip.parse.make_fqn(org, channelName, packageName);
+        if useGhChannel
+            fqn = mip.parse.make_fqn(org, channelName, packageName);
+        else
+            fqn = mip.parse.make_mhl_fqn(packageName);
+        end
 
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
-            existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+            if useGhChannel
+                existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+            else
+                existingFqn = mip.parse.make_mhl_fqn(existingName);
+            end
             error('mip:install:equivalentAlreadyInstalled', ...
                   ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
                    'Package names are equivalent when they match after lowercasing and ' ...
@@ -509,6 +589,7 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
         pkgDir = mip.paths.get_package_dir(fqn);
         if exist(pkgDir, 'dir')
             fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+            mip.state.add_directly_installed(fqn);
             return
         end
 
@@ -671,6 +752,14 @@ function installFromUrlFlag(args, zipUrl, editable, noCompile)
               pkgName);
     end
 
+    % Require HTTPS. A plain http:// fetch lets a network attacker swap
+    % the archive contents, and the unzipped tree is added to the path
+    % on load — i.e. persistent code execution.
+    if startsWith(zipUrl, 'http://')
+        error('mip:install:requireHttps', ...
+              '--url must use https://, not http://. Got: %s', zipUrl);
+    end
+
     % If the URL is a File Exchange landing page, resolve it to the
     % underlying .zip download URL. The resolved URL (with query string
     % stripped) is what gets baked into the generated mip.yaml.
@@ -754,13 +843,13 @@ end
 function tf = isFileExchangeUrl(url)
 % A MathWorks File Exchange landing page looks like
 %   https://www.mathworks.com/matlabcentral/fileexchange/<id>[-<slug>]
-% (with optional query string).
+% (with optional query string). Plain http:// is rejected — see the
+% requireHttps check in installFromUrlFlag.
     if ~ischar(url) && ~isstring(url)
         tf = false; return;
     end
     url = char(url);
-    tf = startsWith(url, 'https://www.mathworks.com/matlabcentral/fileexchange/') || ...
-         startsWith(url, 'http://www.mathworks.com/matlabcentral/fileexchange/');
+    tf = startsWith(url, 'https://www.mathworks.com/matlabcentral/fileexchange/');
 end
 
 function zipUrl = resolveFileExchangeUrl(fexUrl)
@@ -822,14 +911,15 @@ function zipUrl = resolveFileExchangeUrl(fexUrl)
 end
 
 function tf = isZipUrl(url)
-% Return true if url is an http(s) URL whose path component ends in .zip
+% Return true if url is an https:// URL whose path component ends in .zip
 % (case-insensitive). The path component is everything before the first
-% '?' (query) or '#' (fragment).
+% '?' (query) or '#' (fragment). Plain http:// is rejected — see the
+% requireHttps check in installFromUrlFlag.
     if ~ischar(url) && ~isstring(url)
         tf = false; return;
     end
     url = char(url);
-    if ~startsWith(url, 'http://') && ~startsWith(url, 'https://')
+    if ~startsWith(url, 'https://')
         tf = false;
         return
     end

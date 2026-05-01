@@ -2,7 +2,10 @@ function localPath = download_mhl(source, destDir, expectedSha256)
 %DOWNLOAD_MHL   Download a .mhl package file from URL or copy from local path.
 %
 % Args:
-%   source          - URL (http:// or https://) or local file path
+%   source          - HTTPS URL or local file path. Plain http:// is
+%                     rejected (a network attacker could otherwise swap
+%                     .mhl payloads, leading to arbitrary code execution
+%                     once the package is loaded).
 %   destDir         - Destination directory for the downloaded file
 %   expectedSha256  - (Optional) Expected hex SHA-256 of the file (case-insensitive).
 %                     If provided and nonempty, the downloaded/copied file is
@@ -29,8 +32,18 @@ end
 
 source = char(source);
 
+% Reject plain HTTP URLs. mhl_url comes from a channel's index.json, and
+% any third-party channel can be added via `--channel owner/channel`;
+% allowing http:// would let a network attacker swap the payload and
+% achieve persistent code execution once the package is loaded.
+if startsWith(source, 'http://')
+    error('mip:downloadMhl:requireHttps', ...
+          'Refusing to download .mhl over plain HTTP; use https:// instead. Got: %s', ...
+          source);
+end
+
 % Check if source is a URL or local file
-isURL = startsWith(source, {'http://', 'https://'});
+isURL = startsWith(source, 'https://');
 
 if isURL
     % Download from URL using websave
