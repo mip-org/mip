@@ -2,12 +2,12 @@ function load(varargin)
 %LOAD   Load one or more mip packages into the MATLAB path.
 %
 % Usage:
-%   mip.load('packageName')
-%   mip.load('package1', 'package2', ...)
-%   mip.load('packageName', '--sticky')
-%   mip.load('packageName', '--install')
-%   mip.load('--channel', 'owner/chan', 'packageName', '--install')
-%   mip.load('org/channel/packageName')
+%   mip load <package>
+%   mip load <package1> <package2> ...
+%   mip load <package> --sticky
+%   mip load <package> --install
+%   mip load --channel owner/chan <package> --install
+%   mip load org/channel/<package>
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
 % For bare names, resolution priority is:

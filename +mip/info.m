@@ -2,10 +2,10 @@ function info(varargin)
 %INFO   Display detailed information about a package.
 %
 % Usage:
-%   mip.info('packageName')
-%   mip.info('org/channel/packageName')
-%   mip.info('--channel', 'dev', 'packageName')
-%   mip.info('--channel', 'owner/chan', 'packageName')
+%   mip info <package>
+%   mip info org/channel/<package>
+%   mip info --channel dev <package>
+%   mip info --channel owner/chan <package>
 %
 % Options:
 %   --channel <name>  Query a specific channel (default: mip-org/core)

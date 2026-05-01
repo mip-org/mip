@@ -2,19 +2,19 @@ function install(varargin)
 %INSTALL   Install one or more mip packages.
 %
 % Usage:
-%   mip.install('packageName')
-%   mip.install('package1', 'package2', 'package3')
-%   mip.install('--channel', 'dev', 'packageName')
-%   mip.install('--channel', 'owner/chan', 'packageName')
-%   mip.install('owner/chan/packageName')
-%   mip.install('/path/to/package.mhl')
-%   mip.install('https://example.com/package.mhl')
-%   mip.install('/path/to/local/package')          - Install from local directory
-%   mip.install('.', '--editable')                  - Editable install (like pip -e)
-%   mip.install('-e', '/path/to/package')           - Editable install (short form)
-%   mip.install('-e', '.', '--no-compile')          - Editable install, skip compilation
-%   mip.install('mypkg', '--url', 'https://example.com/pkg.zip')
-%                                                    - Install from a remote .zip URL
+%   mip install <package>
+%   mip install <package1> <package2> <package3>
+%   mip install --channel dev <package>
+%   mip install --channel owner/chan <package>
+%   mip install owner/chan/<package>
+%   mip install /path/to/package.mhl
+%   mip install https://example.com/package.mhl
+%   mip install /path/to/local/package           - Install from local directory
+%   mip install . --editable                     - Editable install (like pip -e)
+%   mip install -e /path/to/package              - Editable install (short form)
+%   mip install -e . --no-compile                - Editable install, skip compilation
+%   mip install mypkg --url https://example.com/pkg.zip
+%                                                - Install from a remote .zip URL
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)

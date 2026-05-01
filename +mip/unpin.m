@@ -2,9 +2,9 @@ function unpin(varargin)
 %UNPIN   Unpin one or more packages.
 %
 % Usage:
-%   mip.unpin('packageName')
-%   mip.unpin('org/channel/packageName')
-%   mip.unpin('package1', 'package2')
+%   mip unpin <package>
+%   mip unpin org/channel/<package>
+%   mip unpin <package1> <package2>
 %
 % Unpinned packages will be updated normally by "mip update --all".
 %

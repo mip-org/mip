@@ -2,9 +2,9 @@ function uninstall(varargin)
 %UNINSTALL   Uninstall one or more mip packages.
 %
 % Usage:
-%   mip.uninstall('packageName')
-%   mip.uninstall('org/channel/packageName')
-%   mip.uninstall('package1', 'package2')
+%   mip uninstall <package>
+%   mip uninstall org/channel/<package>
+%   mip uninstall <package1> <package2>
 %
 % Accepts both bare package names and fully qualified names.
 % This function uninstalls packages and then prunes any packages that

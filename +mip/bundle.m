@@ -2,9 +2,9 @@ function bundle(varargin)
 %BUNDLE   Build a .mhl package file from a local directory with mip.yaml.
 %
 % Usage:
-%   mip.bundle('/path/to/package')
-%   mip.bundle('/path/to/package', '--output', '/path/to/output')
-%   mip.bundle('/path/to/package', '--arch', 'linux_x86_64')
+%   mip bundle /path/to/package
+%   mip bundle /path/to/package --output /path/to/output
+%   mip bundle /path/to/package --arch linux_x86_64
 %
 % Options:
 %   --output <dir>   Output directory for the .mhl file (default: current dir)
