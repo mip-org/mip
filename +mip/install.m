@@ -763,13 +763,13 @@ end
 function tf = isFileExchangeUrl(url)
 % A MathWorks File Exchange landing page looks like
 %   https://www.mathworks.com/matlabcentral/fileexchange/<id>[-<slug>]
-% (with optional query string).
+% (with optional query string). Plain http:// is rejected — see the
+% requireHttps check in installFromUrlFlag.
     if ~ischar(url) && ~isstring(url)
         tf = false; return;
     end
     url = char(url);
-    tf = startsWith(url, 'https://www.mathworks.com/matlabcentral/fileexchange/') || ...
-         startsWith(url, 'http://www.mathworks.com/matlabcentral/fileexchange/');
+    tf = startsWith(url, 'https://www.mathworks.com/matlabcentral/fileexchange/');
 end
 
 function zipUrl = resolveFileExchangeUrl(fexUrl)
