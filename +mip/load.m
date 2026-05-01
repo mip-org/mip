@@ -192,6 +192,9 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
         else
             fprintf('Package "%s" is already loaded\n', displayFqn);
         end
+        if isDirect
+            mip.state.add_directly_installed(fqn);
+        end
         % If --sticky was specified, add to sticky packages
         if stickyPackage
             if ~mip.state.is_sticky(fqn)
@@ -257,6 +260,7 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
     % Track directly loaded packages separately
     if isDirect
         mip.state.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
+        mip.state.add_directly_installed(fqn);
     end
 
     % Mark package as sticky if requested
