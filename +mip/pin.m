@@ -6,8 +6,10 @@ function pin(varargin)
 %   mip.pin('org/channel/packageName')
 %   mip.pin('package1', 'package2')
 %
-% Pinned packages are skipped by "mip update --all". Use "mip update
-% --force" to override the pin (which also unpins the package).
+% Pinned packages are blocked from being updated by any "mip update"
+% invocation, including "mip update <pkg>", "mip update --force <pkg>",
+% "mip update --deps", and "mip update --all". To update a pinned
+% package, run "mip unpin <pkg>" first.
 %
 % Accepts both bare package names and fully qualified names.
 
