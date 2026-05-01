@@ -123,6 +123,15 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
                 'mip:install:urlMustBeZip');
         end
 
+        function testUrl_RejectsHttpScheme(testCase)
+            % Plain http:// is refused: a MITM could swap the archive
+            % and gain code execution once the package is loaded. See
+            % #229.
+            testCase.verifyError( ...
+                @() mip.install('mypkg', '--url', 'http://example.com/foo.zip'), ...
+                'mip:install:requireHttps');
+        end
+
         function testUrl_RejectsZipOnlyInQueryString(testCase)
             % .zip appears only in query string (not path) -> not a zip URL
             testCase.verifyError( ...

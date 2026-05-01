@@ -70,5 +70,16 @@ classdef TestDownloadMhl < matlab.unittest.TestCase
             testCase.verifyTrue(exist(localPath, 'file') > 0);
         end
 
+        function testHttpUrl_Rejected(testCase)
+            % Plain http:// URLs are refused: mhl_url comes from a
+            % third-party-controllable channel index, and the unpacked
+            % .mhl is loaded as code, so a network attacker swapping the
+            % payload would get persistent code execution. See #229.
+            testCase.verifyError( ...
+                @() mip.channel.download_mhl( ...
+                    'http://example.invalid/pkg.mhl', testCase.DestDir), ...
+                'mip:downloadMhl:requireHttps');
+        end
+
     end
 end
