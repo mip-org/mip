@@ -14,6 +14,12 @@ function init(varargin)
 % automatically by walking the directory and identifying folders that
 % contain runtime MATLAB code.
 %
+% If the target directory contains a .git/config with a remote URL, the
+% repo name (derived from the URL) is used as the default package name
+% in place of the directory basename, and the URL is filled into the
+% `repository` field. Both are still overridable via --name and
+% --repository.
+%
 % A blank `test_<name>.m` script is created (if not already present) and
 % referenced from the generated mip.yaml's `test_script` field.
 %
@@ -23,6 +29,8 @@ function init(varargin)
     targetPath = '';
     overrideName = '';
     repository = '';
+    nameProvided = false;
+    repositoryProvided = false;
 
     i = 1;
     while i <= numel(varargin)
@@ -32,6 +40,7 @@ function init(varargin)
                 error('mip:init:missingNameValue', '--name requires a value.');
             end
             overrideName = varargin{i + 1};
+            nameProvided = true;
             i = i + 2;
         elseif ischar(arg) && strcmp(arg, '--repository')
             if i + 1 > numel(varargin)
@@ -39,6 +48,7 @@ function init(varargin)
                       '--repository requires a value.');
             end
             repository = varargin{i + 1};
+            repositoryProvided = true;
             i = i + 2;
         elseif isempty(targetPath)
             targetPath = arg;
@@ -64,8 +74,15 @@ function init(varargin)
         return;
     end
 
-    if ~isempty(overrideName)
+    [gitRepoName, gitRepoUrl] = mip.init.git_info(targetDir);
+
+    if nameProvided
         pkgName = overrideName;
+    elseif ~isempty(gitRepoName)
+        % Lowercase the git repo name to produce a canonical name. Other
+        % non-canonical characters (dots, spaces) still cause a failure
+        % below — use --name for those.
+        pkgName = lower(gitRepoName);
     else
         normalizedDir = regexprep(targetDir, '[/\\]+$', '');
         [~, baseName, ext] = fileparts(normalizedDir);
@@ -73,6 +90,10 @@ function init(varargin)
         % Other non-canonical characters (dots, spaces, leading/trailing
         % separators) still cause a failure below — use --name for those.
         pkgName = lower([baseName, ext]);
+    end
+
+    if ~repositoryProvided && ~isempty(gitRepoUrl)
+        repository = gitRepoUrl;
     end
 
     if ~mip.name.is_valid_canonical(pkgName)
