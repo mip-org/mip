@@ -355,8 +355,8 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
 
     index = mip.channel.fetch_index(channelStr);
 
-    % If the installed version is non-numeric (e.g. 'main', 'master',
-    % 'unspecified'), pin the update lookup to that branch or version.
+    % If the installed version is non-numeric (e.g. 'main', 'master'),
+    % pin the update lookup to that branch or version.
     % Otherwise the default select_best_version would silently switch to
     % a higher-ranked numeric release the first time one appears in the
     % channel. Switching to a different branch or version requires an

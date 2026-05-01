@@ -50,7 +50,7 @@ A **bare name** is just the package name without org/channel (e.g., `chebfun`). 
 
 ### 1.3 Version Strings
 
-Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`, `unspecified`). Numeric versions use dot-separated components that are each parseable as numbers.
+Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`). Numeric versions use dot-separated components that are each parseable as numbers.
 
 A version can live in two places:
 
@@ -266,8 +266,7 @@ Given all available versions for a package:
 1. If any numeric versions exist (all dot-separated components are numbers), select the **highest** numeric version.
 2. Else if `main` exists, select it.
 3. Else if `master` exists, select it.
-4. Else if `unspecified` exists, select it.
-5. Else select the alphabetically first version.
+4. Else select the alphabetically first version.
 
 If a `@version` was specified, it overrides this selection. If the requested version doesn't exist, raises `mip:versionNotFound`.
 
@@ -658,7 +657,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 
 #### 7.1.1 Target Version Selection for Update
 
-`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`, `unspecified`), the update stays on that branch or version — the target is the same version in the channel, and only the commit hash is refreshed. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
+`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`), the update stays on that branch or version — the target is the same version in the channel, and only the commit hash is refreshed. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
 
 Behavior by installed version:
 

@@ -38,16 +38,6 @@ classdef TestSelectBestVersion < matlab.unittest.TestCase
             testCase.verifyEqual(result, 'main');
         end
 
-        function testMasterPreferredOverUnspecified(testCase)
-            result = mip.resolve.select_best_version({'unspecified', 'master'});
-            testCase.verifyEqual(result, 'master');
-        end
-
-        function testUnspecifiedPreferredOverArbitrary(testCase)
-            result = mip.resolve.select_best_version({'zeta', 'unspecified', 'beta'});
-            testCase.verifyEqual(result, 'unspecified');
-        end
-
         function testAlphabeticallyFirstWhenNoSpecialNames(testCase)
             result = mip.resolve.select_best_version({'charlie', 'alpha', 'bravo'});
             testCase.verifyEqual(result, 'alpha');

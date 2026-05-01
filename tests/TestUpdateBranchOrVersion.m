@@ -1,6 +1,6 @@
 classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
 %TESTUPDATEBRANCHORVERSION   Tests that `mip update` preserves non-numeric
-%branches or versions (main/master/unspecified) rather than silently
+%branches or versions (main/master) rather than silently
 %switching to a newly published numeric release.
 %
 %   Uses a synthetic channel cache (no network) to simulate a channel
@@ -59,25 +59,6 @@ classdef TestUpdateBranchOrVersion < matlab.unittest.TestCase
             testCase.verifySubstring(output, 'already up to date');
             testCase.verifyEmpty(strfind(output, '0.5.0'), ...
                 'Update output should not mention the numeric release.');
-        end
-
-        function testUpdate_StaysOnUnspecified_WhenNumericExists(testCase)
-            % Same rule applies to 'unspecified'.
-            fqn = 'mip-org/test-channel-bt/beta';
-            pkgDir = fullfile(testCase.TestRoot, 'packages', ...
-                'gh', 'mip-org', 'test-channel-bt', 'beta');
-            writeInstalledPackage(pkgDir, 'beta', 'unspecified', 'abc123');
-            mip.state.add_directly_installed(fqn);
-
-            writeChannelIndex(testCase.TestRoot, 'mip-org/test-channel-bt', { ...
-                makeIndexEntry('beta', 'unspecified', 'abc123'), ...
-                makeIndexEntry('beta', '1.0.0',       'def456') ...
-            });
-
-            mip.update(fqn);
-
-            info = mip.config.read_package_json(pkgDir);
-            testCase.verifyEqual(info.version, 'unspecified');
         end
 
         function testUpdate_MainMissingFromChannel_Errors(testCase)
