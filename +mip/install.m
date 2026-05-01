@@ -7,8 +7,11 @@ function install(varargin)
 %   mip.install('--channel', 'dev', 'packageName')
 %   mip.install('--channel', 'owner/chan', 'packageName')
 %   mip.install('owner/chan/packageName')
-%   mip.install('/path/to/package.mhl')
-%   mip.install('https://example.com/package.mhl')
+%   mip.install('/path/to/package.mhl')             - Install under mhl/<name>
+%   mip.install('https://example.com/package.mhl')  - Install under mhl/<name>
+%   mip.install('--channel', 'org/chan', '/path/to/package.mhl')
+%                                                    - Install under
+%                                                      gh/org/chan/<name>
 %   mip.install('/path/to/local/package')          - Install from local directory
 %   mip.install('.', '--editable')                  - Editable install (like pip -e)
 %   mip.install('-e', '/path/to/package')           - Editable install (short form)
@@ -476,16 +479,21 @@ end
 
 function installedFqn = installFromMhl(mhlSource, ~, channel)
 % Install a package from a local .mhl file or URL.
+%
+% When no --channel was given, the package lands under the 'mhl/' source
+% type (e.g. 'mhl/chebfun'), so a .mhl from an arbitrary path or URL
+% cannot masquerade as a member of the default core channel. Passing
+% --channel <org>/<chan> opts in to gh-channel placement.
 
     installedFqn = '';
     tempDir = tempname;
     mkdir(tempDir);
     cleanupTemp = onCleanup(@() rmTempDir(tempDir));
 
-    if isempty(channel)
-        channel = 'mip-org/core';
+    useGhChannel = ~isempty(channel);
+    if useGhChannel
+        [org, channelName] = mip.parse.parse_channel_spec(channel);
     end
-    [org, channelName] = mip.parse.parse_channel_spec(channel);
 
     try
         mhlPath = mip.channel.download_mhl(mhlSource, tempDir);
@@ -494,11 +502,19 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
 
         pkgInfo = mip.config.read_package_json(extractDir);
         packageName = pkgInfo.name;
-        fqn = mip.parse.make_fqn(org, channelName, packageName);
+        if useGhChannel
+            fqn = mip.parse.make_fqn(org, channelName, packageName);
+        else
+            fqn = mip.parse.make_mhl_fqn(packageName);
+        end
 
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
-            existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+            if useGhChannel
+                existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+            else
+                existingFqn = mip.parse.make_mhl_fqn(existingName);
+            end
             error('mip:install:equivalentAlreadyInstalled', ...
                   ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
                    'Package names are equivalent when they match after lowercasing and ' ...

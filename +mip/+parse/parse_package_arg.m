@@ -8,10 +8,12 @@ function result = parse_package_arg(arg)
 %   gh/<org>/<channel>/<name>   - GitHub channel package
 %   local/<name>                - Local directory / editable install
 %   fex/<name>                  - File Exchange / --url zip install
+%   web/<name>                  - Generic remote .zip / --url install
+%   mhl/<name>                  - .mhl install with no --channel given
 %
 % On input, the 'gh/' prefix may be omitted: a 3-part 'org/channel/name'
 % input is treated as 'gh/org/channel/name'. Non-gh source types must be
-% written explicitly ('local/<name>', 'fex/<name>').
+% written explicitly ('local/<name>', 'fex/<name>', 'mhl/<name>', etc.).
 %
 % Args:
 %   arg - Package string. One of:
