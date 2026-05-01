@@ -854,8 +854,8 @@ mip init [<path>] [--name <packagename>] [--repository <url>]
 ```
 
 - **`<path>`** (optional positional) -- directory to initialize. Defaults to the current directory (`.`) when omitted. Must already exist; otherwise raises `mip:init:notADirectory`.
-- **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the target directory's basename. Names must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` (letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override.
-- **`--repository <url>`** (optional) -- fills in the generated `mip.yaml`'s `repository` field. Omit to leave it blank.
+- **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the git repo name (if a `.git/config` is detected -- see below) and otherwise to the target directory's basename. The default is lowercased before validation; an explicit `--name` is not. Names must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` (letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override.
+- **`--repository <url>`** (optional) -- fills in the generated `mip.yaml`'s `repository` field. When omitted, the field is auto-filled from `.git/config` if a remote URL is detected (see below) and is otherwise left blank.
 
 Behavior:
 
@@ -863,8 +863,9 @@ Behavior:
 2. `paths` is auto-populated by walking the directory and identifying folders that contain runtime MATLAB code. The walk happens **before** the placeholder test script is created, so the root is not auto-included just because of that new file.
 3. A blank `test_<name>.m` is created at the target root (unless one already exists), and the generated `mip.yaml`'s `test_script` field points at it.
 4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. A single `builds: [{ architectures: [any] }]` entry is emitted.
+5. If `<path>/.git/config` exists, it is parsed directly (no `git` shellout) for `[remote "<name>"] url = ...` entries. The URL of `[remote "origin"]` is used if present; otherwise the first remote in file order. The repo name is derived by stripping a trailing `.git` from the URL and taking the last `/`- or `:`-delimited segment, so `https://`, `ssh://`, and `git@host:owner/repo` forms all work. The URL is preserved verbatim (with any `.git` suffix) when written to the `repository` field. If no `.git/config` is found, no remotes are configured, or the file cannot be parsed, both fields fall back to their non-git defaults. Auto-detection only inspects `<path>/.git/`; parent directories are not searched, so a sub-package inside a larger git repo will not pick up the outer repo's URL.
 
-`mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)).
+`mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)). The local-install auto-invocation passes no flags, so the git-config auto-detection applies normally. The URL-based auto-invocation passes `--name` and `--repository` explicitly (the resolved zip URL), so the git-config auto-detection has no effect there.
 
 Error identifiers: `mip:init:notADirectory`, `mip:init:invalidName`, `mip:init:missingNameValue`, `mip:init:missingRepositoryValue`, `mip:init:unexpectedArg`, `mip:init:writeFailed`.
 

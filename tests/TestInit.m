@@ -398,6 +398,171 @@ classdef TestInit < matlab.unittest.TestCase
             testCase.verifyTrue(contains(yamlText, 'paths: []'));
         end
 
+        function testInit_GitConfigFillsNameAndRepository(testCase)
+            % If targetDir contains a .git/config with an origin URL,
+            % init derives the package name from the URL and writes the
+            % URL into `repository`. The folder basename is ignored
+            % (folder is "mypkg", git repo is "chebfun").
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'https://github.com/chebfun/chebfun');
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'chebfun');
+            testCase.verifyEqual(cfg.repository, ...
+                'https://github.com/chebfun/chebfun');
+        end
+
+        function testInit_GitConfigStripsDotGitFromName(testCase)
+            % An origin URL ending in .git keeps the suffix in the
+            % `repository` field (canonical clone URL) but does not
+            % include it in the derived package name.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'https://github.com/owner/myrepo.git');
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'myrepo');
+            testCase.verifyEqual(cfg.repository, ...
+                'https://github.com/owner/myrepo.git');
+        end
+
+        function testInit_GitConfigSshUrl(testCase)
+            % SSH-style URLs (git@host:owner/repo.git) parse correctly:
+            % the URL is preserved in `repository` and the repo name is
+            % the trailing path segment with .git stripped.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'git@github.com:owner/sshrepo.git');
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'sshrepo');
+            testCase.verifyEqual(cfg.repository, ...
+                'git@github.com:owner/sshrepo.git');
+        end
+
+        function testInit_GitConfigLowercasesName(testCase)
+            % An uppercase repo name is lowercased to produce a
+            % canonical package name (mirrors the dir-basename path).
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'https://github.com/Owner/MyRepo');
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'myrepo');
+        end
+
+        function testInit_GitConfigNameOverrideStillWins(testCase)
+            % --name continues to take precedence over the git-derived
+            % name (and the dir basename).
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'https://github.com/owner/repo');
+
+            mip.init(pkgDir, '--name', 'overridden');
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'overridden');
+            % Repository is still auto-filled when --name is used.
+            testCase.verifyEqual(cfg.repository, ...
+                'https://github.com/owner/repo');
+        end
+
+        function testInit_GitConfigRepositoryOverrideStillWins(testCase)
+            % --repository continues to take precedence over the
+            % git-derived URL (even an empty string passed by the user).
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            writeGitConfigOrigin(pkgDir, 'https://github.com/owner/repo');
+
+            url = 'https://example.com/custom.zip';
+            mip.init(pkgDir, '--repository', url);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            % Name is still auto-derived from the git config.
+            testCase.verifyEqual(cfg.name, 'repo');
+            testCase.verifyEqual(cfg.repository, url);
+        end
+
+        function testInit_GitConfigNoRemoteFallsBack(testCase)
+            % A .git/config with no remote URL leaves `repository`
+            % blank and falls back to the directory basename for the
+            % package name.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            mkdir(fullfile(pkgDir, '.git'));
+            fid = fopen(fullfile(pkgDir, '.git', 'config'), 'w');
+            fprintf(fid, '[core]\n\trepositoryformatversion = 0\n');
+            fclose(fid);
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'mypkg');
+            testCase.verifyEqual(cfg.repository, '');
+        end
+
+        function testInit_GitConfigPrefersOriginOverOtherRemotes(testCase)
+            % When several remotes are listed, origin wins regardless
+            % of file order.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            mkdir(fullfile(pkgDir, '.git'));
+            fid = fopen(fullfile(pkgDir, '.git', 'config'), 'w');
+            fprintf(fid, '[remote "upstream"]\n');
+            fprintf(fid, '\turl = https://github.com/upstream/wrong\n');
+            fprintf(fid, '[remote "origin"]\n');
+            fprintf(fid, '\turl = https://github.com/me/right\n');
+            fclose(fid);
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'right');
+            testCase.verifyEqual(cfg.repository, ...
+                'https://github.com/me/right');
+        end
+
+        function testInit_GitConfigFallsBackToFirstRemoteWhenNoOrigin(testCase)
+            % If no [remote "origin"] section exists, the first remote
+            % seen in file order is used.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            mkdir(fullfile(pkgDir, '.git'));
+            fid = fopen(fullfile(pkgDir, '.git', 'config'), 'w');
+            fprintf(fid, '[remote "upstream"]\n');
+            fprintf(fid, '\turl = https://github.com/upstream/first\n');
+            fprintf(fid, '[remote "fork"]\n');
+            fprintf(fid, '\turl = https://github.com/fork/second\n');
+            fclose(fid);
+
+            mip.init(pkgDir);
+
+            cfg = mip.config.read_mip_yaml(pkgDir);
+            testCase.verifyEqual(cfg.name, 'first');
+            testCase.verifyEqual(cfg.repository, ...
+                'https://github.com/upstream/first');
+        end
+
+        function testInit_GitInfoHelperReturnsEmptyWhenNoGit(testCase)
+            % Direct unit test for the helper: a directory with no
+            % .git/ returns empty strings.
+            pkgDir = fullfile(testCase.TestDir, 'plain');
+            mkdir(pkgDir);
+
+            [name, url] = mip.init.git_info(pkgDir);
+            testCase.verifyEqual(name, '');
+            testCase.verifyEqual(url, '');
+        end
+
         function testInit_PathsListMatchesAutoUtil(testCase)
             % The paths written into mip.yaml agree with what
             % mip.init.auto_add_paths returns for the same tree.
@@ -426,4 +591,17 @@ classdef TestInit < matlab.unittest.TestCase
         end
 
     end
+end
+
+
+function writeGitConfigOrigin(pkgDir, url)
+% Helper: write a minimal .git/config under pkgDir whose [remote "origin"]
+% has the given url.
+mkdir(fullfile(pkgDir, '.git'));
+fid = fopen(fullfile(pkgDir, '.git', 'config'), 'w');
+fprintf(fid, '[core]\n\trepositoryformatversion = 0\n');
+fprintf(fid, '[remote "origin"]\n');
+fprintf(fid, '\turl = %s\n', url);
+fprintf(fid, '\tfetch = +refs/heads/*:refs/remotes/origin/*\n');
+fclose(fid);
 end
