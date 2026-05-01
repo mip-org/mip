@@ -105,6 +105,11 @@ function install(varargin)
     for i = 1:length(args)
         pkg = char(args{i});
         if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
+            if isFileExchangeUrl(pkg)
+                error('mip:install:fexRequiresName', ...
+                      ['To install a package from the File Exchange, you must specify a package name using the syntax\n' ...
+                       '   mip install <name> --url <url>']);
+            end
             mhlSources{end+1} = pkg; %#ok<AGROW>
         elseif isLocalPathArg(pkg)
             localPaths{end+1} = pkg; %#ok<AGROW>

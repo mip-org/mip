@@ -196,6 +196,15 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             end
         end
 
+        function testFexUrl_AsPositional_RequiresName(testCase)
+            % `mip install <FEX URL>` (without --url) should produce a
+            % helpful message pointing to the correct syntax, rather than
+            % attempting to download the landing page as an .mhl file.
+            testCase.verifyError( ...
+                @() mip.install('https://www.mathworks.com/matlabcentral/fileexchange/26311-shadederrorbar'), ...
+                'mip:install:fexRequiresName');
+        end
+
         function testWebUrl_E2EInstall(testCase)
             % End-to-end install from a generic (non-FEX) .zip URL. Uses a
             % GitHub archive zip as a benign test target. Verifies the
