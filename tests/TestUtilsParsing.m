@@ -262,6 +262,20 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, 'web/testpkg');
         end
 
+        function testMakeMhlFqn(testCase)
+            fqn = mip.parse.make_mhl_fqn('testpkg');
+            testCase.verifyEqual(fqn, 'mhl/testpkg');
+        end
+
+        function testMakeMhlFqnRoundTrip(testCase)
+            fqn = mip.parse.make_mhl_fqn('testpkg');
+            r = mip.parse.parse_package_arg(fqn);
+            testCase.verifyEqual(r.type, 'mhl');
+            testCase.verifyEqual(r.name, 'testpkg');
+            testCase.verifyEqual(r.fqn, 'mhl/testpkg');
+            testCase.verifyTrue(r.is_fqn);
+        end
+
         function testMakeFqnRoundTrip(testCase)
             fqn = mip.parse.make_fqn('mip-org', 'core', 'chebfun');
             r = mip.parse.parse_package_arg(fqn);
