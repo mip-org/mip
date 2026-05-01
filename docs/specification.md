@@ -437,12 +437,13 @@ Validation happens *before* extraction so that a malicious entry can never write
 4. Look up the package directory. If it doesn't exist, raise `mip:packageNotFound`.
 5. If already loaded:
    - If this is a direct load and the package was previously loaded as a dependency, promote it to "directly loaded".
+   - If this is a direct load, also mark the package as directly installed (idempotent; promotes a previously transitive install).
    - If `--sticky` is specified, add to sticky packages.
    - Return early.
 6. Read `mip.json` and load dependencies first (recursively, as non-direct loads).
 7. Add each entry in the `mip.json` `paths` field to the MATLAB path (see [§4.8](#48-path-addition-from-mipjson)). If the field is missing, raise `mip:loadNotFound` and stop -- the package is **not** marked as loaded.
 8. Add to `MIP_LOADED_PACKAGES`.
-9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES`.
+9. If this is a direct load, add to `MIP_DIRECTLY_LOADED_PACKAGES` and mark the package as directly installed.
 10. If `--sticky`, add to `MIP_STICKY_PACKAGES`.
 
 ### 4.2 The `--sticky` Flag
@@ -466,7 +467,7 @@ When loading a package with dependencies (listed in `mip.json`):
 
 1. Each dependency is resolved using `resolve_dependency` ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)): bare names always resolve to `gh/mip-org/core/<name>`.
 2. Dependencies are loaded recursively before the package itself.
-3. Dependencies are loaded as **non-direct** (they won't appear in `MIP_DIRECTLY_LOADED_PACKAGES`).
+3. Dependencies are loaded as **non-direct** (they won't appear in `MIP_DIRECTLY_LOADED_PACKAGES`, and are not added to `directly_installed.txt`).
 4. Dependencies are loaded as **non-sticky** (even if the parent was loaded with `--sticky`).
 5. Already-loaded dependencies are skipped.
 
@@ -903,6 +904,10 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 - `get_directly_installed()`: Returns current list.
 
 This tracking is critical for dependency pruning: only directly installed packages are "roots" in the dependency graph. Packages installed only as dependencies can be pruned when no root needs them.
+
+Entries are added by:
+- `mip install <pkg>` — marks the user-requested packages, even if they were already on disk as transitive dependencies (so re-installing a transitive dep promotes it to a root).
+- `mip load <pkg>` — marks any package the user loads directly (`isDirect`). This means a `mip load` of a package previously pulled in only as a transitive dependency promotes it to a root, so a later uninstall of its parent will not prune it. Loads marked `--transitive` (used internally for dependency loads) do not mark.
 
 Writes to `directly_installed.txt` are performed atomically: the new contents are written to `directly_installed.txt.tmp` and then moved into place via `movefile`. If the temp write fails, the existing `directly_installed.txt` is left untouched and the temp file is deleted. A stale `.tmp` from a previous crashed write is overwritten on the next write, not appended to.
 

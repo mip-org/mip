@@ -190,6 +190,66 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/badpkg'));
         end
 
+        %% Direct loads mark the package as directly_installed
+
+        function testLoadPackage_MarksAsDirectlyInstalled(testCase)
+            % A direct load should add the package to directly_installed,
+            % so it survives an uninstall of any parent that depends on it.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
+            mip.load('mip-org/core/testpkg');
+            testCase.verifyTrue( ...
+                ismember('gh/mip-org/core/testpkg', mip.state.get_directly_installed()));
+        end
+
+        function testLoadPackage_TransitiveDepNotMarkedDirectlyInstalled(testCase)
+            % A package loaded only as a transitive dependency must not
+            % become directly_installed.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
+                'dependencies', {'depA'});
+            mip.load('mip-org/core/mainpkg');
+            testCase.verifyTrue( ...
+                ismember('gh/mip-org/core/mainpkg', mip.state.get_directly_installed()));
+            testCase.verifyFalse( ...
+                ismember('gh/mip-org/core/depA', mip.state.get_directly_installed()));
+        end
+
+        function testLoadPackage_PromotesTransitiveDepWhenLoadedDirectly(testCase)
+            % Issue #224: if a package was already loaded as a transitive
+            % dependency, a subsequent direct mip.load on it must promote
+            % it to directly_installed so a later uninstall of the parent
+            % does not prune it.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
+                'dependencies', {'depA'});
+            mip.load('mip-org/core/mainpkg');
+            testCase.verifyFalse( ...
+                ismember('gh/mip-org/core/depA', mip.state.get_directly_installed()));
+
+            mip.load('mip-org/core/depA');
+
+            testCase.verifyTrue( ...
+                ismember('gh/mip-org/core/depA', mip.state.get_directly_installed()));
+        end
+
+        function testLoadPackage_LoadedDepSurvivesParentUninstall(testCase)
+            % Full issue #224 scenario: install mainpkg (which pulls in
+            % depA as a transitive dep), then `mip load depA`, then
+            % uninstall mainpkg. depA must NOT be pruned.
+            depDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
+                'dependencies', {'depA'});
+            % Simulate `mip install mainpkg` having marked mainpkg (and
+            % only mainpkg) as directly_installed.
+            mip.state.add_directly_installed('mip-org/core/mainpkg');
+
+            mip.load('mip-org/core/depA');
+            mip.uninstall('mip-org/core/mainpkg');
+
+            testCase.verifyTrue(exist(depDir, 'dir') > 0, ...
+                'depA must not be pruned: it was directly loaded');
+        end
+
     end
 end
 
