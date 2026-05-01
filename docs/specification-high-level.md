@@ -44,6 +44,7 @@ Pin a version with `@`: `chebfun@1.2.0`, `mip-org/core/chebfun@main`
 | `mip load <pkg>` | Add package (+ deps) to MATLAB path |
 | `mip unload <pkg>` | Remove package from path, prune unused deps |
 | `mip list` | List installed packages |
+| `mip info` | Show mip's version, root, and architecture |
 | `mip info <pkg>` | Show package details (installed + remote) |
 | `mip avail` | List packages available in a channel |
 | `mip compile <pkg>` | Run the package's compile script |
@@ -51,8 +52,6 @@ Pin a version with `@`: `chebfun@1.2.0`, `mip-org/core/chebfun@main`
 | `mip bundle ./path` | Build a `.mhl` archive from a local package |
 | `mip reset` | Unload everything and clear all state |
 | `mip version` | Print mip version |
-| `mip index` | Print channel index URL |
-| `mip root` | Print mip root directory |
 
 ---
 

@@ -4,7 +4,7 @@ function packagesDir = get_packages_dir()
 % Returns:
 %   Path to the packages directory: <root>/packages
 
-mipDir = mip.root();
+mipDir = mip.paths.root();
 packagesDir = fullfile(mipDir, 'packages');
 
 end

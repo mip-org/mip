@@ -7,14 +7,14 @@ function [buildEntry, effectiveArch] = match_build(mipConfig, architecture)
 %
 % Args:
 %   mipConfig    - Struct from read_mip_yaml (must have .builds field)
-%   architecture - (Optional) Architecture string. Default: mip.arch()
+%   architecture - (Optional) Architecture string. Default: mip.build.arch()
 %
 % Returns:
 %   buildEntry    - The matched build struct from the builds array
 %   effectiveArch - The effective architecture string ('any' or specific)
 
 if nargin < 2 || isempty(architecture)
-    architecture = mip.arch();
+    architecture = mip.build.arch();
 end
 
 builds = mipConfig.builds;

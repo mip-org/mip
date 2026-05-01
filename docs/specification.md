@@ -619,7 +619,7 @@ When `mip-org/core/mip` is among the resolved uninstall targets, the command del
 1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
 2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
 3. If the user declines, the self-uninstall is aborted. `mip uninstall` then drops `mip-org/core/mip` from its argument list and proceeds normally with any remaining packages.
-4. If the user confirms, mip runs `mip.reset()`, removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.root(), 's')`).
+4. If the user confirms, mip runs `mip.reset()`, removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.paths.root(), 's')`).
 5. A reinstall hint is printed.
 
 If the packages directory is missing when self-uninstall is invoked, the flow raises `mip:uninstall:corrupted` and aborts without touching anything.
@@ -794,9 +794,11 @@ This guarantees an exact architecture match is always preferred over `any`, rega
 
 Lists all installed packages. Default sort is by reverse load order (most recently loaded first). `--sort-by-name` sorts alphabetically. Status markers shown per package: `[sticky]` ([§4.2](#42-the---sticky-flag)), `[pinned]` ([§7.11](#711-pinned-packages)), and `[editable: <source>]` ([§3.2.2](#322-editable-install--e----editable)). An asterisk (`*`) marks directly loaded packages.
 
-### 9.2 `mip info <package>`
+### 9.2 `mip info [<package>]`
 
-Displays information about a package from two sources:
+With no arguments, prints mip's own version (from `mip.yaml`), the resolved mip root directory (see [§11.5](#115-mip_root-environment-variable)), and the current architecture tag (see [§12](#12-architecture-detection)).
+
+With a package name, displays information about that package from two sources:
 
 **Local Installation section:**
 - Version, path, loaded status, dependencies, editable flag, source path.
@@ -819,21 +821,13 @@ Lists packages available in the channel index. Uses `--channel` to specify which
 
 Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, an empty string is printed (see [§11.2](#112-mipyaml-schema)).
 
-### 9.5 `mip index`
-
-Prints the channel index URL. Takes an optional channel argument (default: `mip-org/core`). The URL follows the pattern `https://<org>.github.io/mip-<channel>/index.json`.
-
-### 9.6 `mip root`
-
-Prints the mip root directory path. See [§11.5](#115-mip_root-environment-variable) for resolution rules.
-
-### 9.7 `mip reset`
+### 9.5 `mip reset`
 
 Resets mip to a clean state:
 1. Runs `mip unload --all --force` (unloads everything except `mip-org/core/mip`).
 2. Removes all in-memory key-value stores (`MIP_LOADED_PACKAGES`, `MIP_DIRECTLY_LOADED_PACKAGES`, `MIP_STICKY_PACKAGES`).
 
-### 9.8 `mip bundle <path>`
+### 9.6 `mip bundle <path>`
 
 Builds a `.mhl` archive from a local package directory containing `mip.yaml`. Options:
 - `--output <dir>` -- output directory (default: current directory)
@@ -841,11 +835,11 @@ Builds a `.mhl` archive from a local package directory containing `mip.yaml`. Op
 
 Output filename: `<name>-<version>-<architecture>.mhl`. Because `-` is the field separator in this scheme, any `-` in the canonical package name is encoded as `_` in the filename only (e.g. `foo-bar` version `1.0` on `linux_x86_64` becomes `foo_bar-1.0-linux_x86_64.mhl`). The canonical name is preserved verbatim inside the bundled `mip.json`, and name normalization ([§1.8](#18-name-equivalence)) treats `-` and `_` as equivalent, so this encoding is transparent at install time. The **version** string, by contrast, is written verbatim; versions containing `-` (e.g. `1.0-beta`) are not encoded and will produce an ambiguous-looking filename. Nothing in mip currently parses the filename back out (installs read `mip.json` for the canonical metadata), so the ambiguity is cosmetic, but package authors should prefer dot-separated versions. See [§11.3](#113-mhl-file-format) for the archive format.
 
-### 9.9 `mip test <package>`
+### 9.7 `mip test <package>`
 
 Loads the package (if not already loaded) and runs its `test_script` (defined in `mip.yaml`). If no test script is defined, prints a message and returns.
 
-### 9.10 `mip init`
+### 9.8 `mip init`
 
 Scaffolds a new mip package by generating a `mip.yaml` in a target directory.
 
@@ -1027,12 +1021,12 @@ After removing a package, empty channel and org directories are cleaned up:
 
 ### 11.5 `MIP_ROOT` Environment Variable
 
-The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.root()`](../+mip/root.m) according to these rules:
+The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.paths.root()`](../+mip/+paths/root.m) according to these rules:
 
-- **Unset**: `mip.root()` first tries path-based detection (navigating up from the installed `+mip/root.m` location, assuming `<root>/packages/mip-org/core/mip/mip/+mip/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
-- **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.root()` makes no attempt to distinguish them.
+- **Unset**: `mip.paths.root()` first tries path-based detection (navigating up from the installed `+mip/+paths/root.m` location, assuming `<root>/packages/mip-org/core/mip/mip/+mip/+paths/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
+- **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.paths.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
-- **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
+- **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.paths.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
 
 ### 11.6 Channel Index Cache
 
@@ -1049,7 +1043,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<org>/<chan
 
 ## 12. Architecture Detection
 
-`mip.arch()` returns a tag based on the platform:
+`mip.build.arch()` returns a tag based on the platform:
 
 | Platform | Tag |
 |---|---|
@@ -1062,7 +1056,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<org>/<chan
 | MATLAB Numerics macOS x86_64 | `numbl_macos_x86_64` |
 | MATLAB Numerics WASM/Browser | `numbl_wasm` |
 
-`mip.arch()` itself only performs **detection** and always returns the exact platform tag (e.g. `numbl_linux_x86_64`). The `numbl_wasm` tag serves as a cross-`numbl_*` fallback during **variant selection** (see [§3.1.4](#314-architecture-selection-select_best_variant)), not at detection time.
+`mip.build.arch()` itself only performs **detection** and always returns the exact platform tag (e.g. `numbl_linux_x86_64`). The `numbl_wasm` tag serves as a cross-`numbl_*` fallback during **variant selection** (see [§3.1.4](#314-architecture-selection-select_best_variant)), not at detection time.
 
 ---
 

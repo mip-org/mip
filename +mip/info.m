@@ -1,7 +1,8 @@
 function info(varargin)
-%INFO   Display detailed information about a package.
+%INFO   Display detailed information about mip or a package.
 %
 % Usage:
+%   mip info
 %   mip info <package>
 %   mip info org/channel/<package>
 %   mip info --channel dev <package>
@@ -10,21 +11,21 @@ function info(varargin)
 % Options:
 %   --channel <name>  Query a specific channel (default: mip-org/core)
 %
-% Shows two kinds of information:
+% With no arguments, prints mip's version, root directory, and current
+% architecture tag.
+%
+% With a package name, shows two kinds of information:
 %   1. Local installation(s) — version, path, loaded/sticky status, deps
 %   2. Remote channel info — available versions and architectures
 %
 % If the package is installed from a channel other than the one being
 % queried, that channel's remote index is also fetched and displayed.
 
-if nargin < 1
-    error('mip:noPackage', 'Package name is required');
-end
-
 [channel, args] = mip.parse.parse_channel_flag(varargin);
 
 if isempty(args)
-    error('mip:noPackage', 'Package name is required');
+    showMipSelfInfo();
+    return
 end
 
 packageArg = args{1};
@@ -133,6 +134,16 @@ for i = 1:length(channelsToQuery)
     showRemoteChannelInfo(channelsToQuery{i}, packageName, remoteIndexes{i});
 end
 
+end
+
+
+function showMipSelfInfo()
+% Display info about mip itself: version, root directory, and architecture.
+    fprintf('\n');
+    fprintf('  Version:      %s\n', mip.version());
+    fprintf('  Root:         %s\n', mip.paths.root());
+    fprintf('  Architecture: %s\n', mip.build.arch());
+    fprintf('\n');
 end
 
 
@@ -282,7 +293,7 @@ function showRemoteChannelInfo(channelStr, packageName, index)
     % Show dependencies from latest compatible variant
     latestVersion = allVersions{end};
     latestVariants = versionMap(latestVersion);
-    currentArch = mip.arch();
+    currentArch = mip.build.arch();
     compatibleVariant = [];
 
     canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');

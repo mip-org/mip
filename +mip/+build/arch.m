@@ -2,7 +2,7 @@ function arch = arch()
 %ARCH   Get the current architecture tag.
 %
 % Usage:
-%   mip arch
+%   arch = mip.build.arch()
 %
 % Returns the architecture tag for the current system.
 

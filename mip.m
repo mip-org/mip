@@ -25,13 +25,11 @@ function varargout = mip(command, varargin)
 %   mip unload <package> [...]                 - Unload one or more packages from MATLAB path
 %   mip unload --all                           - Unload all non-sticky packages
 %   mip unload --all --force                   - Unload all packages (including sticky)
-%   mip arch                                   - Display current architecture tag
+%   mip info                                   - Display info about mip itself
 %   mip info <package>                         - Display package information
 %   mip info --channel dev <package>           - Display info from a specific channel
 %   mip avail                                  - List available packages in repository
 %   mip avail --channel dev                    - List packages from a specific channel
-%   mip index                                  - Display the mip package index URL
-%   mip root                                   - Display the mip root directory
 %   mip version                                - Display mip version
 %   mip test <package>                         - Run package test script
 %   mip compile <package>                      - Compile/recompile MEX files
@@ -120,13 +118,7 @@ switch command
         end
         mip.unload(varargin{:});
 
-    case 'arch'
-        fprintf('%s\n', mip.arch());
-
     case 'info'
-        if nargin < 2
-            error('mip:noPackage', 'No package specified for info command.');
-        end
         mip.info(varargin{:});
 
     case 'test'
@@ -155,13 +147,6 @@ switch command
 
     case 'avail'
         mip.avail(varargin{:});
-
-    case 'index'
-        [ch, ~] = mip.parse.parse_channel_flag(varargin);
-        fprintf('%s\n', mip.index(ch));
-
-    case 'root'
-        fprintf('%s\n', mip.root());
 
     case 'version'
         fprintf('%s\n', mip.version());

@@ -7,7 +7,7 @@ function mipConfig = prepare_package(sourceDir, stagingDir, architecture)
 % Args:
 %   sourceDir    - Original source directory containing mip.yaml
 %   stagingDir   - Temp directory to build the package layout in
-%   architecture - (Optional) Architecture override. Default: mip.arch()
+%   architecture - (Optional) Architecture override. Default: mip.build.arch()
 %
 % Returns:
 %   mipConfig - Parsed mip.yaml struct

@@ -8,7 +8,7 @@ function bundle(varargin)
 %
 % Options:
 %   --output <dir>   Output directory for the .mhl file (default: current dir)
-%   --arch <arch>    Override architecture (default: auto-detect via mip.arch())
+%   --arch <arch>    Override architecture (default: auto-detect via mip.build.arch())
 %
 % The .mhl file is a ZIP archive containing:
 %   mip.json

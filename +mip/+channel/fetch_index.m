@@ -28,10 +28,10 @@ end
 
 cacheFile = '';
 try
-    cacheDir = fullfile(mip.root(), 'cache', 'index', org);
+    cacheDir = fullfile(mip.paths.root(), 'cache', 'index', org);
     cacheFile = fullfile(cacheDir, [channelName '.json']);
 catch
-    % If mip.root() is unavailable, proceed without caching.
+    % If mip.paths.root() is unavailable, proceed without caching.
 end
 
 if ~forceRefresh && ~isempty(cacheFile) && isfile(cacheFile)
@@ -51,7 +51,7 @@ if ~forceRefresh && ~isempty(cacheFile) && isfile(cacheFile)
     end
 end
 
-indexUrl = mip.index(channel);
+indexUrl = mip.channel.index_url(channel);
 
 tempFile = [tempname, '.json'];
 try

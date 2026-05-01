@@ -135,7 +135,7 @@ end
 function didUninstall = uninstallSelf()
 % Completely uninstall mip: reset state, remove from path, delete root dir.
 
-    mipRoot        = mip.root();
+    mipRoot        = mip.paths.root();
     mipPackagesDir = mip.paths.get_packages_dir();
     mipPackageDir  = mip.paths.get_package_dir('gh/mip-org/core/mip');
     mipSourceDir   = fullfile(mipPackageDir, 'mip');

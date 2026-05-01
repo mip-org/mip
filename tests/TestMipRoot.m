@@ -1,5 +1,5 @@
 classdef TestMipRoot < matlab.unittest.TestCase
-%TESTMIPROOT   Tests for mip.root() and MIP_ROOT environment variable
+%TESTMIPROOT   Tests for mip.paths.root() and MIP_ROOT environment variable
 %   handling, including validation of nonexistent paths and missing
 %   'packages' subdirectories.
 
@@ -32,13 +32,13 @@ classdef TestMipRoot < matlab.unittest.TestCase
             mkdir(testCase.TestRoot);
             mkdir(fullfile(testCase.TestRoot, 'packages'));
             setenv('MIP_ROOT', testCase.TestRoot);
-            testCase.verifyEqual(mip.root(), testCase.TestRoot);
+            testCase.verifyEqual(mip.paths.root(), testCase.TestRoot);
         end
 
         function testNonexistentPathErrors(testCase)
             % MIP_ROOT pointing to a path that does not exist should error.
             setenv('MIP_ROOT', testCase.TestRoot);
-            testCase.verifyError(@() mip.root(), 'mip:rootInvalid');
+            testCase.verifyError(@() mip.paths.root(), 'mip:rootInvalid');
         end
 
         function testPathIsFileErrors(testCase)
@@ -48,7 +48,7 @@ classdef TestMipRoot < matlab.unittest.TestCase
             fwrite(fid, 'not a dir');
             fclose(fid);
             setenv('MIP_ROOT', testCase.TestRoot);
-            testCase.verifyError(@() mip.root(), 'mip:rootInvalid');
+            testCase.verifyError(@() mip.paths.root(), 'mip:rootInvalid');
             delete(testCase.TestRoot);
         end
 
@@ -57,7 +57,7 @@ classdef TestMipRoot < matlab.unittest.TestCase
             % 'packages' subdirectory should error (not auto-create).
             mkdir(testCase.TestRoot);
             setenv('MIP_ROOT', testCase.TestRoot);
-            testCase.verifyError(@() mip.root(), 'mip:rootInvalid');
+            testCase.verifyError(@() mip.paths.root(), 'mip:rootInvalid');
             % Verify packages dir was not auto-created
             testCase.verifyFalse(isfolder(fullfile(testCase.TestRoot, 'packages')));
         end
@@ -65,12 +65,12 @@ classdef TestMipRoot < matlab.unittest.TestCase
         function testEmptyStringTreatedAsUnset(testCase)
             % MIP_ROOT="" should behave the same as unset (fall through to
             % path-based detection). We can't easily verify the resulting
-            % path here, but we can verify that mip.root() does not raise
-            % a 'mip:rootInvalid' error (which would indicate the empty
-            % string was being validated as a path).
+            % path here, but we can verify that mip.paths.root() does not
+            % raise a 'mip:rootInvalid' error (which would indicate the
+            % empty string was being validated as a path).
             setenv('MIP_ROOT', '');
             try
-                mip.root();
+                mip.paths.root();
             catch ME
                 testCase.verifyNotEqual(ME.identifier, 'mip:rootInvalid', ...
                     'Empty MIP_ROOT should be treated as unset, not validated as a path');

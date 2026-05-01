@@ -248,7 +248,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
         fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
     end
 
-    currentArch = mip.arch();
+    currentArch = mip.build.arch();
     fprintf('Detected architecture: %s\n', currentArch);
 
     % Fetch channel indexes. Always fetch mip-org/core (bare-name deps resolve

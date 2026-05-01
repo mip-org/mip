@@ -378,7 +378,7 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
         rethrow(err);
     end
 
-    currentArch = mip.arch();
+    currentArch = mip.build.arch();
     if ~packageInfoMap.isKey(fqn)
         if unavailablePackages.isKey(fqn)
             archs = unavailablePackages(fqn);

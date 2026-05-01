@@ -1,9 +1,9 @@
-function url = index(channel)
-%INDEX   Get the URL for the mip package index.
+function url = index_url(channel)
+%INDEX_URL   Build the URL for a channel's package index.
 %
 % Usage:
-%   mip index                           - Get URL for default channel (mip-org/core)
-%   mip index --channel owner/channel   - Get URL for a user-hosted channel
+%   url = mip.channel.index_url()                    - URL for default channel (mip-org/core)
+%   url = mip.channel.index_url('owner/channel')     - URL for a user-hosted channel
 %
 % Channel URL mapping:
 %   'mip-org/core'   -> https://mip-org.github.io/mip-core/index.json

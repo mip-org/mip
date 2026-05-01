@@ -17,7 +17,7 @@ if nargin < 4
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
 end
 
-currentArch = mip.arch();
+currentArch = mip.build.arch();
 packages = index.packages;
 
 % Group packages by name, then by version. Names that differ only in case
