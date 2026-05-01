@@ -348,67 +348,78 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     % Sort topologically
     allPackagesToInstall = mip.dependency.topological_sort(allRequiredFqns, packageInfoMap);
 
-    % If a user-requested @version differs from what's installed, replace it
-    reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageInfoMap);
+    % If a user-requested @version differs from what's installed, replace it.
+    % Old versions are staged to backup dirs; restored on failure below.
+    [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap);
 
-    % Determine which packages need installing vs already installed.
-    % Reject equivalent-but-different on-disk names (e.g. user asks for
-    % "some-packagE" while "some_package" is already installed): their
-    % FQNs share a normalized form, so letting both coexist would give
-    % two parallel installs for one logical package.
-    toInstallFqns = {};
-    for i = 1:length(allPackagesToInstall)
-        fqn = allPackagesToInstall{i};
-        result = mip.parse.parse_package_arg(fqn);
-        existingName = mip.resolve.installed_dir(fqn);
-        if ~isempty(existingName) && ~strcmp(existingName, result.name)
-            existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
-            error('mip:install:equivalentAlreadyInstalled', ...
-                  ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
-                   'Package names are equivalent when they match after lowercasing and ' ...
-                   'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
-                  mip.parse.display_fqn(fqn), mip.parse.display_fqn(existingFqn), ...
-                  mip.parse.display_fqn(existingFqn));
+    % From here on, any error must restore @version backups. If a download
+    % was actually attempted, also prune orphan deps installed during this
+    % call (they aren't in directly_installed.txt yet). Restore happens
+    % before prune so prune doesn't drop deps of the restored packages.
+    installAttempted = false;
+    try
+        % Determine which packages need installing vs already installed.
+        % Reject equivalent-but-different on-disk names (e.g. user asks for
+        % "some-packagE" while "some_package" is already installed): their
+        % FQNs share a normalized form, so letting both coexist would give
+        % two parallel installs for one logical package.
+        toInstallFqns = {};
+        for i = 1:length(allPackagesToInstall)
+            fqn = allPackagesToInstall{i};
+            result = mip.parse.parse_package_arg(fqn);
+            existingName = mip.resolve.installed_dir(fqn);
+            if ~isempty(existingName) && ~strcmp(existingName, result.name)
+                existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
+                error('mip:install:equivalentAlreadyInstalled', ...
+                      ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
+                       'Package names are equivalent when they match after lowercasing and ' ...
+                       'treating "-" and "_" as the same character. Uninstall "%s" first.'], ...
+                      mip.parse.display_fqn(fqn), mip.parse.display_fqn(existingFqn), ...
+                      mip.parse.display_fqn(existingFqn));
+            end
+            pkgDir = mip.paths.get_package_dir(fqn);
+            if exist(pkgDir, 'dir')
+                fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+            else
+                toInstallFqns{end+1} = fqn; %#ok<AGROW>
+            end
         end
-        pkgDir = mip.paths.get_package_dir(fqn);
-        if exist(pkgDir, 'dir')
-            fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
-        else
-            toInstallFqns{end+1} = fqn; %#ok<AGROW>
-        end
-    end
 
-    % Show installation plan and install
-    if ~isempty(toInstallFqns)
-        if length(toInstallFqns) == 1
-            fprintf('\nInstallation plan:\n');
-        else
-            fprintf('\nInstallation plan (%d packages):\n', length(toInstallFqns));
-        end
-        for i = 1:length(toInstallFqns)
-            fprintf('  - %s %s\n', mip.parse.display_fqn(toInstallFqns{i}), packageInfoMap(toInstallFqns{i}).version);
-        end
-        fprintf('\n');
+        % Show installation plan and install
+        if ~isempty(toInstallFqns)
+            if isscalar(toInstallFqns)
+                fprintf('\nInstallation plan:\n');
+            else
+                fprintf('\nInstallation plan (%d packages):\n', length(toInstallFqns));
+            end
+            for i = 1:length(toInstallFqns)
+                fprintf('  - %s %s\n', mip.parse.display_fqn(toInstallFqns{i}), packageInfoMap(toInstallFqns{i}).version);
+            end
+            fprintf('\n');
 
-        % Install each package. On failure, prune orphaned deps that were
-        % installed during this call (they aren't in directly_installed.txt yet).
-        try
+            installAttempted = true;
             for i = 1:length(toInstallFqns)
                 fqn = toInstallFqns{i};
                 pkgDir = mip.paths.get_package_dir(fqn);
                 downloadAndInstall(fqn, packageInfoMap(fqn), pkgDir);
             end
-        catch ME
-            fprintf('\nInstall failed; rolling back any orphaned dependencies...\n');
+        end
+    catch ME
+        fprintf('\nInstall failed; rolling back...\n');
+        restoreReplacementBackups(replacementBackups);
+        if installAttempted
             try
                 mip.state.prune_unused_packages();
             catch pruneErr
                 warning('mip:rollbackFailed', ...
                         'Rollback prune failed: %s', pruneErr.message);
             end
-            rethrow(ME);
         end
+        rethrow(ME);
+    end
+    cleanupReplacementBackups(replacementBackups);
 
+    if ~isempty(toInstallFqns)
         % Mark requested packages as directly installed and collect their FQNs.
         % Skip marking when this call is installing transitive dependencies
         % (e.g. from an .mhl install) so those deps can be pruned later.
@@ -442,10 +453,14 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     end
 end
 
-function reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageInfoMap)
+function [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap)
 % Replace installed packages when the user requested a different @version.
+% Old packages are moved to backup dirs (returned in replacementBackups) so the
+% caller can restore them if a subsequent download/install fails.
 % Returns FQNs that were loaded before replacement (caller should reload them).
     reloadAfterInstall = {};
+    replacementBackups = struct('fqn', {}, 'pkgDir', {}, 'backupDir', {}, ...
+                                'wasDirectlyInstalled', {});
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
         if isempty(s.requested_version)
@@ -469,8 +484,49 @@ function reloadAfterInstall = replaceExistingVersions(resolvedPackages, packageI
             mip.unload(s.fqn);
             reloadAfterInstall{end+1} = s.fqn; %#ok<AGROW>
         end
-        rmdir(pkgDir, 's');
-        mip.state.remove_directly_installed(s.fqn);
+        wasDirectlyInstalled = mip.state.is_directly_installed(s.fqn);
+        backupDir = [tempname '_mip_backup'];
+        movefile(pkgDir, backupDir);
+        if wasDirectlyInstalled
+            mip.state.remove_directly_installed(s.fqn);
+        end
+        replacementBackups(end+1) = struct(...
+            'fqn', s.fqn, ...
+            'pkgDir', pkgDir, ...
+            'backupDir', backupDir, ...
+            'wasDirectlyInstalled', wasDirectlyInstalled); %#ok<AGROW>
+    end
+end
+
+function restoreReplacementBackups(replacementBackups)
+% Restore packages from backup dirs after a failed replace install.
+    for i = 1:length(replacementBackups)
+        b = replacementBackups(i);
+        try
+            if exist(b.pkgDir, 'dir')
+                rmdir(b.pkgDir, 's');
+            end
+            if exist(b.backupDir, 'dir')
+                movefile(b.backupDir, b.pkgDir);
+            end
+            if b.wasDirectlyInstalled
+                mip.state.add_directly_installed(b.fqn);
+            end
+        catch restoreErr
+            warning('mip:rollbackFailed', ...
+                    'Could not restore "%s" from backup: %s', ...
+                    mip.parse.display_fqn(b.fqn), restoreErr.message);
+        end
+    end
+end
+
+function cleanupReplacementBackups(replacementBackups)
+% Remove backup dirs after a successful replace install.
+    for i = 1:length(replacementBackups)
+        b = replacementBackups(i);
+        if exist(b.backupDir, 'dir')
+            rmdir(b.backupDir, 's');
+        end
     end
 end
 
