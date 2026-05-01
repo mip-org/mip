@@ -2,9 +2,9 @@ function avail(varargin)
 %AVAIL   Display a list of all available packages.
 %
 % Usage:
-%   mip.avail()
-%   mip.avail('--channel', 'dev')
-%   mip.avail('--channel', 'owner/channel')
+%   mip avail
+%   mip avail --channel dev
+%   mip avail --channel owner/channel
 %
 % Options:
 %   --channel <name>  List packages from a specific channel (default: mip-org/core)

@@ -2,9 +2,9 @@ function pin(varargin)
 %PIN   Pin one or more installed packages to their current version.
 %
 % Usage:
-%   mip.pin('packageName')
-%   mip.pin('org/channel/packageName')
-%   mip.pin('package1', 'package2')
+%   mip pin <package>
+%   mip pin org/channel/<package>
+%   mip pin <package1> <package2> ...
 %
 % Pinned packages are blocked from being updated by any "mip update"
 % invocation, including "mip update <pkg>", "mip update --force <pkg>",

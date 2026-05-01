@@ -2,8 +2,8 @@ function list(varargin)
 %LIST   List all installed mip packages.
 %
 % Usage:
-%   mip list              - List packages (default: reverse load order)
-%   mip list --sort-by-name  - List packages sorted alphabetically by name
+%   mip list                  - List packages (default: reverse load order)
+%   mip list --sort-by-name   - List packages sorted alphabetically by name
 %
 % Columns: name, fqn, version. Asterisk (*) marks directly loaded packages.
 % Editable packages show their source location.

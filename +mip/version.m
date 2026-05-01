@@ -1,5 +1,10 @@
 function v = version()
 %VERSION   Return the mip package manager version string.
+%
+% Usage:
+%   mip version
+%
+% Returns the version string for mip.
 
 thisDir = fileparts(mfilename('fullpath'));  % +mip directory
 pkgRoot = fileparts(thisDir);  % package root (contains mip.yaml)

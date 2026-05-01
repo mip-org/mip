@@ -2,8 +2,8 @@ function compile(varargin)
 %COMPILE   Compile (or recompile) an installed package's MEX files.
 %
 % Usage:
-%   mip.compile('packageName')
-%   mip.compile('org/channel/packageName')
+%   mip compile <package>
+%   mip compile org/channel/<package>
 %
 % Runs the compile script defined in the package's mip.yaml (or stored
 % in mip.json for editable installs). For editable installs, compilation

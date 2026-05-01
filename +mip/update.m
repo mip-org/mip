@@ -2,13 +2,13 @@ function update(varargin)
 %UPDATE   Update one or more installed mip packages.
 %
 % Usage:
-%   mip.update('packageName')
-%   mip.update('org/channel/packageName')
-%   mip.update('package1', 'package2')
-%   mip.update('--force', 'packageName')
-%   mip.update('--deps', 'packageName')
-%   mip.update('--all')
-%   mip.update('mip')
+%   mip update <package>
+%   mip update org/channel/<package>
+%   mip update <package1> <package2> ...
+%   mip update --force <package>
+%   mip update --deps <package>
+%   mip update --all
+%   mip update mip
 %
 % Options:
 %   --force           Force update even if already up to date

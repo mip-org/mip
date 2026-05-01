@@ -2,8 +2,8 @@ function test(varargin)
 %TEST   Run the test script for an installed package.
 %
 % Usage:
-%   mip.test('packageName')
-%   mip.test('org/channel/packageName')
+%   mip test <package>
+%   mip test org/channel/<package>
 %
 % Loads the package (if not already loaded) and runs the test script
 % defined in the package's mip.yaml (test_script field). If no test

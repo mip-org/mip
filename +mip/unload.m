@@ -2,15 +2,15 @@ function unload(varargin)
 %UNLOAD   Unload one or more mip packages from MATLAB path.
 %
 % Usage:
-%   mip.unload('packageName')
-%   mip.unload('package1', 'package2', ...)
-%   mip.unload('org/channel/packageName')
-%   mip.unload('--all')
-%   mip.unload('--all', '--force')
+%   mip unload <package>
+%   mip unload <package1> <package2> ...
+%   mip unload org/channel/<package>
+%   mip unload --all
+%   mip unload --all --force
 %
 % Accepts both bare package names and fully qualified names.
-% Use '--all' to unload all non-sticky packages.
-% Use '--all --force' to unload all packages including sticky ones.
+% Use --all to unload all non-sticky packages.
+% Use --all --force to unload all packages including sticky ones.
 
     % Check for --all and --force flags
     hasAll = any(strcmp(varargin, '--all'));

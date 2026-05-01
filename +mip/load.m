@@ -2,12 +2,12 @@ function load(varargin)
 %LOAD   Load one or more mip packages into the MATLAB path.
 %
 % Usage:
-%   mip.load('packageName')
-%   mip.load('package1', 'package2', ...)
-%   mip.load('packageName', '--sticky')
-%   mip.load('packageName', '--install')
-%   mip.load('--channel', 'owner/chan', 'packageName', '--install')
-%   mip.load('org/channel/packageName')
+%   mip load <package>
+%   mip load <package1> <package2> ...
+%   mip load <package> --sticky
+%   mip load <package> --install
+%   mip load --channel owner/channel <package> --install
+%   mip load org/channel/<package>
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
 % For bare names, resolution priority is:
@@ -15,22 +15,22 @@ function load(varargin)
 %   2. First alphabetically by org/channel
 %
 % Options:
-%   --sticky        Mark the package(s) as sticky (prevents unload with 'mip unload --all')
-%   --install       Automatically install the package(s) if not already installed
-%   --channel <c>   Channel to install from when using --install
-%   --addpath <rel> Add this source-relative subpath to the MATLAB path AFTER
-%                   the paths from mip.json are added. May be repeated. Only
-%                   valid with a single positional package; applies only to
-%                   direct loads (not transitive dependencies).
-%   --rmpath  <rel> Remove this source-relative subpath from the MATLAB path
-%                   AFTER the paths from mip.json are added. Same constraints
-%                   as --addpath.
-%   --with <group>  Also add to the MATLAB path the directories declared
-%                   under extra_paths.<group> in the package's mip.yaml
-%                   (e.g. --with examples, --with tests). May be repeated.
-%                   Applies only to direct loads. Warns at end if no loaded
-%                   package declared the requested group.
-%   --transitive    (internal) Load as a transitive dependency, not a direct load
+%   --sticky         Mark the package(s) as sticky (prevents unload with 'mip unload --all')
+%   --install        Automatically install the package(s) if not already installed
+%   --channel <name> Channel to install from when using --install
+%   --addpath <rel>  Add this source-relative subpath to the MATLAB path AFTER
+%                    the paths from mip.json are added. May be repeated. Only
+%                    valid with a single positional package; applies only to
+%                    direct loads (not transitive dependencies).
+%   --rmpath  <rel>  Remove this source-relative subpath from the MATLAB path
+%                    AFTER the paths from mip.json are added. Same constraints
+%                    as --addpath.
+%   --with <group>   Also add to the MATLAB path the directories declared
+%                    under extra_paths.<group> in the package's mip.yaml
+%                    (e.g. --with examples, --with tests). May be repeated.
+%                    Applies only to direct loads. Warns at end if no loaded
+%                    package declared the requested group.
+%   --transitive     (internal) Load as a transitive dependency, not a direct load
 
     % Parse flags and package names from arguments
     installIfMissing = false;
