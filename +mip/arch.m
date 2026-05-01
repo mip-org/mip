@@ -1,6 +1,10 @@
 function arch = arch()
 %ARCH   Get the current architecture tag.
-%   ARCH() returns the architecture tag for the current system.
+%
+% Usage:
+%   mip arch
+%
+% Returns the architecture tag for the current system.
 
 is_numbl = exist('isnumbl', 'builtin') && isnumbl();
 

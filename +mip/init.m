@@ -3,7 +3,7 @@ function init(varargin)
 %
 % Usage:
 %   mip init [<path>]
-%   mip init [<path>] [--name <packagename>] [--repository <url>]
+%   mip init [<path>] [--name <package>] [--repository <url>]
 %
 % Generates a mip.yaml in the given directory (defaults to the current
 % directory if no path is provided). The package name defaults to the

@@ -4,7 +4,7 @@ function update(varargin)
 % Usage:
 %   mip update <package>
 %   mip update org/channel/<package>
-%   mip update <package1> <package2>
+%   mip update <package1> <package2> ...
 %   mip update --force <package>
 %   mip update --deps <package>
 %   mip update --all

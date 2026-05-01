@@ -5,7 +5,7 @@ function info(varargin)
 %   mip info <package>
 %   mip info org/channel/<package>
 %   mip info --channel dev <package>
-%   mip info --channel owner/chan <package>
+%   mip info --channel owner/channel <package>
 %
 % Options:
 %   --channel <name>  Query a specific channel (default: mip-org/core)

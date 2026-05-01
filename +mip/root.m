@@ -1,14 +1,17 @@
 function root = root()
 %ROOT   Get the mip root directory path.
-%   ROOT() returns the path to the mip root directory. If the environment
-%   variable MIP_ROOT is set to a non-empty value, that value is used. It
-%   must point to an existing directory containing a 'packages'
-%   subdirectory; otherwise an error is raised. An empty MIP_ROOT is
-%   treated the same as unset.
 %
-%   When MIP_ROOT is unset (or empty), the root is determined by navigating
-%   up from this file's installed location, assuming the layout:
-%     <root>/packages/gh/mip-org/core/mip/mip/+mip/root.m
+% Usage:
+%   mip root
+%
+% Returns the path to the mip root directory. If the environment variable
+% MIP_ROOT is set to a non-empty value, that value is used. It must point to an
+% existing directory containing a 'packages' subdirectory; otherwise an error is
+% raised. An empty MIP_ROOT is treated the same as unset.
+%
+% When MIP_ROOT is unset (or empty), the root is determined by navigating up
+% from this file's installed location, assuming the layout:
+%   <root>/packages/gh/mip-org/core/mip/mip/+mip/root.m
 
 root = getenv('MIP_ROOT');
 if ~isempty(root)

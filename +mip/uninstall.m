@@ -4,7 +4,7 @@ function uninstall(varargin)
 % Usage:
 %   mip uninstall <package>
 %   mip uninstall org/channel/<package>
-%   mip uninstall <package1> <package2>
+%   mip uninstall <package1> <package2> ...
 %
 % Accepts both bare package names and fully qualified names.
 % This function uninstalls packages and then prunes any packages that

@@ -4,7 +4,7 @@ function pin(varargin)
 % Usage:
 %   mip pin <package>
 %   mip pin org/channel/<package>
-%   mip pin <package1> <package2>
+%   mip pin <package1> <package2> ...
 %
 % Pinned packages are skipped by "mip update --all". Use "mip update
 % --force" to override the pin (which also unpins the package).
