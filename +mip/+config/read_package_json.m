@@ -53,6 +53,10 @@ try
         elseif ~iscell(pkgInfo.paths)
             pkgInfo.paths = {pkgInfo.paths};
         end
+        for i = 1:numel(pkgInfo.paths)
+            mip.paths.assert_safe_relative(pkgInfo.paths{i}, ...
+                sprintf('mip.json paths[%d]', i));
+        end
     end
 
     % Normalize extra_paths field if present. Shape: struct mapping group
@@ -64,11 +68,17 @@ try
             elseif ~iscell(pkgInfo.extra_paths.(key{1}))
                 pkgInfo.extra_paths.(key{1}) = {pkgInfo.extra_paths.(key{1})};
             end
+            entries = pkgInfo.extra_paths.(key{1});
+            for i = 1:numel(entries)
+                mip.paths.assert_safe_relative(entries{i}, ...
+                    sprintf('mip.json extra_paths.%s[%d]', key{1}, i));
+            end
         end
     end
 
 catch ME
-    if strcmp(ME.identifier, 'mip:invalidMipJson')
+    if strcmp(ME.identifier, 'mip:invalidMipJson') || ...
+            strcmp(ME.identifier, 'mip:unsafePath')
         rethrow(ME);
     else
         error('mip:jsonParseFailed', ...
