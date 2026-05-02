@@ -75,8 +75,9 @@ A channel is a package repository hosted on GitHub Pages at `https://<org>.githu
 
 Channel strings can be specified as:
 - `org/channel` (e.g., `mip-org/core`, `mylab/custom`)
+- `<name>` (single name) — only on the `--channel` flag, expanded to `<name>/<name>`. See [§2.3](#23-parsing-the---channel-flag-parse_channel_flag).
 
-A bare channel name (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
+A bare channel name passed to the channel parser directly (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
 
 ### 1.6 Non-channel Source Types
 
@@ -164,6 +165,7 @@ Validation rules:
 
 Scans an argument list for `--channel <value>` and extracts it:
 - Returns the channel string and the remaining arguments with `--channel` and its value removed
+- A bare single name `<name>` (no `/`) is expanded to `<name>/<name>` — shorthand for the user's personal channel repo at `github.com/<name>/mip-<name>`. This shorthand is exclusive to the `--channel` flag; it does not apply to FQN package arguments.
 - If `--channel` appears without a following value, raises `mip:missingChannelValue`
 - If `--channel` is absent, returns empty string and the original arguments unchanged
 - Works regardless of position in the argument list (beginning, middle, or end)

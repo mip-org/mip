@@ -5,7 +5,11 @@ function [channel, remainingArgs] = parse_channel_flag(args)
 %   args - Cell array of arguments (typically varargin)
 %
 % Returns:
-%   channel       - Channel name string, or '' if not specified
+%   channel       - Channel string in 'org/channel' form, or '' if not
+%                   specified. A bare single name 'foo' is expanded to
+%                   'foo/foo' as shorthand for a user's personal channel
+%                   repo (github.com/foo/mip-foo). This shorthand applies
+%                   only to --channel, not to FQNs.
 %   remainingArgs - Cell array with --channel and its value removed
 
 channel = '';
@@ -21,6 +25,9 @@ while i <= length(args)
                 error('mip:missingChannelValue', '--channel requires a channel name argument');
             end
             channel = char(args{i + 1});
+            if ~isempty(channel) && ~contains(channel, '/')
+                channel = [channel '/' channel];
+            end
             i = i + 2;
             continue;
         end

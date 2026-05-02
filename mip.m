@@ -3,8 +3,8 @@ function varargout = mip(command, varargin)
 %
 % Usage:
 %   mip install <package> [...]                - Install one or more packages
-%   mip install --channel dev <package>        - Install from a specific channel
 %   mip install --channel owner/channel <pkg>  - Install from a user-hosted channel
+%   mip install --channel <name> <pkg>         - Shorthand for --channel <name>/<name>
 %   mip install owner/chan/package             - Install using fully qualified name
 %   mip update <package> [...]                 - Update one or more packages
 %   mip update --force <package>               - Force update even if up to date
@@ -27,9 +27,9 @@ function varargout = mip(command, varargin)
 %   mip unload --all --force                   - Unload all packages (including sticky)
 %   mip arch                                   - Display current architecture tag
 %   mip info <package>                         - Display package information
-%   mip info --channel dev <package>           - Display info from a specific channel
+%   mip info --channel owner/channel <package> - Display info from a specific channel
 %   mip avail                                  - List available packages in repository
-%   mip avail --channel dev                    - List packages from a specific channel
+%   mip avail --channel owner/channel          - List packages from a specific channel
 %   mip index                                  - Display the mip package index URL
 %   mip root                                   - Display the mip root directory
 %   mip version                                - Display mip version
@@ -43,9 +43,10 @@ function varargout = mip(command, varargin)
 % Channels:
 %   The default channel is 'core' (mip-org/core). Use --channel <name> to
 %   install from or query other channels. Channel formats:
-%     'core'           -> mip-org/core (default)
-%     'dev'            -> mip-org/dev
+%     'mip-org/core'   -> default channel
 %     'owner/channel'  -> user-hosted channel
+%     '<name>'         -> shorthand for '<name>/<name>', the user's
+%                         personal channel repo at github.com/<name>/mip-<name>
 %
 % Package names:
 %   Packages can be specified by bare name or fully qualified name:

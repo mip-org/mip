@@ -7,6 +7,7 @@ function load(varargin)
 %   mip load <package> --sticky
 %   mip load <package> --install
 %   mip load --channel owner/channel <package> --install
+%   mip load --channel <name> <package> --install   - Shorthand for --channel <name>/<name>
 %   mip load org/channel/<package>
 %
 % Accepts both bare package names and fully qualified names (org/channel/package).
@@ -17,7 +18,10 @@ function load(varargin)
 % Options:
 %   --sticky         Mark the package(s) as sticky (prevents unload with 'mip unload --all')
 %   --install        Automatically install the package(s) if not already installed
-%   --channel <name> Channel to install from when using --install
+%   --channel <name> Channel to install from when using --install. A bare
+%                    single name '<name>' is shorthand for '<name>/<name>' —
+%                    the user's personal channel repo at
+%                    github.com/<name>/mip-<name>.
 %   --addpath <rel>  Add this source-relative subpath to the MATLAB path AFTER
 %                    the paths from mip.json are added. May be repeated. Only
 %                    valid with a single positional package; applies only to
@@ -54,6 +58,9 @@ function load(varargin)
             if i < length(varargin)
                 i = i + 1;
                 channel = varargin{i};
+                if ~isempty(channel) && ~contains(channel, '/')
+                    channel = [channel '/' channel];
+                end
             else
                 error('mip:load:missingChannel', '--channel requires a value');
             end

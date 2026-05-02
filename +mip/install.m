@@ -4,8 +4,8 @@ function install(varargin)
 % Usage:
 %   mip install <package>
 %   mip install <package1> <package2> ...
-%   mip install --channel dev <package>
 %   mip install --channel owner/channel <package>
+%   mip install --channel <name> <package>                    - Shorthand for --channel <name>/<name>
 %   mip install owner/channel/<package>
 %   mip install /path/to/package.mhl                          - Install under mhl/<name>
 %   mip install https://example.com/package.mhl               - Install under mhl/<name>
@@ -18,7 +18,10 @@ function install(varargin)
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)
-%                       Format: 'org/channel' (e.g. 'mip-org/core')
+%                       Format: 'org/channel' (e.g. 'mip-org/core'). A bare
+%                       single name '<name>' is shorthand for '<name>/<name>'
+%                       — the user's personal channel repo at
+%                       github.com/<name>/mip-<name>.
 %   --editable, -e      Install in editable mode (local packages only)
 %   --no-compile        Skip compilation (editable installs only)
 %   --url <zip-url>     Install from a remote .zip archive. The positional

@@ -208,13 +208,13 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
 
         function testParseChannelFlagPresent(testCase)
             [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'dev', 'pkg1'});
-            testCase.verifyEqual(ch, 'dev');
+            testCase.verifyEqual(ch, 'dev/dev');
             testCase.verifyEqual(remaining, {'pkg1'});
         end
 
         function testParseChannelFlagAtEnd(testCase)
             [ch, remaining] = mip.parse.parse_channel_flag({'pkg1', '--channel', 'dev'});
-            testCase.verifyEqual(ch, 'dev');
+            testCase.verifyEqual(ch, 'dev/dev');
             testCase.verifyEqual(remaining, {'pkg1'});
         end
 
@@ -222,6 +222,26 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'mylab/custom', 'pkg1'});
             testCase.verifyEqual(ch, 'mylab/custom');
             testCase.verifyEqual(remaining, {'pkg1'});
+        end
+
+        function testParseChannelFlagBareNameExpands(testCase)
+            % --channel <name> is shorthand for <name>/<name>, the user's
+            % personal channel repo at github.com/<name>/mip-<name>.
+            [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'foo', 'pkg1'});
+            testCase.verifyEqual(ch, 'foo/foo');
+            testCase.verifyEqual(remaining, {'pkg1'});
+        end
+
+        function testParseChannelShorthandDoesNotApplyToFqn(testCase)
+            % The bare-name shorthand is exclusive to --channel. A 2-part
+            % positional arg like 'foo/pkg1' must NOT be expanded to
+            % 'foo/foo/pkg1' — it parses as a non-gh FQN with type='foo'.
+            r = mip.parse.parse_package_arg('foo/pkg1');
+            testCase.verifyTrue(r.is_fqn);
+            testCase.verifyEqual(r.type, 'foo');
+            testCase.verifyEqual(r.name, 'pkg1');
+            testCase.verifyEqual(r.org, '');
+            testCase.verifyEqual(r.channel, '');
         end
 
         function testParseChannelFlagMissingValue(testCase)

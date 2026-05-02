@@ -4,11 +4,14 @@ function info(varargin)
 % Usage:
 %   mip info <package>
 %   mip info org/channel/<package>
-%   mip info --channel dev <package>
 %   mip info --channel owner/channel <package>
+%   mip info --channel <name> <package>           - Shorthand for --channel <name>/<name>
 %
 % Options:
-%   --channel <name>  Query a specific channel (default: mip-org/core)
+%   --channel <name>  Query a specific channel (default: mip-org/core).
+%                     A bare single name '<name>' is shorthand for
+%                     '<name>/<name>' — the user's personal channel repo
+%                     at github.com/<name>/mip-<name>.
 %
 % Shows two kinds of information:
 %   1. Local installation(s) — version, path, loaded/sticky status, deps

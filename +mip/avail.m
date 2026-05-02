@@ -3,12 +3,15 @@ function avail(varargin)
 %
 % Usage:
 %   mip avail
-%   mip avail --channel dev
 %   mip avail --channel owner/channel
+%   mip avail --channel <name>             - Shorthand for --channel <name>/<name>
 %
 % Options:
 %   --channel <name>  List packages from a specific channel (default: mip-org/core)
-%                     Format: 'org/channel' (e.g. 'mip-org/core')
+%                     Format: 'org/channel' (e.g. 'mip-org/core'). A bare
+%                     single name '<name>' is shorthand for '<name>/<name>' —
+%                     the user's personal channel repo at
+%                     github.com/<name>/mip-<name>.
 %
 % Displays an alphabetical list of all available packages in the online
 % repository for the current architecture, shown with fully qualified names.

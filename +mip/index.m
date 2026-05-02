@@ -4,10 +4,12 @@ function url = index(channel)
 % Usage:
 %   mip index                           - Get URL for default channel (mip-org/core)
 %   mip index --channel owner/channel   - Get URL for a user-hosted channel
+%   mip index --channel <name>          - Shorthand for --channel <name>/<name>
 %
 % Channel URL mapping:
 %   'mip-org/core'   -> https://mip-org.github.io/mip-core/index.json
 %   'owner/channel'  -> https://owner.github.io/mip-channel/index.json
+%   '<name>'         -> https://<name>.github.io/mip-<name>/index.json
 
 if nargin < 1 || isempty(channel)
     channel = 'mip-org/core';
