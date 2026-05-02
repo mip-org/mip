@@ -3,7 +3,7 @@ function uninstall(varargin)
 %
 % Usage:
 %   mip uninstall <package>
-%   mip uninstall org/channel/<package>
+%   mip uninstall <owner>/<channel>/<package>
 %   mip uninstall <package1> <package2> ...
 %
 % Accepts both bare package names and fully qualified names.
@@ -34,7 +34,7 @@ function uninstall(varargin)
             if isempty(onDisk)
                 fqn = result.fqn;
             elseif strcmp(result.type, 'gh')
-                fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+                fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
             else
                 fqn = [result.type '/' onDisk];
             end
@@ -119,13 +119,13 @@ end
 
 function cleanupPackageParents(fqn)
 % Remove empty parent directories above the uninstalled package. For a
-% gh FQN this walks up through <channel>, <org>, and the 'gh' root; for
+% gh FQN this walks up through <channel>, <owner>, and the 'gh' root; for
 % a non-gh FQN it only needs to check the source-type directory.
     packagesDir = mip.paths.get_packages_dir();
     r = mip.parse.parse_package_arg(fqn);
     if strcmp(r.type, 'gh')
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.org, r.channel));
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.org));
+        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner, r.channel));
+        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner));
         mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh'));
     else
         mip.paths.cleanup_empty_dirs(fullfile(packagesDir, r.type));

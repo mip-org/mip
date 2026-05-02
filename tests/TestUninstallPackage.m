@@ -82,7 +82,7 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
         function testCleanupEmptyParentDirs(testCase)
             pkgDir = createTestPackage(testCase.TestRoot, 'testorg', 'testchan', 'testpkg');
             chanDir = fullfile(testCase.TestRoot, 'packages', 'gh', 'testorg', 'testchan');
-            orgDir = fullfile(testCase.TestRoot, 'packages', 'gh', 'testorg');
+            ownerDir = fullfile(testCase.TestRoot, 'packages', 'gh', 'testorg');
 
             % Remove the package
             rmdir(pkgDir, 's');
@@ -94,9 +94,9 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
 
             % Clean up empty dirs
             rmdir(chanDir);
-            rmdir(orgDir);
+            rmdir(ownerDir);
 
-            testCase.verifyFalse(exist(orgDir, 'dir') > 0);
+            testCase.verifyFalse(exist(ownerDir, 'dir') > 0);
         end
 
         function testUninstallBareNameAmbiguous_RefusesAndPrintsOptions(testCase)

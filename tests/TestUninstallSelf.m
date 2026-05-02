@@ -40,7 +40,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
             r = mip.parse.parse_package_arg('mip-org/core/mip');
             testCase.verifyTrue(r.is_fqn);
             testCase.verifyEqual(r.fqn, 'gh/mip-org/core/mip');
-            testCase.verifyEqual(r.org, 'mip-org');
+            testCase.verifyEqual(r.owner, 'mip-org');
             testCase.verifyEqual(r.channel, 'core');
             testCase.verifyEqual(r.name, 'mip');
 

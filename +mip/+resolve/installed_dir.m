@@ -12,7 +12,7 @@ function name = installed_dir(fqn)
 % ismember against already-stored FQNs keeps working.
 %
 % Args:
-%   fqn - Canonical FQN (gh/<org>/<channel>/<name>, local/<name>, fex/<name>)
+%   fqn - Canonical FQN (gh/<owner>/<channel>/<name>, local/<name>, fex/<name>)
 %
 % Returns:
 %   name - char row vector with the on-disk name, or '' if no matching
@@ -27,7 +27,7 @@ end
 
 packagesDir = mip.paths.get_packages_dir();
 if strcmp(r.type, 'gh')
-    parentDir = fullfile(packagesDir, 'gh', r.org, r.channel);
+    parentDir = fullfile(packagesDir, 'gh', r.owner, r.channel);
 else
     parentDir = fullfile(packagesDir, r.type);
 end

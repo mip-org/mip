@@ -1,12 +1,12 @@
-function pkgDir = createTestPackage(rootDir, org, channel, pkgName, varargin)
+function pkgDir = createTestPackage(rootDir, owner, channel, pkgName, varargin)
 %CREATETESTPACKAGE   Create a fake installed mip package for testing.
 %
 % The on-disk layout follows the canonical mip layout:
-%   - For GitHub channel packages (3-arg form): org/channel/name are
+%   - For GitHub channel packages (3-arg form): owner/channel/name are
 %     provided. The package is created at
-%     <rootDir>/packages/gh/<org>/<channel>/<name>/.
+%     <rootDir>/packages/gh/<owner>/<channel>/<name>/.
 %   - For non-gh source types (2-arg form): the second positional arg
-%     is the package name, with org/channel omitted or passed as ''.
+%     is the package name, with owner/channel omitted or passed as ''.
 %     Pass source-type via the 'type' name-value ('local' or 'fex').
 %
 % The package is created with a "paths" field in mip.json that points at
@@ -14,7 +14,7 @@ function pkgDir = createTestPackage(rootDir, org, channel, pkgName, varargin)
 %
 % Args:
 %   rootDir  - The MIP_ROOT directory (e.g. tempdir)
-%   org      - Organization name (e.g. 'mip-org'). Use '' for non-gh.
+%   owner    - GitHub repo owner (user or organization, e.g. 'mip-org'). Use '' for non-gh.
 %   channel  - Channel name (e.g. 'core'). Use '' for non-gh.
 %   pkgName  - Package name (e.g. 'testpkg')
 %
@@ -37,15 +37,15 @@ parse(p, varargin{:});
 
 sourceType = p.Results.type;
 if isempty(sourceType)
-    if isempty(org) && isempty(channel)
+    if isempty(owner) && isempty(channel)
         error('createTestPackage:invalidArgs', ...
-              'org/channel must be given for gh packages, or pass type=''local''/''fex''.');
+              'owner/channel must be given for gh packages, or pass type=''local''/''fex''.');
     end
     sourceType = 'gh';
 end
 
 if strcmp(sourceType, 'gh')
-    pkgDir = fullfile(rootDir, 'packages', 'gh', org, channel, pkgName);
+    pkgDir = fullfile(rootDir, 'packages', 'gh', owner, channel, pkgName);
 else
     pkgDir = fullfile(rootDir, 'packages', sourceType, pkgName);
 end

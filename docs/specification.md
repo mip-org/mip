@@ -12,13 +12,13 @@ Every installed package has a unique **FQN** that begins with a **source-type pr
 
 | Source type | Canonical FQN | Example |
 |---|---|---|
-| `gh` — GitHub channel package | `gh/<org>/<channel>/<name>` | `gh/mip-org/core/chebfun` |
+| `gh` — GitHub channel package | `gh/<owner>/<channel>/<name>` | `gh/mip-org/core/chebfun` |
 | `local` — local directory / editable install | `local/<name>` | `local/mypkg` |
 | `fex` — File Exchange / `--url` zip install | `fex/<name>` | `fex/some_fex_pkg` |
 
 For GitHub channel packages:
-- **org** -- the GitHub organization that hosts the channel repository
-- **channel** -- the channel name within that organization
+- **owner** -- the GitHub user or organization that owns the channel repository
+- **channel** -- the channel name within that owner
 - **name** -- the package name
 
 All components must match the regex `^[-a-zA-Z0-9_.]+$` and must not be `.` or `..`.
@@ -46,7 +46,7 @@ The parser accepts either the canonical form or a shorter form for GitHub packag
 
 ### 1.2 Bare Names
 
-A **bare name** is just the package name without org/channel (e.g., `chebfun`). Bare names are resolved to FQNs using context-dependent rules described in section 2.4.
+A **bare name** is just the package name without owner/channel (e.g., `chebfun`). Bare names are resolved to FQNs using context-dependent rules described in section 2.4.
 
 ### 1.3 Version Strings
 
@@ -71,12 +71,13 @@ When an argument is identified as a local path (see [§3.0](#30-argument-categor
 
 ### 1.5 Channels
 
-A channel is a package repository hosted on GitHub Pages at `https://<org>.github.io/mip-<channel>/index.json`. The default channel is `mip-org/core`.
+A channel is a package repository hosted on GitHub Pages at `https://<owner>.github.io/mip-<channel>/index.json`. The default channel is `mip-org/core`.
 
 Channel strings can be specified as:
-- `org/channel` (e.g., `mip-org/core`, `mylab/custom`)
+- `owner/channel` (e.g., `mip-org/core`, `mylab/custom`)
+- `owner` (single name) — only on the `--channel` flag, expanded to `owner/owner`. See §3.x for details.
 
-A bare channel name (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
+A bare channel name passed to the channel parser directly (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
 
 ### 1.6 Non-channel Source Types
 
@@ -85,7 +86,7 @@ Packages installed from local directories and from File Exchange / `--url` zips 
 - `local/<name>` — directory and editable installs
 - `fex/<name>` — File Exchange URLs and `--url` zip installs
 
-These are addressed by the source-type prefix directly; no `org/channel` is involved.
+These are addressed by the source-type prefix directly; no `owner/channel` is involved.
 
 ### 1.7 The `gh/mip-org/core/mip` Identity
 
@@ -109,13 +110,13 @@ normalize(name) = lowercase(name) with '-' replaced by '_'
 
 So `My-Pkg`, `my_pkg`, `MY-PKG`, and `My_Pkg` all refer to the same package. `mypkg` (no separator) is a *different* name — normalization equates `-` with `_`, but does not remove them.
 
-This rule applies **only to the name component** of an FQN. The `org` and `channel` components compare strictly (case-sensitive, no separator equivalence) because they map to GitHub paths. So `mip-org/core/My-Pkg` and `mip-org/core/my_pkg` refer to the same package, but `MIP-ORG/core/my_pkg` does not.
+This rule applies **only to the name component** of an FQN. The `owner` and `channel` components compare strictly (case-sensitive, no separator equivalence) because they map to GitHub paths. So `mip-org/core/My-Pkg` and `mip-org/core/my_pkg` refer to the same package, but `MIP-ORG/core/my_pkg` does not.
 
 #### 1.8.1 Canonical Form
 
 Internally, mip stores names in a single **canonical** form per install. The canonical form is:
 
-- **For an installed package**: the actual on-disk directory name under `<root>/packages/gh/<org>/<channel>/`. Whatever case/separators the directory uses is the canonical form for that install.
+- **For an installed package**: the actual on-disk directory name under `<root>/packages/gh/<owner>/<channel>/`. Whatever case/separators the directory uses is the canonical form for that install.
 - **For a not-yet-installed package being installed**: the name as published by its source — the `name` field in the channel index entry, the `name` field in `mip.yaml` (local install), or the `name` field in `mip.json` (mhl install). The on-disk directory is named to match.
 
 This means the on-disk name is always the canonical name, and stored FQNs (`MIP_LOADED_PACKAGES`, `directly_installed.txt`, etc.) are always in canonical form. User input that differs from the canonical form is canonicalized at command entry by case-insensitive lookup against the on-disk directory or the channel index.
@@ -140,8 +141,8 @@ Input is split on `/` after stripping any `@version` suffix:
 |---|---|
 | `name` | bare name: `is_fqn=false`, `type=''`, `fqn=''` |
 | `type/name` (2 parts, `type != 'gh'`) | non-gh FQN: `type='local'`/`'fex'`/..., `fqn='<type>/<name>'` |
-| `org/channel/name` (3 parts) | gh FQN: `type='gh'`, org/channel/name populated, `fqn='gh/<org>/<channel>/<name>'` |
-| `gh/org/channel/name` (4 parts) | gh FQN (explicit), same result as 3-part form |
+| `owner/channel/name` (3 parts) | gh FQN: `type='gh'`, owner/channel/name populated, `fqn='gh/<owner>/<channel>/<name>'` |
+| `gh/owner/channel/name` (4 parts) | gh FQN (explicit), same result as 3-part form |
 | 2-part input starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 4-part input not starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 5+ parts | **Error** `mip:invalidPackageSpec` |
@@ -156,7 +157,7 @@ Validation rules:
 | Input | Result |
 |---|---|
 | `''` (empty) | defaults to `mip-org`, `core` |
-| `org/channel` | parsed as-is |
+| `owner/channel` | parsed as-is |
 | `name` (single part) | **Error** `mip:invalidChannel` |
 | `a/b/c` (3+ parts) | **Error** `mip:invalidChannel` |
 
@@ -164,6 +165,7 @@ Validation rules:
 
 Scans an argument list for `--channel <value>` and extracts it:
 - Returns the channel string and the remaining arguments with `--channel` and its value removed
+- A bare single name `<owner>` (no `/`) is expanded to `<owner>/<owner>` — shorthand for the owner's personal channel repo at `github.com/<owner>/mip-<owner>`. This shorthand is exclusive to the `--channel` flag; it does not apply to FQN package arguments.
 - If `--channel` appears without a following value, raises `mip:missingChannelValue`
 - If `--channel` is absent, returns empty string and the original arguments unchanged
 - Works regardless of position in the argument list (beginning, middle, or end)
@@ -221,7 +223,7 @@ This is consistent with the general dependency resolution rule (2.4.4).
 
 Used by: `mip install` for remote packages
 
-- If the argument is a FQN, use the org/channel/name from it (ignoring `--channel`)
+- If the argument is a FQN, use the owner/channel/name from it (ignoring `--channel`)
 - If the argument is a bare name, apply the `--channel` flag (defaulting to `mip-org/core`)
 
 ---
@@ -234,7 +236,7 @@ Used by: `mip install` for remote packages
 
 1. If the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
 2. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
-3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`org/channel/pkg`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
+3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`owner/channel/pkg`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
 
 This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
 
@@ -247,7 +249,7 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 #### 3.1.1 Channel Resolution
 
 1. If `--channel` is provided, use it as the primary channel for any bare-name arguments. Otherwise default to `mip-org/core`.
-2. FQN arguments use the org/channel encoded in the name; `--channel` does not apply to them.
+2. FQN arguments use the owner/channel encoded in the name; `--channel` does not apply to them.
 3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch).
 
 #### 3.1.2 Index Fetching
@@ -299,7 +301,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
    - Download the `.mhl` file from the URL in the index.
    - If the channel index entry includes `mhl_sha256`, verify the downloaded file against it. Mismatch raises `mip:digestMismatch` and deletes the corrupted file. Missing digest (legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips verification. See [§3.6](#36-mhl-archive-integrity).
    - Validate the `.mhl` archive against path-traversal attacks before extraction (see [§3.6](#36-mhl-archive-integrity)).
-   - Extract to `<root>/packages/gh/<org>/<channel>/<name>/`.
+   - Extract to `<root>/packages/gh/<owner>/<channel>/<name>/`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
 3. Print a summary with load hints.
 
@@ -379,8 +381,8 @@ If the package is already installed at `local/<name>`, prints a message and retu
 2. Validate the archive for path-traversal safety (see [§3.6](#36-mhl-archive-integrity)), then extract and read `mip.json` to get the package name.
 3. If already installed, skip.
 4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
-5. Move extracted files to `<root>/packages/gh/<org>/<channel>/<name>/`.
-6. The org/channel is determined by the `--channel` flag (default `mip-org/core`).
+5. Move extracted files to `<root>/packages/gh/<owner>/<channel>/<name>/`.
+6. The owner/channel is determined by the `--channel` flag (default `mip-org/core`).
 7. Mark the top-level `.mhl` package as directly installed.
 
 ### 3.4 Installation from a Remote `.zip` URL
@@ -591,7 +593,7 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
 4. Remove each package directory (`rmdir`).
 5. Remove from `directly_installed.txt`.
 6. Clear the pin entry for the package, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
-7. Clean up empty parent directories (channel dir, then org dir).
+7. Clean up empty parent directories (channel dir, then owner dir).
 8. **Prune** packages that are no longer needed.
 
 ### 6.2 Dependency Pruning After Uninstall
@@ -636,7 +638,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
 2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` does **not** override the pin filter (see [§7.11](#711-pinned-packages)). If every installed package is pinned, a message is printed and `mip update --all` returns without error. Otherwise (no `--all`), drop any explicitly named pinned packages from the batch with a "Skipping pinned package" message; the unpinned named packages still update. The user must `mip unpin <pkg>` first to update a pinned package. If every named package is pinned, the call returns without error. If `--deps` is specified, expand each remaining package's installed transitive dependencies into the argument list, dropping any pinned dependencies with a "Skipping pinned dependency" message.
-3. Resolve each argument to a `(fqn, org, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
+3. Resolve each argument to a `(fqn, owner, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
    - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable` (checked after the `noSource` filter in step 4).
@@ -821,7 +823,7 @@ Prints the mip version string, read from `mip.yaml` in the package root. If `mip
 
 ### 9.5 `mip index`
 
-Prints the channel index URL. Takes an optional channel argument (default: `mip-org/core`). The URL follows the pattern `https://<org>.github.io/mip-<channel>/index.json`.
+Prints the channel index URL. Takes an optional channel argument (default: `mip-org/core`). The URL follows the pattern `https://<owner>.github.io/mip-<channel>/index.json`.
 
 ### 9.6 `mip root`
 
@@ -957,8 +959,8 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
   "version": "1.0.0",
   "description": "...",
   "architecture": "linux_x86_64",
-  "dependencies": ["dep1", "org/chan/dep2"],   // bare or FQN names only; no @version or constraints
-  "paths": ["src", "lib"],                     // addpath entries, relative to srcDir (see §4.8)
+  "dependencies": ["dep1", "owner/channel/dep2"],   // bare or FQN names only; no @version or constraints
+  "paths": ["src", "lib"],                         // addpath entries, relative to srcDir (see §4.8)
   "editable": false,
   "source_path": "/path/to/source",
   "compile_script": "do_compile.m",
@@ -1021,9 +1023,9 @@ mip.json
 
 ### 11.4 Empty Directory Cleanup
 
-After removing a package, empty channel and org directories are cleaned up:
-- If `<org>/<channel>/` is empty after removal, remove it.
-- If `<org>/` is empty after that, remove it.
+After removing a package, empty channel and user directories are cleaned up:
+- If `<owner>/<channel>/` is empty after removal, remove it.
+- If `<owner>/` is empty after that, remove it.
 
 ### 11.5 `MIP_ROOT` Environment Variable
 
@@ -1036,7 +1038,7 @@ The `MIP_ROOT` environment variable overrides the location of the mip root direc
 
 ### 11.6 Channel Index Cache
 
-Channel index downloads are cached on disk under `<root>/cache/index/<org>/<channel>.json`. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
+Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<channel>.json`. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
 
 - **TTL**: 30 seconds. A cache entry whose age is `< 30s` is served without contacting the network.
 - **Bypass**: `mip avail` always re-downloads, bypassing the cache, so the displayed list reflects the current state of the channel. All other commands (`mip install`, `mip update`, `mip info`, etc.) use the cache.
@@ -1072,7 +1074,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<org>/<chan
 |---|---|
 | `mip:invalidPackageSpec` | Invalid package argument format or characters |
 | `mip:rootInvalid` | `MIP_ROOT` is set but path doesn't exist, isn't a directory, or has no `packages/` subdir |
-| `mip:invalidChannel` | Invalid channel spec (not `org/channel` format) |
+| `mip:invalidChannel` | Invalid channel spec (not `owner/channel` format) |
 | `mip:missingChannelValue` | `--channel` flag without a value |
 | `mip:packageNotFound` | Package not found (not installed, or not in index) |
 | `mip:packageUnavailable` | Package exists but not for this architecture |

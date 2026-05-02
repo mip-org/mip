@@ -3,7 +3,7 @@ function pin(varargin)
 %
 % Usage:
 %   mip pin <package>
-%   mip pin org/channel/<package>
+%   mip pin <owner>/<channel>/<package>
 %   mip pin <package1> <package2> ...
 %
 % Pinned packages are blocked from being updated by any "mip update"

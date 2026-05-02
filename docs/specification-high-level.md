@@ -8,19 +8,19 @@ A quick overview of how the MIP package manager works. For exact rules and edge 
 
 MIP is a package manager for MATLAB. It installs, loads, updates, and unloads packages from **channels** -- package repositories hosted on GitHub Pages.
 
-Packages live at `~/.mip/packages/<org>/<channel>/<name>/`.
+Packages live at `~/.mip/packages/<owner>/<channel>/<name>/`.
 
 ---
 
 ## Naming
 
-Every package has a **fully qualified name (FQN)**: `org/channel/name`
+Every package has a **fully qualified name (FQN)**: `owner/channel/name`
 
 ```
 mip-org/core/chebfun
 │        │       └── package name
 │        └── channel
-└── GitHub org
+└── GitHub owner
 ```
 
 You can also use just the **bare name** (`chebfun`). MIP resolves it by checking `mip-org/core` first, then alphabetically among other channels.
@@ -128,7 +128,7 @@ Only the named packages are updated -- existing dependencies are left as-is unle
 ```yaml
 name: mypackage
 version: "1.0.0"
-dependencies: [dep1, org/chan/dep2]
+dependencies: [dep1, owner/channel/dep2]
 paths:
   - path: "src"
 builds:

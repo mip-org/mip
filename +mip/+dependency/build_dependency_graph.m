@@ -2,7 +2,7 @@ function [depList, missingFqns] = build_dependency_graph(packageFqn, packageInfo
 %BUILD_DEPENDENCY_GRAPH   Recursively build dependency graph for a package.
 %
 % Args:
-%   packageFqn     - Fully qualified package name (org/channel/name)
+%   packageFqn     - Fully qualified package name (owner/channel/name)
 %   packageInfoMap - containers.Map of FQN -> package info
 %   visited        - (Optional) Cell array of already visited FQNs
 %   path           - (Optional) Cell array representing current dependency path

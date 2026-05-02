@@ -2,7 +2,7 @@ function install_local(sourceDir, editable, noCompile, sourceType)
 %INSTALL_LOCAL   Install a package from a local directory with mip.yaml.
 %
 % Non-channel packages live under a top-level source-type directory
-% (no org/channel). 'local' is used for directory and editable installs;
+% (no owner/channel). 'local' is used for directory and editable installs;
 % 'fex' for File Exchange installs; 'web' for generic remote .zip installs.
 %
 % Args:

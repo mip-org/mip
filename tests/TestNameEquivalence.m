@@ -27,8 +27,8 @@ classdef TestNameEquivalence < matlab.unittest.TestCase
     end
 
     methods (Access = private)
-        function makePkgDir(testCase, org, channel, name)
-            mkdir(fullfile(testCase.TestRoot, 'packages', 'gh', org, channel, name));
+        function makePkgDir(testCase, owner, channel, name)
+            mkdir(fullfile(testCase.TestRoot, 'packages', 'gh', owner, channel, name));
         end
     end
 

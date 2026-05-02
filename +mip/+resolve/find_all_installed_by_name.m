@@ -8,7 +8,7 @@ function matches = find_all_installed_by_name(packageName)
 %
 % Returns:
 %   matches - Cell array of canonical FQN strings for each source-type /
-%             org / channel combination where this name is installed.
+%             owner / channel combination where this name is installed.
 
 matches = {};
 packagesDir = mip.paths.get_packages_dir();
@@ -25,23 +25,23 @@ for i = 1:length(topEntries)
     topPath = fullfile(packagesDir, topName);
 
     if strcmp(topName, 'gh')
-        orgDirs = dir(topPath);
-        for j = 1:length(orgDirs)
-            if ~orgDirs(j).isdir || startsWith(orgDirs(j).name, '.')
+        ownerDirs = dir(topPath);
+        for j = 1:length(ownerDirs)
+            if ~ownerDirs(j).isdir || startsWith(ownerDirs(j).name, '.')
                 continue
             end
-            org = orgDirs(j).name;
-            orgPath = fullfile(topPath, org);
-            chanDirs = dir(orgPath);
+            owner = ownerDirs(j).name;
+            ownerPath = fullfile(topPath, owner);
+            chanDirs = dir(ownerPath);
             for k = 1:length(chanDirs)
                 if ~chanDirs(k).isdir || startsWith(chanDirs(k).name, '.')
                     continue
                 end
                 ch = chanDirs(k).name;
-                candidateFqn = mip.parse.make_fqn(org, ch, packageName);
+                candidateFqn = mip.parse.make_fqn(owner, ch, packageName);
                 onDisk = mip.resolve.installed_dir(candidateFqn);
                 if ~isempty(onDisk)
-                    matches{end+1} = mip.parse.make_fqn(org, ch, onDisk); %#ok<AGROW>
+                    matches{end+1} = mip.parse.make_fqn(owner, ch, onDisk); %#ok<AGROW>
                 end
             end
         end

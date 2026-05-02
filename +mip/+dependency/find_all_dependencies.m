@@ -6,7 +6,7 @@ function deps = find_all_dependencies(fqn, visited)
 % already in `visited` is not re-entered.
 %
 % Args:
-%   fqn     - Fully qualified package name (org/channel/name)
+%   fqn     - Fully qualified package name (owner/channel/name)
 %   visited - (Optional) Cell array of FQNs already being processed. Used
 %             internally to break circular dependency chains.
 %

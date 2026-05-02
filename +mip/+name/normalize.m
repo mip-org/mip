@@ -3,7 +3,7 @@ function n = normalize(s)
 %
 % Lowercases the input and replaces hyphens with underscores. Two package
 % names are considered equivalent (see mip.name.match) iff their
-% normalized forms are equal. Org and channel components are NOT subject
+% normalized forms are equal. Owner and channel components are NOT subject
 % to this normalization — they map to GitHub paths and remain
 % case-sensitive.
 %

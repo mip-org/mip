@@ -3,9 +3,8 @@ function info(varargin)
 %
 % Usage:
 %   mip info <package>
-%   mip info org/channel/<package>
-%   mip info --channel dev <package>
-%   mip info --channel owner/channel <package>
+%   mip info <owner>/<channel>/<package>
+%   mip info --channel <owner>/<channel> <package>
 %
 % Options:
 %   --channel <name>  Query a specific channel (default: mip-org/core)
@@ -48,7 +47,7 @@ if result.is_fqn
     onDisk = mip.resolve.installed_dir(result.fqn);
     if ~isempty(onDisk)
         if strcmp(result.type, 'gh')
-            installedFqns = {mip.parse.make_fqn(result.org, result.channel, onDisk)};
+            installedFqns = {mip.parse.make_fqn(result.owner, result.channel, onDisk)};
         else
             installedFqns = {[result.type '/' onDisk]};
         end
@@ -66,10 +65,10 @@ end
 % fall back to the --channel flag (default mip-org/core).
 channelsToQuery = {};
 if result.is_fqn && strcmp(result.type, 'gh')
-    channelsToQuery{end+1} = [result.org '/' result.channel]; %#ok<AGROW>
+    channelsToQuery{end+1} = [result.owner '/' result.channel]; %#ok<AGROW>
 elseif ~result.is_fqn
-    [chOrg, chName] = mip.parse.parse_channel_spec(channel);
-    channelsToQuery{end+1} = [chOrg '/' chName];
+    [chOwner, chName] = mip.parse.parse_channel_spec(channel);
+    channelsToQuery{end+1} = [chOwner '/' chName];
 end
 for i = 1:length(installedFqns)
     r = mip.parse.parse_package_arg(installedFqns{i});
@@ -77,7 +76,7 @@ for i = 1:length(installedFqns)
     if ~strcmp(r.type, 'gh')
         continue
     end
-    ch = [r.org '/' r.channel];
+    ch = [r.owner '/' r.channel];
     if ~ismember(ch, channelsToQuery)
         channelsToQuery{end+1} = ch; %#ok<AGROW>
     end
@@ -226,9 +225,9 @@ end
 function showRemoteChannelInfo(channelStr, packageName, index)
 % Display remote channel info for a package using a pre-fetched index.
 
-    [chOrg, chName] = mip.parse.parse_channel_spec(channelStr);
+    [chOwner, chName] = mip.parse.parse_channel_spec(channelStr);
 
-    fprintf('=== Remote Channel: %s/%s ===\n\n', chOrg, chName);
+    fprintf('=== Remote Channel: %s/%s ===\n\n', chOwner, chName);
 
     if isempty(index)
         fprintf('  Could not fetch index.\n\n');

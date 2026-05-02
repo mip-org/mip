@@ -1,17 +1,17 @@
-function [org, channelName, name, version] = resolve_package_name(packageArg, defaultChannel)
-%RESOLVE_PACKAGE_NAME   Resolve a package argument to org/channel/name/version.
+function [owner, channelName, name, version] = resolve_package_name(packageArg, defaultChannel)
+%RESOLVE_PACKAGE_NAME   Resolve a package argument to owner/channel/name/version.
 %
 % Handles both fully qualified names and bare names (with channel context).
 % Also extracts an optional @version suffix.
 %
 % Args:
 %   packageArg     - Package string: 'name', 'name@version',
-%                    'org/channel/name', or 'org/channel/name@version'
-%   defaultChannel - Default channel string (e.g. 'mip-org/core', 'owner/chan')
+%                    'owner/channel/name', or 'owner/channel/name@version'
+%   defaultChannel - Default channel string (e.g. 'mip-org/core', 'owner/channel')
 %                    Used when packageArg is a bare name.
 %
 % Returns:
-%   org         - Organization name
+%   owner       - GitHub repo owner (user or organization)
 %   channelName - Channel name
 %   name        - Package name
 %   version     - Requested version (empty string if not specified)
@@ -28,11 +28,11 @@ if result.is_fqn
               ['Package "%s" is not a GitHub channel package; only "gh/" ' ...
                'packages can be installed from a channel.'], packageArg);
     end
-    org = result.org;
+    owner = result.owner;
     channelName = result.channel;
     name = result.name;
 else
-    [org, channelName] = mip.parse.parse_channel_spec(defaultChannel);
+    [owner, channelName] = mip.parse.parse_channel_spec(defaultChannel);
     name = result.name;
 end
 

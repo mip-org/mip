@@ -10,7 +10,7 @@ function index = fetch_index(channel, forceRefresh)
 %   index - Parsed struct from the index JSON
 %
 % Successful downloads are cached on disk under
-% <root>/cache/index/<org>/<channel>.json. The cache entry is reused if it
+% <root>/cache/index/<owner>/<channel>.json. The cache entry is reused if it
 % is less than CACHE_TTL_SECONDS old, unless forceRefresh is true. Failed
 % fetches are not cached.
 
@@ -24,11 +24,11 @@ if isempty(channel)
     channel = 'mip-org/core';
 end
 
-[org, channelName] = mip.parse.parse_channel_spec(channel);
+[channelOwner, channelName] = mip.parse.parse_channel_spec(channel);
 
 cacheFile = '';
 try
-    cacheDir = fullfile(mip.root(), 'cache', 'index', org);
+    cacheDir = fullfile(mip.root(), 'cache', 'index', channelOwner);
     cacheFile = fullfile(cacheDir, [channelName '.json']);
 catch
     % If mip.root() is unavailable, proceed without caching.

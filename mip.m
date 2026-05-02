@@ -2,49 +2,47 @@ function varargout = mip(command, varargin)
 %MIP   A package manager for MATLAB/MEX.
 %
 % Usage:
-%   mip install <package> [...]                - Install one or more packages
-%   mip install --channel dev <package>        - Install from a specific channel
-%   mip install --channel owner/channel <pkg>  - Install from a user-hosted channel
-%   mip install owner/chan/package             - Install using fully qualified name
-%   mip update <package> [...]                 - Update one or more packages
-%   mip update --force <package>               - Force update even if up to date
-%   mip update --deps <package>                - Update package and its dependencies
-%   mip update --all                           - Update all installed packages
-%   mip update --no-compile <package>          - Skip compile step (editable local installs)
-%   mip update mip                             - Update mip itself
-%   mip pin <package> [...]                    - Pin packages to their current version
-%   mip unpin <package> [...]                  - Unpin packages
-%   mip uninstall <package> [...]              - Uninstall one or more packages
-%   mip uninstall mip                          - Uninstall mip itself
-%   mip list                                   - List installed packages (reverse load order)
-%   mip list --sort-by-name                    - List installed packages (alphabetical)
-%   mip load <package> [...]  [--sticky]       - Load one or more packages into MATLAB path
-%   mip load <package> --addpath <relpath>     - Add a source-relative path after loading
-%   mip load <package> --rmpath  <relpath>     - Remove a source-relative path after loading
-%   mip load <package> --with <group>          - Also load the named extra path group (e.g. examples, tests)
-%   mip unload <package> [...]                 - Unload one or more packages from MATLAB path
-%   mip unload --all                           - Unload all non-sticky packages
-%   mip unload --all --force                   - Unload all packages (including sticky)
-%   mip arch                                   - Display current architecture tag
-%   mip info <package>                         - Display package information
-%   mip info --channel dev <package>           - Display info from a specific channel
-%   mip avail                                  - List available packages in repository
-%   mip avail --channel dev                    - List packages from a specific channel
-%   mip index                                  - Display the mip package index URL
-%   mip root                                   - Display the mip root directory
-%   mip version                                - Display mip version
-%   mip test <package>                         - Run package test script
-%   mip compile <package>                      - Compile/recompile MEX files
-%   mip bundle <directory> [--output <dir>]    - Build .mhl from local package
-%   mip init <directory> [--name <name>]       - Generate a starter mip.yaml
-%   mip reset                                  - Reset mip to a clean state
-%   mip help [command]                         - Show help text for command
+%   mip install <package> [...]                     - Install one or more packages
+%   mip install --channel <owner>/<channel> <pkg>   - Install from a user-hosted channel
+%   mip install <owner>/<channel>/<package>         - Install using fully qualified name
+%   mip update <package> [...]                      - Update one or more packages
+%   mip update --force <package>                    - Force update even if up to date
+%   mip update --deps <package>                     - Update package and its dependencies
+%   mip update --all                                - Update all installed packages
+%   mip update --no-compile <package>               - Skip compile step (editable local installs)
+%   mip update mip                                  - Update mip itself
+%   mip pin <package> [...]                         - Pin packages to their current version
+%   mip unpin <package> [...]                       - Unpin packages
+%   mip uninstall <package> [...]                   - Uninstall one or more packages
+%   mip uninstall mip                               - Uninstall mip itself
+%   mip list                                        - List installed packages (reverse load order)
+%   mip list --sort-by-name                         - List installed packages (alphabetical)
+%   mip load <package> [...]  [--sticky]            - Load one or more packages into MATLAB path
+%   mip load <package> --addpath <relpath>          - Add a source-relative path after loading
+%   mip load <package> --rmpath  <relpath>          - Remove a source-relative path after loading
+%   mip load <package> --with <group>               - Also load the named extra path group (e.g. examples, tests)
+%   mip unload <package> [...]                      - Unload one or more packages from MATLAB path
+%   mip unload --all                                - Unload all non-sticky packages
+%   mip unload --all --force                        - Unload all packages (including sticky)
+%   mip arch                                        - Display current architecture tag
+%   mip info <package>                              - Display package information
+%   mip info --channel <owner>/<channel> <package>  - Display info from a specific channel
+%   mip avail                                       - List available packages in repository
+%   mip avail --channel <owner>/<channel>           - List packages from a specific channel
+%   mip index                                       - Display the mip package index URL
+%   mip root                                        - Display the mip root directory
+%   mip version                                     - Display mip version
+%   mip test <package>                              - Run package test script
+%   mip compile <package>                           - Compile/recompile MEX files
+%   mip bundle <directory> [--output <dir>]         - Build .mhl from local package
+%   mip init <directory> [--name <name>]            - Generate a starter mip.yaml
+%   mip reset                                       - Reset mip to a clean state
+%   mip help [command]                              - Show help text for command
 %
 % Channels:
 %   The default channel is 'core' (mip-org/core). Use --channel <name> to
 %   install from or query other channels. Channel formats:
-%     'core'           -> mip-org/core (default)
-%     'dev'            -> mip-org/dev
+%     'mip-org/core'   -> default channel
 %     'owner/channel'  -> user-hosted channel
 %
 % Package names:

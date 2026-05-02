@@ -1,12 +1,12 @@
 classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
 %TESTINSTALLEQUIVALENTFQN   mip install rejects a package whose FQN is
-%   equivalent (same org/channel, name matches under mip.name.match) to
+%   equivalent (same owner/channel, name matches under mip.name.match) to
 %   one that is already installed.
 %
 % Equivalence equates case and treats `-`/`_` as the same character.
 % The intent: prevent two parallel installs like
-%   packages/user/channel/some_package/
-%   packages/user/channel/some-packagE/
+%   packages/owner/channel/some_package/
+%   packages/owner/channel/some-packagE/
 % from coexisting, which would happen if the underlying channel (or local
 % source) hypothetically exposed both forms as distinct packages.
 
@@ -67,9 +67,9 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
         end
 
         function testRepoInstall_RejectsEquivalentFqn(testCase)
-            % Pre-install user/channel/some_package on disk, then point the
+            % Pre-install owner/channel/some_package on disk, then point the
             % channel index cache at a hypothetical 'some-packagE' variant
-            % with the SAME org/channel. The second install must error
+            % with the SAME owner/channel. The second install must error
             % rather than create a parallel install dir.
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'some_package');
 

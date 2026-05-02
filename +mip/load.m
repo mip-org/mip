@@ -6,13 +6,13 @@ function load(varargin)
 %   mip load <package1> <package2> ...
 %   mip load <package> --sticky
 %   mip load <package> --install
-%   mip load --channel owner/channel <package> --install
-%   mip load org/channel/<package>
+%   mip load --channel <owner>/<channel> <package> --install
+%   mip load <owner>/<channel>/<package>
 %
-% Accepts both bare package names and fully qualified names (org/channel/package).
+% Accepts both bare package names and fully qualified names (owner/channel/package).
 % For bare names, resolution priority is:
 %   1. mip-org/core
-%   2. First alphabetically by org/channel
+%   2. First alphabetically by owner/channel
 %
 % Options:
 %   --sticky         Mark the package(s) as sticky (prevents unload with 'mip unload --all')
@@ -381,7 +381,7 @@ function fqn = resolveToFqn(packageArg)
                   packageArg, packageArg);
         end
         if strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
         else
             fqn = [result.type '/' onDisk];
         end

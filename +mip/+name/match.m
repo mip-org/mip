@@ -6,7 +6,7 @@ function tf = match(a, b)
 % mip.name.normalize.
 %
 % This is only applied to package NAMES (the last component of a FQN).
-% Org and channel components are compared strictly.
+% Owner and channel components are compared strictly.
 %
 % Args:
 %   a, b - char or string scalar

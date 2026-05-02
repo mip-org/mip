@@ -34,8 +34,8 @@ this_dir     = fileparts(mfilename('fullpath')); % .../+mip
 source_dir   = fileparts(this_dir);              % .../mip/mip
 package_dir  = fileparts(source_dir);            % .../core/mip
 channel_dir  = fileparts(package_dir);           % .../mip-org/core
-org_dir      = fileparts(channel_dir);           % .../gh/mip-org
-gh_dir       = fileparts(org_dir);               % .../packages/gh
+owner_dir    = fileparts(channel_dir);           % .../gh/mip-org
+gh_dir       = fileparts(owner_dir);             % .../packages/gh
 packages_dir = fileparts(gh_dir);                % .../packages
 root         = fileparts(packages_dir);          % .../root
 
