@@ -7,7 +7,7 @@ function cacheFile = writeChannelIndex(rootDir, channel, entries)
 %
 % Args:
 %   rootDir - The MIP_ROOT directory (e.g. tempdir)
-%   channel - Channel spec in 'org/channel' form (e.g. 'mip-org/core')
+%   channel - Channel spec in 'owner/channel' form (e.g. 'mip-org/core')
 %   entries - Cell array of entries. Each element is either:
 %             * a char/string package name — shorthand for
 %                 version '1.0.0', architecture 'any', no commit hash.
@@ -24,10 +24,10 @@ function cacheFile = writeChannelIndex(rootDir, channel, entries)
 %   cacheFile - Absolute path to the written cache JSON file
 
 parts = strsplit(channel, '/');
-org = parts{1};
-chName = parts{2};
+chOwner = parts{1};
+chName  = parts{2};
 
-cacheDir = fullfile(rootDir, 'cache', 'index', org);
+cacheDir = fullfile(rootDir, 'cache', 'index', chOwner);
 if ~isfolder(cacheDir)
     mkdir(cacheDir);
 end

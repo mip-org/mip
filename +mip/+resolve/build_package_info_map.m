@@ -1,9 +1,9 @@
-function [packageInfoMap, unavailablePackages] = build_package_info_map(index, org, channelName, requestedVersions)
+function [packageInfoMap, unavailablePackages] = build_package_info_map(index, channelOwner, channelName, requestedVersions)
 %BUILD_PACKAGE_INFO_MAP   Build a map from package FQN to best variant info.
 %
 % Args:
 %   index             - Parsed index struct (from fetch_index)
-%   org               - Organization name (e.g. 'mip-org')
+%   channelOwner      - Channel owner (e.g. 'mip-org')
 %   channelName       - Channel name (e.g. 'core')
 %   requestedVersions - (optional) containers.Map of bare name -> version string.
 %                       When a version is specified for a package, that version
@@ -89,7 +89,7 @@ for i = 1:length(packageNames)
     variants = versionMap(chosenVersion);
     bestVariant = mip.resolve.select_best_variant(variants, currentArch);
 
-    fqn = mip.parse.make_fqn(org, channelName, pkgName);
+    fqn = mip.parse.make_fqn(channelOwner, channelName, pkgName);
 
     if ~isempty(bestVariant)
         packageInfoMap(fqn) = bestVariant;

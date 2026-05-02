@@ -5,7 +5,7 @@ function [channel, remainingArgs] = parse_channel_flag(args)
 %   args - Cell array of arguments (typically varargin)
 %
 % Returns:
-%   channel       - Channel string in 'org/channel' form, or '' if not
+%   channel       - Channel string in 'owner/channel' form, or '' if not
 %                   specified. A bare single name 'foo' is expanded to
 %                   'foo/foo' as shorthand for a user's personal channel
 %                   repo (github.com/foo/mip-foo). This shorthand applies

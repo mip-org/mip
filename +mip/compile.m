@@ -3,7 +3,7 @@ function compile(varargin)
 %
 % Usage:
 %   mip compile <package>
-%   mip compile org/channel/<package>
+%   mip compile <owner>/<channel>/<package>
 %
 % Runs the compile script defined in the package's mip.yaml (or stored
 % in mip.json for editable installs). For editable installs, compilation

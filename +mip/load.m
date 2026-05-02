@@ -6,22 +6,22 @@ function load(varargin)
 %   mip load <package1> <package2> ...
 %   mip load <package> --sticky
 %   mip load <package> --install
-%   mip load --channel owner/channel <package> --install
-%   mip load --channel <name> <package> --install   - Shorthand for --channel <name>/<name>
-%   mip load org/channel/<package>
+%   mip load --channel <owner>/<channel> <package> --install
+%   mip load --channel <owner> <package> --install             - Shorthand for --channel <owner>/<owner>
+%   mip load <owner>/<channel>/<package>
 %
-% Accepts both bare package names and fully qualified names (org/channel/package).
+% Accepts both bare package names and fully qualified names (owner/channel/package).
 % For bare names, resolution priority is:
 %   1. mip-org/core
-%   2. First alphabetically by org/channel
+%   2. First alphabetically by owner/channel
 %
 % Options:
 %   --sticky         Mark the package(s) as sticky (prevents unload with 'mip unload --all')
 %   --install        Automatically install the package(s) if not already installed
 %   --channel <name> Channel to install from when using --install. A bare
-%                    single name '<name>' is shorthand for '<name>/<name>' —
+%                    single name '<owner>' is shorthand for '<owner>/<owner>' —
 %                    the user's personal channel repo at
-%                    github.com/<name>/mip-<name>.
+%                    github.com/<owner>/mip-<owner>.
 %   --addpath <rel>  Add this source-relative subpath to the MATLAB path AFTER
 %                    the paths from mip.json are added. May be repeated. Only
 %                    valid with a single positional package; applies only to
@@ -388,7 +388,7 @@ function fqn = resolveToFqn(packageArg)
                   packageArg, packageArg);
         end
         if strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
         else
             fqn = [result.type '/' onDisk];
         end

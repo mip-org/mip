@@ -122,10 +122,10 @@ end
 
 function cacheFile = writeSentinelCache(rootDir, channel, sentinelName)
 parts = strsplit(channel, '/');
-org = parts{1};
-chName = parts{2};
+chOwner = parts{1};
+chName  = parts{2};
 
-cacheDir = fullfile(rootDir, 'cache', 'index', org);
+cacheDir = fullfile(rootDir, 'cache', 'index', chOwner);
 if ~isfolder(cacheDir)
     mkdir(cacheDir);
 end

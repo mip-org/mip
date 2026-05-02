@@ -5,11 +5,11 @@ function result = resolve_to_installed(packageArg)
 % installed packages, and verifies the package directory exists.
 %
 % Args:
-%   packageArg - Package string: 'name', 'org/channel/name', 'local/name',
-%                'fex/name', or 'gh/org/channel/name'.
+%   packageArg - Package string: 'name', 'owner/channel/name', 'local/name',
+%                'fex/name', or 'gh/owner/channel/name'.
 %
 % Returns:
-%   result - Struct with fields: fqn, type, org, channel, name, pkg_dir.
+%   result - Struct with fields: fqn, type, owner, channel, name, pkg_dir.
 %            Returns empty [] if the package is not installed.
 
 if isstring(packageArg)
@@ -29,7 +29,7 @@ if parsed.is_fqn
     end
     parsed.name = onDisk;
     if strcmp(parsed.type, 'gh')
-        fqn = mip.parse.make_fqn(parsed.org, parsed.channel, onDisk);
+        fqn = mip.parse.make_fqn(parsed.owner, parsed.channel, onDisk);
     else
         fqn = [parsed.type '/' onDisk];
     end
@@ -53,7 +53,7 @@ end
 result = struct( ...
     'fqn', fqn, ...
     'type', parsed.type, ...
-    'org', parsed.org, ...
+    'owner', parsed.owner, ...
     'channel', parsed.channel, ...
     'name', parsed.name, ...
     'pkg_dir', pkg_dir ...
