@@ -80,26 +80,25 @@ function uninstall(varargin)
         return
     end
 
-    % Unload any packages that are currently loaded
-    for i = 1:length(resolvedPackages)
-        fqn = resolvedPackages{i};
-        if mip.state.is_loaded(fqn)
-            mip.unload(fqn);
-        end
-    end
-
-    % Uninstall each requested package
+    % Run each package's full lifecycle (unload, then uninstall) in
+    % argument order so the output for one package is not interleaved
+    % with the next.
     for i = 1:length(resolvedPackages)
         fqn = resolvedPackages{i};
         pkgDir = mip.paths.get_package_dir(fqn);
+        displayFqn = mip.parse.display_fqn(fqn);
+
+        if mip.state.is_loaded(fqn)
+            mip.unload(fqn);
+        end
 
         try
-            fprintf('Uninstalling "%s"...\n', mip.parse.display_fqn(fqn));
+            fprintf('Uninstalling "%s"...\n', displayFqn);
             rmdir(pkgDir, 's');
-            fprintf('Uninstalled package "%s"\n', mip.parse.display_fqn(fqn));
+            fprintf('Uninstalled package "%s"\n', displayFqn);
         catch ME
             error('mip:uninstallFailed', ...
-                  'Failed to uninstall package "%s": %s', mip.parse.display_fqn(fqn), ME.message);
+                  'Failed to uninstall package "%s": %s', displayFqn, ME.message);
         end
 
         % Remove from directly installed and pinned packages

@@ -67,6 +67,37 @@ classdef TestUninstallPackage < matlab.unittest.TestCase
             testCase.verifyFalse(exist(pkgDir, 'dir') > 0);
         end
 
+        function testUninstall_PerPackageOrderInterleaving(testCase)
+            % Multi-package uninstall: each package's full lifecycle
+            % (Unloaded / Uninstalling / Uninstalled) must appear in
+            % argument order before the next package starts, not batched
+            % across phases.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'alpha');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'beta');
+            mip.state.add_directly_installed('mip-org/core/alpha');
+            mip.state.add_directly_installed('mip-org/core/beta');
+            mip.load('mip-org/core/alpha');
+            mip.load('mip-org/core/beta');
+
+            output = evalc('mip.uninstall(''mip-org/core/alpha'', ''mip-org/core/beta'')');
+
+            posAlphaUnloaded    = strfind(output, 'Unloaded package "mip-org/core/alpha"');
+            posAlphaUninstalled = strfind(output, 'Uninstalled package "mip-org/core/alpha"');
+            posBetaUnloaded     = strfind(output, 'Unloaded package "mip-org/core/beta"');
+            posBetaUninstalled  = strfind(output, 'Uninstalled package "mip-org/core/beta"');
+
+            testCase.verifyNotEmpty(posAlphaUnloaded);
+            testCase.verifyNotEmpty(posAlphaUninstalled);
+            testCase.verifyNotEmpty(posBetaUnloaded);
+            testCase.verifyNotEmpty(posBetaUninstalled);
+
+            % Alpha's full lifecycle must complete before beta's begins
+            testCase.verifyTrue(posAlphaUnloaded(1)    < posAlphaUninstalled(1));
+            testCase.verifyTrue(posAlphaUninstalled(1) < posBetaUnloaded(1), ...
+                'beta''s unload must come AFTER alpha''s uninstall completes');
+            testCase.verifyTrue(posBetaUnloaded(1)     < posBetaUninstalled(1));
+        end
+
         function testPackageNoLongerDiscoverableAfterRemoval(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             fqn = mip.resolve.resolve_bare_name('testpkg');

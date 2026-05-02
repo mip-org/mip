@@ -224,6 +224,38 @@ classdef TestPinPackage < matlab.unittest.TestCase
             testCase.verifyTrue(mip.state.is_pinned('mip-org/core/beta'));
         end
 
+        function testUpdateNamed_PreservesArgumentOrderInterleaved(testCase)
+            % Mixed pinned and unpinned packages: pin-skip messages must
+            % appear at their argument-order slot, interleaved with the
+            % unpinned packages' update output -- not batched at the top.
+            % Uses local installs without source_path so the unpinned
+            % packages reach the "no local source" skip line, which is
+            % deterministic without network access.
+            createTestPackage(testCase.TestRoot, '', '', 'alpha', 'type', 'local');
+            createTestPackage(testCase.TestRoot, '', '', 'beta',  'type', 'local');
+            createTestPackage(testCase.TestRoot, '', '', 'gamma', 'type', 'local');
+            createTestPackage(testCase.TestRoot, '', '', 'delta', 'type', 'local');
+            mip.pin('local/beta');
+            mip.pin('local/delta');
+
+            output = evalc(['mip.update(''local/alpha'', ''local/beta'', ' ...
+                            '''local/gamma'', ''local/delta'')']);
+
+            posAlpha = strfind(output, 'Skipping "local/alpha":');
+            posBeta  = strfind(output, 'Skipping pinned package "local/beta"');
+            posGamma = strfind(output, 'Skipping "local/gamma":');
+            posDelta = strfind(output, 'Skipping pinned package "local/delta"');
+
+            testCase.verifyNotEmpty(posAlpha, 'no-source skip line for alpha missing');
+            testCase.verifyNotEmpty(posBeta,  'pin-skip line for beta missing');
+            testCase.verifyNotEmpty(posGamma, 'no-source skip line for gamma missing');
+            testCase.verifyNotEmpty(posDelta, 'pin-skip line for delta missing');
+
+            testCase.verifyTrue(posAlpha(1) < posBeta(1),  'alpha must precede beta');
+            testCase.verifyTrue(posBeta(1)  < posGamma(1), 'beta must precede gamma');
+            testCase.verifyTrue(posGamma(1) < posDelta(1), 'gamma must precede delta');
+        end
+
         %% --- --deps drops pinned deps ---
 
         function testUpdateDeps_PinnedDependencyIsSkipped(testCase)

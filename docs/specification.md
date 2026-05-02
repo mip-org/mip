@@ -587,12 +587,13 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
 2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
-3. Unload any packages that are currently loaded.
-4. Remove each package directory (`rmdir`).
-5. Remove from `directly_installed.txt`.
-6. Clear the pin entry for the package, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
-7. Clean up empty parent directories (channel dir, then org dir).
-8. **Prune** packages that are no longer needed.
+3. Walk the resolved packages in argument order, running each package's full lifecycle before moving on to the next. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next:
+   - Unload it if it is currently loaded.
+   - Remove its directory (`rmdir`).
+   - Remove it from `directly_installed.txt`.
+   - Clear its pin entry, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
+   - Clean up empty parent directories (channel dir, then org dir).
+4. After the per-package walk, **prune** packages that are no longer needed and check for broken dependencies among the remaining installed packages. These two operations are batched at the end because they depend on the post-uninstall on-disk state of every package in the batch.
 
 ### 6.2 Dependency Pruning After Uninstall
 
@@ -649,12 +650,16 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
      - Same version **and** same commit hash (or no hash available): "already up to date", skip.
      - Same version but different commit hash: update (content changed within the same version).
      - Different version: update.
-7. If no packages need updating, return. Otherwise:
-   - Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`.
+7. Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`, then walk the batch in argument order, running each package's full lifecycle (skip messages, "Checking for updates" output, download/replace, etc.) before moving on to the next package. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next.
+   - **Pinned packages** (named explicitly): print "Skipping pinned package …" and continue.
+   - **No-source local packages** (`source_path` absent or empty): print "Skipping … no local source to update from." and continue.
    - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable, noCompile)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
-   - **Remote packages** are updated via staging: unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition). Then install any missing dependencies that the updated packages require, and prune any orphaned packages.
+   - **Remote packages** are updated via staging: fetch the channel index and run the up-to-date check ([§7.1.1](#711-target-version-selection-for-update)); if the package is up to date, continue. Otherwise unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition).
+   - After the per-package walk, install any missing dependencies that the updated remote packages now require, and prune any orphaned packages. These two operations are batched at the end of the walk because they depend on the post-update on-disk state of every updated package.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
    - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
+
+Because the up-to-date check now runs inside the per-package walk, a `mip:update:notInIndex`, `mip:update:unavailable`, or `mip:update:versionNotInChannel` failure raised for a later package no longer short-circuits the whole batch — earlier packages may already have been replaced on disk. The `try/catch` + reload safety net (see [§7.8](#78-load-state-preservation)) still guarantees that successfully-updated packages are reloaded before the original error is re-raised.
 
 #### 7.1.1 Target Version Selection for Update
 

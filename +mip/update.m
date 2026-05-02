@@ -63,7 +63,12 @@ function update(varargin)
         end
     end
 
-    % --all: update all installed packages
+    % --all: expand to all installed packages. Pinned packages are
+    % filtered up-front for --all (the user did not specify an explicit
+    % order, so there is no per-arg position to anchor the skip messages
+    % to). Explicitly named pinned packages are handled inside the main
+    % per-package loop below so their skip messages appear in argument
+    % order, interleaved with the unpinned packages' update output.
     if updateAll
         if ~isempty(args)
             error('mip:update:allWithPackages', ...
@@ -89,22 +94,6 @@ function update(varargin)
             return
         end
         args = filtered;
-    else
-        % Explicitly named packages: skip pinned packages with a
-        % "Skipping" message rather than erroring on the whole batch,
-        % so that "mip update X Y Z" with Y pinned still updates X and
-        % Z. The user must "mip unpin Y" first to update it; --force
-        % does not override the pin.
-        filtered = {};
-        for i = 1:length(args)
-            if ~warnIfPinned(args{i})
-                filtered{end+1} = args{i}; %#ok<AGROW>
-            end
-        end
-        if isempty(filtered)
-            return
-        end
-        args = filtered;
     end
 
     if isempty(args)
@@ -117,83 +106,28 @@ function update(varargin)
         args = expandWithDeps(args);
     end
 
-    % Resolve and validate each argument. Any error here (not installed,
-    % missing source dir) is raised before we touch anything on disk.
-    resolved = cell(1, length(args));
+    % Pre-pass: classify each argument into a single per-arg item so the
+    % main loop below can walk in argument order without revalidating.
+    % Validation errors (not installed, missing source dir) are raised
+    % here, before any destructive action — but the per-arg user-facing
+    % messages (pin skip, no-source skip, "Checking for updates", etc.)
+    % are deferred to the main loop so that one package's full lifecycle
+    % output is not interleaved with the next.
+    items = cell(1, length(args));
     for i = 1:length(args)
-        resolved{i} = resolvePackage(args{i});
+        items{i} = classifyArg(args{i});
     end
 
-    % Skip local packages with no available source (e.g. URL installs).
-    % They cannot be reinstalled, so update them is a no-op with a message.
-    toProcess = {};
-    for i = 1:length(resolved)
-        p = resolved{i};
-        if p.noSource
-            fprintf('Skipping "%s": no local source to update from.\n', mip.parse.display_fqn(p.fqn));
-        else
-            toProcess{end+1} = p; %#ok<AGROW>
-        end
-    end
-    if isempty(toProcess)
-        return
-    end
-
-    % --no-compile only applies to editable local installs. Error if any
-    % package in the batch is not an editable local install.
+    % --no-compile only applies to editable local installs. Validate
+    % across all "process" items before any destructive action.
     if noCompile
-        for i = 1:length(toProcess)
-            p = toProcess{i};
-            if ~(p.isLocal && p.editable)
+        for i = 1:length(items)
+            it = items{i};
+            if strcmp(it.kind, 'process') && ~(it.pkg.isLocal && it.pkg.editable)
                 error('mip:update:noCompileRequiresEditable', ...
                       '--no-compile can only be used when all updated packages are editable local installs (offending package: "%s").', ...
-                      mip.parse.display_fqn(p.fqn));
+                      mip.parse.display_fqn(it.pkg.fqn));
             end
-        end
-    end
-
-    % Handle self-update (`gh/mip-org/core/mip`) separately and remove it
-    % from the batch. mip cannot be uninstalled through the normal flow.
-    keepMask = true(1, length(toProcess));
-    for i = 1:length(toProcess)
-        if strcmp(toProcess{i}.fqn, 'gh/mip-org/core/mip')
-            updateSelf(toProcess{i}, force);
-            keepMask(i) = false;
-        end
-    end
-    toProcess = toProcess(keepMask);
-    if isempty(toProcess)
-        return
-    end
-
-    % Determine which of the remaining packages actually need updating.
-    % For remote packages, also fetch the latest channel info (needed for
-    % downloading the new version).
-    needsUpdate = false(1, length(toProcess));
-    for i = 1:length(toProcess)
-        p = toProcess{i};
-        if p.isLocal
-            % Local packages are always reinstalled from source.
-            needsUpdate(i) = true;
-        else
-            [needsUpdate(i), latestInfo] = checkRemoteNeedsUpdate(p, force);
-            toProcess{i}.latestInfo = latestInfo;
-        end
-    end
-    toProcess = toProcess(needsUpdate);
-
-    if isempty(toProcess)
-        return
-    end
-
-    % Split into local and remote sets
-    localPkgs = {};
-    remotePkgs = {};
-    for i = 1:length(toProcess)
-        if toProcess{i}.isLocal
-            localPkgs{end+1} = toProcess{i}; %#ok<AGROW>
-        else
-            remotePkgs{end+1} = toProcess{i}; %#ok<AGROW>
         end
     end
 
@@ -202,72 +136,48 @@ function update(varargin)
     loadedBefore = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     directlyLoadedBefore = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
 
-    % Wrap the update loops in try-catch so that reloadPreviouslyLoaded
+    % Wrap the per-package loop in try-catch so that reloadPreviouslyLoaded
     % always runs. Without this, a failure mid-batch would leave
     % already-updated packages unloaded for the rest of the session.
+    updatedRemoteFqns = {};
     updateError = [];
     try
-        % --- Local packages: backup + install_local (no mip.uninstall) ---
-        % Local packages cannot go through mip.uninstall because that prunes
-        % orphaned deps, and install_local cannot re-fetch them from a channel.
-        % The old package is moved to a backup directory before reinstalling so
-        % that a failure in install_local does not destroy the installed copy.
-        for i = 1:length(localPkgs)
-            p = localPkgs{i};
-            displayFqn = mip.parse.display_fqn(p.fqn);
-            fprintf('Updating local package "%s"...\n', displayFqn);
-
-            if mip.state.is_loaded(p.fqn)
-                fprintf('Unloading "%s" before update...\n', displayFqn);
-                mip.unload(p.fqn);
-            end
-
-            % Move old package to backup before reinstalling
-            backupDir = [tempname '_mip_backup'];
-            movefile(p.pkgDir, backupDir);
-            mip.state.remove_directly_installed(p.fqn);
-            packagesDir = mip.paths.get_packages_dir();
-            mip.paths.cleanup_empty_dirs(fullfile(packagesDir, p.type));
-
-            fprintf('Reinstalling "%s" from %s...\n', displayFqn, p.sourcePath);
-            try
-                mip.build.install_local(p.sourcePath, p.editable, noCompile, p.type);
-            catch ME
-                % Restore old package on failure
-                parentDir = fileparts(p.pkgDir);
-                if ~exist(parentDir, 'dir')
-                    mkdir(parentDir);
-                end
-                movefile(backupDir, p.pkgDir);
-                mip.state.add_directly_installed(p.fqn);
-                rethrow(ME);
-            end
-            if exist(backupDir, 'dir')
-                rmdir(backupDir, 's');
+        for i = 1:length(items)
+            it = items{i};
+            switch it.kind
+                case 'pin-skip'
+                    fprintf(['Skipping pinned package "%s". ' ...
+                             'Run "mip unpin %s" first to allow updates.\n'], ...
+                            it.displayFqn, it.displayFqn);
+                case 'no-source-skip'
+                    fprintf('Skipping "%s": no local source to update from.\n', ...
+                            mip.parse.display_fqn(it.pkg.fqn));
+                case 'self-update'
+                    updateSelf(it.pkg, force);
+                case 'process'
+                    p = it.pkg;
+                    if p.isLocal
+                        updateLocalPackage(p, noCompile);
+                    else
+                        [needs, latestInfo] = checkRemoteNeedsUpdate(p, force);
+                        if ~needs
+                            continue
+                        end
+                        p.latestInfo = latestInfo;
+                        if mip.state.is_loaded(p.fqn)
+                            fprintf('Unloading "%s" before update...\n', mip.parse.display_fqn(p.fqn));
+                            mip.unload(p.fqn);
+                        end
+                        downloadAndReplace(p);
+                        updatedRemoteFqns{end+1} = p.fqn; %#ok<AGROW>
+                    end
             end
         end
 
-        % --- Remote packages: update via staging, install missing deps, prune ---
-        % Each package is replaced on disk with the latest version from the
-        % channel. Existing dependencies are left alone. After all packages are
-        % updated, any missing dependencies are installed and orphaned packages
-        % are pruned.
-        if ~isempty(remotePkgs)
-            for i = 1:length(remotePkgs)
-                p = remotePkgs{i};
-                displayFqn = mip.parse.display_fqn(p.fqn);
-                if mip.state.is_loaded(p.fqn)
-                    fprintf('Unloading "%s" before update...\n', displayFqn);
-                    mip.unload(p.fqn);
-                end
-                downloadAndReplace(p);
-            end
-
-            % Install any missing dependencies that the updated packages require
-            remoteFqns = cellfun(@(p) p.fqn, remotePkgs, 'UniformOutput', false);
-            installMissingDeps(remoteFqns);
-
-            % Prune packages that are no longer needed
+        % Whole-batch operations: install any missing dependencies that
+        % the updated remote packages now require, and prune orphans.
+        if ~isempty(updatedRemoteFqns)
+            installMissingDeps(updatedRemoteFqns);
             mip.state.prune_unused_packages();
         end
     catch ME
@@ -281,6 +191,75 @@ function update(varargin)
 
     if ~isempty(updateError)
         rethrow(updateError);
+    end
+end
+
+function item = classifyArg(packageArg)
+% Classify a single argument into one of:
+%   - pin-skip       : installed and pinned (named-explicit only; --all
+%                      pre-filters, so reaching this branch implies the
+%                      user named the package explicitly)
+%   - self-update    : the gh/mip-org/core/mip identity
+%   - no-source-skip : local install with no recoverable source path
+%   - process        : full update lifecycle should run
+%
+% Validation errors (not installed, missing source dir) are raised here.
+%
+% The pin check resolves silently against installed packages — if the
+% package is not installed, we fall through to resolvePackage so the
+% standard mip:update:notInstalled error is raised.
+
+    r = mip.resolve.resolve_to_installed(packageArg);
+    if ~isempty(r) && mip.state.is_pinned(r.fqn)
+        item = struct('kind', 'pin-skip', 'displayFqn', mip.parse.display_fqn(r.fqn));
+        return
+    end
+
+    p = resolvePackage(packageArg);
+    if strcmp(p.fqn, 'gh/mip-org/core/mip')
+        item = struct('kind', 'self-update', 'pkg', p);
+    elseif p.noSource
+        item = struct('kind', 'no-source-skip', 'pkg', p);
+    else
+        item = struct('kind', 'process', 'pkg', p);
+    end
+end
+
+function updateLocalPackage(p, noCompile)
+% Update a local package: backup, remove from directly_installed, then
+% install_local from the original source path. Restore the backup if
+% install_local fails. Local packages do NOT go through mip.uninstall
+% because that would prune orphaned deps, which install_local cannot
+% re-fetch from a channel.
+
+    displayFqn = mip.parse.display_fqn(p.fqn);
+    fprintf('Updating local package "%s"...\n', displayFqn);
+
+    if mip.state.is_loaded(p.fqn)
+        fprintf('Unloading "%s" before update...\n', displayFqn);
+        mip.unload(p.fqn);
+    end
+
+    backupDir = [tempname '_mip_backup'];
+    movefile(p.pkgDir, backupDir);
+    mip.state.remove_directly_installed(p.fqn);
+    packagesDir = mip.paths.get_packages_dir();
+    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, p.type));
+
+    fprintf('Reinstalling "%s" from %s...\n', displayFqn, p.sourcePath);
+    try
+        mip.build.install_local(p.sourcePath, p.editable, noCompile, p.type);
+    catch ME
+        parentDir = fileparts(p.pkgDir);
+        if ~exist(parentDir, 'dir')
+            mkdir(parentDir);
+        end
+        movefile(backupDir, p.pkgDir);
+        mip.state.add_directly_installed(p.fqn);
+        rethrow(ME);
+    end
+    if exist(backupDir, 'dir')
+        rmdir(backupDir, 's');
     end
 end
 
@@ -350,8 +329,7 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
     installedVersion = p.pkgInfo.version;
     channelStr = [p.org '/' p.channel];
 
-    fprintf('Checking for updates to "%s" (installed: %s, channel: %s)...\n', ...
-            displayFqn, installedVersion, channelStr);
+    fprintf('Checking for updates to "%s"...\n', displayFqn);
 
     index = mip.channel.fetch_index(channelStr);
 
@@ -416,7 +394,6 @@ function downloadAndReplace(p)
 % so a failure at any point does not destroy the installed copy.
 
     displayFqn = mip.parse.display_fqn(p.fqn);
-    fprintf('Downloading %s %s...\n', displayFqn, p.latestInfo.version);
 
     tempDir = tempname;
     mkdir(tempDir);
@@ -545,7 +522,7 @@ function updateSelf(p, force)
     installedVersion = pkgInfo.version;
     channelStr = 'mip-org/core';
 
-    fprintf('Checking for updates to mip (installed: %s)...\n', installedVersion);
+    fprintf('Checking for updates to "mip-org/core/mip"...\n');
 
     index = mip.channel.fetch_index(channelStr);
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -572,11 +549,15 @@ function updateSelf(p, force)
     latestInfo = packageInfoMap(fqn);
 
     if ~force && ~mip.state.check_needs_update(pkgInfo, latestInfo)
-        fprintf('mip is already up to date (%s)\n', installedVersion);
+        fprintf('Package "mip-org/core/mip" is already up to date (%s)\n', installedVersion);
         return
     end
 
-    fprintf('Updating mip: %s -> %s\n', installedVersion, latestInfo.version);
+    if force
+        fprintf('Force updating "mip-org/core/mip" (%s)\n', installedVersion);
+    else
+        fprintf('Updating "mip-org/core/mip": %s -> %s\n', installedVersion, latestInfo.version);
+    end
 
     tempDir = tempname;
     mkdir(tempDir);
@@ -624,7 +605,7 @@ function updateSelf(p, force)
         for k = 1:length(newPathsToAdd)
             addpath(newPathsToAdd{k});
         end
-        fprintf('Successfully updated mip to %s\n', latestInfo.version);
+        fprintf('Successfully updated "mip-org/core/mip" to %s\n', latestInfo.version);
     catch ME
         if exist(tempDir, 'dir')
             rmdir(tempDir, 's');
@@ -635,7 +616,6 @@ function updateSelf(p, force)
     if exist(tempDir, 'dir')
         rmdir(tempDir, 's');
     end
-    fprintf('\nmip has been updated to %s.\n', latestInfo.version);
 end
 
 function out = resolvePathList(srcDir, relPaths)
@@ -664,6 +644,12 @@ function expanded = expandWithDeps(args)
             % Not installed — will error later in resolvePackage; skip here
             continue
         end
+        % Pinned explicit packages are dropped in the per-package loop
+        % (with a "Skipping pinned package" message). Their dependencies
+        % are not expanded — see spec §7.11.3.
+        if mip.state.is_pinned(r.fqn)
+            continue
+        end
         deps = mip.dependency.find_all_dependencies(r.fqn);
         for j = 1:length(deps)
             if ~mip.state.is_installed(deps{j}) || any(strcmp(expanded, deps{j}))
@@ -676,21 +662,4 @@ function expanded = expandWithDeps(args)
             expanded{end+1} = deps{j}; %#ok<AGROW>
         end
     end
-end
-
-function tf = warnIfPinned(packageArg)
-% If the given package is installed and pinned, print a "Skipping pinned
-% package" message and return true (caller should drop it from the
-% batch). Otherwise return false. Users must "mip unpin <pkg>" first;
-% --force does not override the pin.
-    r = mip.resolve.resolve_to_installed(packageArg);
-    if isempty(r) || ~mip.state.is_pinned(r.fqn)
-        tf = false;
-        return
-    end
-    displayFqn = mip.parse.display_fqn(r.fqn);
-    fprintf(['Skipping pinned package "%s". ' ...
-             'Run "mip unpin %s" first to allow updates.\n'], ...
-            displayFqn, displayFqn);
-    tf = true;
 end
