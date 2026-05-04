@@ -817,7 +817,7 @@ Lists packages available in the channel index. Uses `--channel` to specify which
 
 ### 9.4 `mip version`
 
-Prints the mip version string, read from `mip.yaml` in the package root. If `mip.yaml`'s `version` is blank or missing, an empty string is printed (see [§11.2](#112-mipyaml-schema)).
+Prints the mip version string. Reads `mip.json` (the authoritative version written at install/build time) when present in the package root, and falls back to `mip.yaml` for source checkouts that have no `mip.json`. If neither file's `version` is set, an empty string is printed (see [§11.2](#112-mipyaml-schema)).
 
 ### 9.5 `mip index`
 
@@ -1142,7 +1142,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<org>/<chan
 | `mip:yamlParseFailed` | `mip.yaml` could not be parsed (see `mip:parse_yaml:*` for the low-level cause) |
 | `mip:parse_yaml:*` | Low-level YAML parser errors: `type`, `trailing`, `unterminatedString`, `noProgress`, `expectColon`, `expectKey`, `keyNewline`, `unterminatedFlow`, `flowSeparator`, `badEscape` |
 | `mip:name:invalidInput` | Input passed to `mip.name.normalize` / `mip.name.match` is not a valid string |
-| `mip:version:noMipYaml` | `mip version` cannot locate `mip.yaml` in the package root |
+| `mip:version:noMetadata` | `mip version` cannot locate either `mip.json` or `mip.yaml` in the package root |
 | `mip:install:invalidPackageSpec` | Install argument has 2 or 4+ slash-separated parts (see [§3.0](#30-argument-categorization)) |
 | `mip:install:notADirectory` | Local install target exists but is not a directory |
 | `mip:update:noPackage` | `mip update` called with no arguments and no `--all` |
