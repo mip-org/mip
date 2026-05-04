@@ -11,17 +11,17 @@ function result = parse_package_arg(arg)
 %   web/<name>                    - Generic remote .zip / --url install
 %   mhl/<name>                    - .mhl install with no --channel given
 %
-% On input, the 'gh/' prefix may be omitted: a 3-part 'owner/channel/name'
-% input is treated as 'gh/owner/channel/name'. Non-gh source types must be
+% On input, the 'gh/' prefix may be omitted: a 3-part '<owner>/<channel>/<name>'
+% input is treated as 'gh/<owner>/<channel>/<name>'. Non-gh source types must be
 % written explicitly ('local/<name>', 'fex/<name>', 'mhl/<name>', etc.).
 %
 % Args:
 %   arg - Package string. One of:
-%           'name'                           (bare name)
-%           'name@version'                   (bare name with version)
-%           'category/name'                  (2-part non-gh FQN, e.g. 'local/foo')
-%           'owner/channel/name'             (3-part, implicit gh/)
-%           'gh/owner/channel/name'          (4-part, explicit gh/)
+%           '<name>'                         (bare name)
+%           '<name>@<version>'               (bare name with version)
+%           '<category>/<name>'              (2-part non-gh FQN, e.g. 'local/foo')
+%           '<owner>/<channel>/<name>'       (3-part, implicit gh/)
+%           'gh/<owner>/<channel>/<name>'    (4-part, explicit gh/)
 %         Any of the FQN forms may include an @version suffix on the last
 %         component.
 %
@@ -108,9 +108,9 @@ switch length(parts)
         result.is_fqn = true;
     otherwise
         error('mip:invalidPackageSpec', ...
-              ['Invalid package spec "%s". Use "name[@version]", ' ...
-               '"category/name[@version]", "owner/channel/name[@version]", ' ...
-               'or "gh/owner/channel/name[@version]".'], arg);
+              ['Invalid package spec "%s". Use "<name>[@<version>]", ' ...
+               '"<category>/<name>[@<version>]", "<owner>/<channel>/<name>[@<version>]", ' ...
+               'or "gh/<owner>/<channel>/<name>[@<version>]".'], arg);
 end
 
 % Validate each component: letters, digits, hyphens, underscores; must

@@ -18,7 +18,7 @@ function install(varargin)
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)
-%                       Format: 'owner/channel' (e.g. 'mip-org/core'). A bare
+%                       Format: '<owner>/<channel>' (e.g. 'mip-org/core'). A bare
 %                       single name '<owner>' is shorthand for '<owner>/<owner>'
 %                       — the user's personal channel repo at
 %                       github.com/<owner>/mip-<owner>.
@@ -44,7 +44,8 @@ function install(varargin)
 %   './chebfun' to force a local install.
 %
 % Packages can be specified by bare name or fully qualified name
-% (owner/channel/package). Fully qualified names override the --channel flag.
+% (<owner>/<channel>/<package>). Fully qualified names override the --channel
+% flag.
 
     if nargin < 1
         error('mip:install:noPackage', 'At least one package name is required for install command.');
@@ -101,7 +102,7 @@ function install(varargin)
     % Categorize each argument by how it should be installed:
     %   - mhl source   (.mhl file or http(s) URL)
     %   - local path   (starts with ~, ., /, or a Windows drive letter)
-    %   - repo package (bare name or owner/channel/package FQN)
+    %   - repo package (bare name or <owner>/<channel>/<package> FQN)
     mhlSources = {};
     localPaths = {};
     repoPackages = {};
@@ -122,7 +123,7 @@ function install(varargin)
             catch
                 error('mip:install:invalidPackageSpec', ...
                       ['Invalid package specifier "%s".\n' ...
-                       'Use "package" for a bare name or "owner/channel/package" for a fully qualified name.\n' ...
+                       'Use "<package>" for a bare name or "<owner>/<channel>/<package>" for a fully qualified name.\n' ...
                        'To install a local package, prefix the path with "./":\n' ...
                        '  mip install ./%s'], pkg, pkg);
             end
@@ -229,7 +230,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     end
     [defaultOwner, defaultChan] = mip.parse.parse_channel_spec(channel);
 
-    % Resolve each package argument to owner/channel/name (with optional version).
+    % Resolve each package argument to <owner>/<channel>/<name> (with optional version).
     resolvedPackages = {};
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     hasBareName = false;

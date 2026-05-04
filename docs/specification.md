@@ -46,7 +46,7 @@ The parser accepts either the canonical form or a shorter form for GitHub packag
 
 ### 1.2 Bare Names
 
-A **bare name** is just the package name without owner/channel (e.g., `chebfun`). Bare names are resolved to FQNs using context-dependent rules described in section 2.4.
+A **bare name** is just the package name without `<owner>/<channel>` (e.g., `chebfun`). Bare names are resolved to FQNs using context-dependent rules described in section 2.4.
 
 ### 1.3 Version Strings
 
@@ -74,7 +74,7 @@ When an argument is identified as a local path (see [§3.0](#30-argument-categor
 A channel is a package repository hosted on GitHub Pages at `https://<owner>.github.io/mip-<channel>/index.json`. The default channel is `mip-org/core`.
 
 Channel strings can be specified as:
-- `owner/channel` (e.g., `mip-org/core`, `mylab/custom`)
+- `<owner>/<channel>` (e.g., `mip-org/core`, `mylab/custom`)
 - `<owner>` (single name) — only on the `--channel` flag, expanded to `<owner>/<owner>`. See [§2.3](#23-parsing-the---channel-flag-parse_channel_flag).
 
 A bare channel name passed to the channel parser directly (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
@@ -86,7 +86,7 @@ Packages installed from local directories and from File Exchange / `--url` zips 
 - `local/<name>` — directory and editable installs
 - `fex/<name>` — File Exchange URLs and `--url` zip installs
 
-These are addressed by the source-type prefix directly; no `owner/channel` is involved.
+These are addressed by the source-type prefix directly; no `<owner>/<channel>` is involved.
 
 ### 1.7 The `gh/mip-org/core/mip` Identity
 
@@ -141,8 +141,8 @@ Input is split on `/` after stripping any `@version` suffix:
 |---|---|
 | `name` | bare name: `is_fqn=false`, `type=''`, `fqn=''` |
 | `type/name` (2 parts, `type != 'gh'`) | non-gh FQN: `type='local'`/`'fex'`/..., `fqn='<type>/<name>'` |
-| `owner/channel/name` (3 parts) | gh FQN: `type='gh'`, owner/channel/name populated, `fqn='gh/<owner>/<channel>/<name>'` |
-| `gh/owner/channel/name` (4 parts) | gh FQN (explicit), same result as 3-part form |
+| `<owner>/<channel>/<name>` (3 parts) | gh FQN: `type='gh'`; `owner`, `channel`, `name` populated; `fqn='gh/<owner>/<channel>/<name>'` |
+| `gh/<owner>/<channel>/<name>` (4 parts) | gh FQN (explicit), same result as 3-part form |
 | 2-part input starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 4-part input not starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 5+ parts | **Error** `mip:invalidPackageSpec` |
@@ -157,7 +157,7 @@ Validation rules:
 | Input | Result |
 |---|---|
 | `''` (empty) | defaults to `mip-org`, `core` |
-| `owner/channel` | parsed as-is |
+| `<owner>/<channel>` | parsed as-is |
 | `name` (single part) | **Error** `mip:invalidChannel` |
 | `a/b/c` (3+ parts) | **Error** `mip:invalidChannel` |
 
@@ -223,7 +223,7 @@ This is consistent with the general dependency resolution rule (2.4.4).
 
 Used by: `mip install` for remote packages
 
-- If the argument is a FQN, use the owner/channel/name from it (ignoring `--channel`)
+- If the argument is a FQN, use the `<owner>/<channel>/<name>` from it (ignoring `--channel`)
 - If the argument is a bare name, apply the `--channel` flag (defaulting to `mip-org/core`)
 
 ---
@@ -236,7 +236,7 @@ Used by: `mip install` for remote packages
 
 1. If the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
 2. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
-3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`owner/channel/pkg`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
+3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`<owner>/<channel>/<pkg>`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
 
 This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
 
@@ -249,7 +249,7 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 #### 3.1.1 Channel Resolution
 
 1. If `--channel` is provided, use it as the primary channel for any bare-name arguments. Otherwise default to `mip-org/core`.
-2. FQN arguments use the owner/channel encoded in the name; `--channel` does not apply to them.
+2. FQN arguments use the `<owner>/<channel>` encoded in the name; `--channel` does not apply to them.
 3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch).
 
 #### 3.1.2 Index Fetching
@@ -382,7 +382,7 @@ If the package is already installed at `local/<name>`, prints a message and retu
 3. If already installed, skip.
 4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
 5. Move extracted files to `<root>/packages/gh/<owner>/<channel>/<name>/`.
-6. The owner/channel is determined by the `--channel` flag (default `mip-org/core`).
+6. The `<owner>/<channel>` is determined by the `--channel` flag (default `mip-org/core`).
 7. Mark the top-level `.mhl` package as directly installed.
 
 ### 3.4 Installation from a Remote `.zip` URL
@@ -1074,7 +1074,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<ch
 |---|---|
 | `mip:invalidPackageSpec` | Invalid package argument format or characters |
 | `mip:rootInvalid` | `MIP_ROOT` is set but path doesn't exist, isn't a directory, or has no `packages/` subdir |
-| `mip:invalidChannel` | Invalid channel spec (not `owner/channel` format) |
+| `mip:invalidChannel` | Invalid channel spec (not `<owner>/<channel>` format) |
 | `mip:missingChannelValue` | `--channel` flag without a value |
 | `mip:packageNotFound` | Package not found (not installed, or not in index) |
 | `mip:packageUnavailable` | Package exists but not for this architecture |

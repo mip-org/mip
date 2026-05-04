@@ -5,8 +5,8 @@ function result = resolve_to_installed(packageArg)
 % installed packages, and verifies the package directory exists.
 %
 % Args:
-%   packageArg - Package string: 'name', 'owner/channel/name', 'local/name',
-%                'fex/name', or 'gh/owner/channel/name'.
+%   packageArg - Package string: '<name>', '<owner>/<channel>/<name>', 'local/<name>',
+%                'fex/<name>', or 'gh/<owner>/<channel>/<name>'.
 %
 % Returns:
 %   result - Struct with fields: fqn, type, owner, channel, name, pkg_dir.

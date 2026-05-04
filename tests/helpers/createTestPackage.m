@@ -2,11 +2,11 @@ function pkgDir = createTestPackage(rootDir, owner, channel, pkgName, varargin)
 %CREATETESTPACKAGE   Create a fake installed mip package for testing.
 %
 % The on-disk layout follows the canonical mip layout:
-%   - For GitHub channel packages (3-arg form): owner/channel/name are
+%   - For GitHub channel packages (3-arg form): <owner>/<channel>/<name> are
 %     provided. The package is created at
 %     <rootDir>/packages/gh/<owner>/<channel>/<name>/.
 %   - For non-gh source types (2-arg form): the second positional arg
-%     is the package name, with owner/channel omitted or passed as ''.
+%     is the package name, with <owner>/<channel> omitted or passed as ''.
 %     Pass source-type via the 'type' name-value ('local' or 'fex').
 %
 % The package is created with a "paths" field in mip.json that points at
@@ -39,7 +39,7 @@ sourceType = p.Results.type;
 if isempty(sourceType)
     if isempty(owner) && isempty(channel)
         error('createTestPackage:invalidArgs', ...
-              'owner/channel must be given for gh packages, or pass type=''local''/''fex''.');
+              '<owner>/<channel> must be given for gh packages, or pass type=''local''/''fex''.');
     end
     sourceType = 'gh';
 end

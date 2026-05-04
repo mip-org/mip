@@ -33,7 +33,7 @@ end
 source = char(source);
 
 % Reject plain HTTP URLs. mhl_url comes from a channel's index.json, and
-% any third-party channel can be added via `--channel owner/channel`;
+% any third-party channel can be added via `--channel <owner>/<channel>`;
 % allowing http:// would let a network attacker swap the payload and
 % achieve persistent code execution once the package is loaded.
 if startsWith(source, 'http://')

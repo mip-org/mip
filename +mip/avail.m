@@ -8,7 +8,7 @@ function avail(varargin)
 %
 % Options:
 %   --channel <name>  List packages from a specific channel (default: mip-org/core)
-%                     Format: 'owner/channel' (e.g. 'mip-org/core'). A bare
+%                     Format: '<owner>/<channel>' (e.g. 'mip-org/core'). A bare
 %                     single name '<owner>' is shorthand for '<owner>/<owner>' —
 %                     the user's personal channel repo at
 %                     github.com/<owner>/mip-<owner>.

@@ -45,7 +45,7 @@ classdef TestFetchIndexCache < matlab.unittest.TestCase
         end
 
         function testCacheHitWithCustomChannel(testCase)
-            % The cache path uses owner/channel as nested directories.
+            % The cache path uses <owner>/<channel> as nested directories.
             channel = 'mylab/custom';
             cacheFile = writeSentinelCache(testCase.TestRoot, channel, 'mylab-sentinel');
 

@@ -1,13 +1,13 @@
 function [owner, channelName, name, version] = resolve_package_name(packageArg, defaultChannel)
-%RESOLVE_PACKAGE_NAME   Resolve a package argument to owner/channel/name/version.
+%RESOLVE_PACKAGE_NAME   Resolve a package argument to <owner>/<channel>/<name>/<version>.
 %
 % Handles both fully qualified names and bare names (with channel context).
 % Also extracts an optional @version suffix.
 %
 % Args:
-%   packageArg     - Package string: 'name', 'name@version',
-%                    'owner/channel/name', or 'owner/channel/name@version'
-%   defaultChannel - Default channel string (e.g. 'mip-org/core', 'owner/channel')
+%   packageArg     - Package string: '<name>', '<name>@<version>',
+%                    '<owner>/<channel>/<name>', or '<owner>/<channel>/<name>@<version>'
+%   defaultChannel - Default channel string (e.g. 'mip-org/core', '<owner>/<channel>')
 %                    Used when packageArg is a bare name.
 %
 % Returns:

@@ -7,7 +7,7 @@ function cacheFile = writeChannelIndex(rootDir, channel, entries)
 %
 % Args:
 %   rootDir - The MIP_ROOT directory (e.g. tempdir)
-%   channel - Channel spec in 'owner/channel' form (e.g. 'mip-org/core')
+%   channel - Channel spec in '<owner>/<channel>' form (e.g. 'mip-org/core')
 %   entries - Cell array of entries. Each element is either:
 %             * a char/string package name — shorthand for
 %                 version '1.0.0', architecture 'any', no commit hash.

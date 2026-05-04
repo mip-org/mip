@@ -10,10 +10,10 @@ function load(varargin)
 %   mip load --channel <owner> <package> --install             - Shorthand for --channel <owner>/<owner>
 %   mip load <owner>/<channel>/<package>
 %
-% Accepts both bare package names and fully qualified names (owner/channel/package).
+% Accepts both bare package names and fully qualified names (<owner>/<channel>/<package>).
 % For bare names, resolution priority is:
 %   1. mip-org/core
-%   2. First alphabetically by owner/channel
+%   2. First alphabetically by <owner>/<channel>
 %
 % Options:
 %   --sticky         Mark the package(s) as sticky (prevents unload with 'mip unload --all')

@@ -10,7 +10,7 @@ function fqn = make_fqn(owner, channelName, packageName)
 %   packageName - Package name (e.g. 'chebfun')
 %
 % Returns:
-%   fqn - Canonical FQN: 'gh/owner/channel/name'
+%   fqn - Canonical FQN: 'gh/<owner>/<channel>/<name>'
 
 fqn = ['gh/' owner '/' channelName '/' packageName];
 

@@ -14,7 +14,7 @@ Packages live at `~/.mip/packages/<owner>/<channel>/<name>/`.
 
 ## Naming
 
-Every package has a **fully qualified name (FQN)**: `owner/channel/name`
+Every package has a **fully qualified name (FQN)**: `<owner>/<channel>/<name>`
 
 ```
 mip-org/core/chebfun

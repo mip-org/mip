@@ -2,7 +2,7 @@ function [owner, channelName] = parse_channel_spec(channel)
 %PARSE_CHANNEL_SPEC   Parse a channel string into owner and channel name.
 %
 % Args:
-%   channel - Channel string in 'owner/channel' format (e.g. 'mip-org/core')
+%   channel - Channel string in '<owner>/<channel>' format (e.g. 'mip-org/core')
 %
 % Returns:
 %   owner       - GitHub repo owner (user or organization, e.g. 'mip-org', 'mylab')
@@ -24,7 +24,7 @@ if length(parts) == 2
     channelName = parts{2};
 else
     error('mip:invalidChannel', ...
-          'Invalid channel format "%s". Use "owner/channel" (e.g. "mip-org/core").', channel);
+          'Invalid channel format "%s". Use "<owner>/<channel>" (e.g. "mip-org/core").', channel);
 end
 
 end
