@@ -3,7 +3,7 @@ function unpin(varargin)
 %
 % Usage:
 %   mip unpin <package>
-%   mip unpin org/channel/<package>
+%   mip unpin <owner>/<channel>/<package>
 %   mip unpin <package1> <package2> ...
 %
 % Unpinned packages will be updated normally by "mip update".

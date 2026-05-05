@@ -4,7 +4,7 @@ function unload(varargin)
 % Usage:
 %   mip unload <package>
 %   mip unload <package1> <package2> ...
-%   mip unload org/channel/<package>
+%   mip unload <owner>/<channel>/<package>
 %   mip unload --all
 %   mip unload --all --force
 %
@@ -88,7 +88,7 @@ function fqn = resolveLoadedFqn(packageArg)
         if isempty(onDisk)
             fqn = result.fqn;
         elseif strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.org, result.channel, onDisk);
+            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
         else
             fqn = [result.type '/' onDisk];
         end
