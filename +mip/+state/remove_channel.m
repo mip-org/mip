@@ -1,7 +1,8 @@
 function remove_channel(channel)
 %REMOVE_CHANNEL   Unsubscribe from a channel.
 %
-% No-op (with a warning) if the channel is not currently subscribed.
+% No-op if the channel is not currently subscribed (prints an
+% informational message).
 %
 % Args:
 %   channel - Channel spec in '<owner>/<channel>' form, or a bare

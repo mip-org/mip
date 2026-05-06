@@ -253,9 +253,10 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     bareChannels = cell(1, length(repoPackages));
     unresolvedBareIdx = false(1, length(repoPackages));
     priorityChannels = {};
+    skippedChannels = {};
     if hasBareName && ~userPassedChannel
         priorityChannels = [{'mip-org/core'}, mip.state.get_channels()];
-        bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels);
+        [bareChannels, skippedChannels] = resolveBareNameChannels(parsedArgs, priorityChannels);
         for j = 1:length(parsedArgs)
             if ~parsedArgs{j}.is_fqn && isempty(bareChannels{j})
                 bareChannels{j} = 'mip-org/core';
@@ -342,9 +343,18 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
                 fprintf('Available architectures: %s\n', strjoin(archs, ', '));
                 error('mip:packageUnavailable', 'Package not available for this architecture');
             elseif unresolvedBareIdx(i)
-                error('mip:packageNotFound', ...
-                      'Package "%s" not found in any of: %s', ...
-                      parsedArgs{i}.name, strjoin(priorityChannels, ', '));
+                if isempty(skippedChannels)
+                    error('mip:packageNotFound', ...
+                          'Package "%s" not found in any of: %s', ...
+                          parsedArgs{i}.name, strjoin(priorityChannels, ', '));
+                else
+                    error('mip:packageNotFound', ...
+                          ['Package "%s" not found in any of: %s\n' ...
+                           '  (could not fetch indexes for: %s)'], ...
+                          parsedArgs{i}.name, ...
+                          strjoin(priorityChannels, ', '), ...
+                          strjoin(skippedChannels, ', '));
+                end
             else
                 error('mip:packageNotFound', ...
                       'Package "%s" not found in repository', mip.parse.display_fqn(s.fqn));
@@ -704,14 +714,19 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
     end
 end
 
-function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
+function [bareChannels, skippedChannels] = resolveBareNameChannels(parsedArgs, priorityChannels)
 % Walk priorityChannels in order. For each, fetch the channel's raw index
 % and check which unresolved bare-name args appear in it. The first
 % channel to publish a given bare name wins. Bare names not found in any
 % priority channel are returned as ''; the caller defaults them and
 % surfaces the consulted channel list in the "not found" error.
+%
+% A channel whose index cannot be fetched is logged via warning and
+% skipped (returned in skippedChannels); resolution continues against
+% the remaining channels rather than aborting the whole install.
 
     bareChannels = cell(1, length(parsedArgs));
+    skippedChannels = {};
     for c = 1:length(priorityChannels)
         % Stop early once every bare-name arg has been placed.
         if ~anyUnresolved(parsedArgs, bareChannels)
@@ -719,7 +734,16 @@ function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
         end
 
         chSpec = priorityChannels{c};
-        chIndex = mip.channel.fetch_index(chSpec);
+        try
+            chIndex = mip.channel.fetch_index(chSpec);
+        catch ME
+            warning('mip:channelUnreachable', ...
+                    ['Could not fetch index for channel "%s" (%s). ' ...
+                     'Skipping; bare-name resolution will continue with the remaining channels.'], ...
+                    chSpec, ME.message);
+            skippedChannels{end+1} = chSpec; %#ok<AGROW>
+            continue
+        end
 
         availableNorms = containers.Map('KeyType', 'char', 'ValueType', 'logical');
         if isfield(chIndex, 'packages')
