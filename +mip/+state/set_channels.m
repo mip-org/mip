@@ -3,8 +3,9 @@ function set_channels(channels)
 %
 % Args:
 %   channels - Cell array of channel specs in priority order (highest
-%              priority first). Each entry must be in 'org/channel' form;
-%              callers are responsible for normalizing shorthand inputs.
+%              priority first). Each entry must be in '<owner>/<channel>'
+%              form; callers are responsible for normalizing shorthand
+%              inputs.
 
     packagesDir = mip.paths.get_packages_dir();
 

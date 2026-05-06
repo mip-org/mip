@@ -54,8 +54,8 @@ function prune_unused_packages()
                 rmdir(pkgDir, 's');
                 fprintf('  Pruned package "%s"\n', mip.parse.display_fqn(fqn));
                 if strcmp(r.type, 'gh')
-                    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.org, r.channel));
-                    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.org));
+                    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner, r.channel));
+                    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner));
                     mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh'));
                 else
                     mip.paths.cleanup_empty_dirs(fullfile(packagesDir, r.type));

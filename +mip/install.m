@@ -4,24 +4,24 @@ function install(varargin)
 % Usage:
 %   mip install <package>
 %   mip install <package1> <package2> ...
-%   mip install --channel owner/channel <package>
-%   mip install --channel <name> <package>                    - Shorthand for --channel <name>/<name>
-%   mip install owner/channel/<package>
-%   mip install /path/to/package.mhl                          - Install under mhl/<name>
-%   mip install https://example.com/package.mhl               - Install under mhl/<name>
-%   mip install --channel org/channel /path/to/package.mhl    - Install under gh/org/channel/<name>
-%   mip install /path/to/local/package                        - Install from local directory
-%   mip install . --editable                                  - Editable install (like pip -e)
-%   mip install -e /path/to/package                           - Editable install (short form)
-%   mip install -e . --no-compile                             - Editable install, skip compilation
-%   mip install mypkg --url https://example.com/pkg.zip       - Install from a remote .zip URL
+%   mip install --channel <owner>/<channel> <package>
+%   mip install --channel <owner> <package>                        - Shorthand for --channel <owner>/<owner>
+%   mip install <owner>/<channel>/<package>
+%   mip install /path/to/package.mhl                               - Install under mhl/<name>
+%   mip install https://example.com/package.mhl                    - Install under mhl/<name>
+%   mip install --channel <owner>/<channel> /path/to/package.mhl   - Install under gh/<owner>/<channel>/<name>
+%   mip install /path/to/local/package                             - Install from local directory
+%   mip install . --editable                                       - Editable install (like pip -e)
+%   mip install -e /path/to/package                                - Editable install (short form)
+%   mip install -e . --no-compile                                  - Editable install, skip compilation
+%   mip install mypkg --url https://example.com/pkg.zip            - Install from a remote .zip URL
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)
-%                       Format: 'org/channel' (e.g. 'mip-org/core'). A bare
-%                       single name '<name>' is shorthand for '<name>/<name>'
+%                       Format: '<owner>/<channel>' (e.g. 'mip-org/core'). A bare
+%                       single name '<owner>' is shorthand for '<owner>/<owner>'
 %                       — the user's personal channel repo at
-%                       github.com/<name>/mip-<name>.
+%                       github.com/<owner>/mip-<owner>.
 %   --editable, -e      Install in editable mode (local packages only)
 %   --no-compile        Skip compilation (editable installs only)
 %   --url <zip-url>     Install from a remote .zip archive. The positional
@@ -44,7 +44,8 @@ function install(varargin)
 %   './chebfun' to force a local install.
 %
 % Packages can be specified by bare name or fully qualified name
-% (org/channel/package). Fully qualified names override the --channel flag.
+% (<owner>/<channel>/<package>). Fully qualified names override the --channel
+% flag.
 
     if nargin < 1
         error('mip:install:noPackage', 'At least one package name is required for install command.');
@@ -101,7 +102,7 @@ function install(varargin)
     % Categorize each argument by how it should be installed:
     %   - mhl source   (.mhl file or http(s) URL)
     %   - local path   (starts with ~, ., /, or a Windows drive letter)
-    %   - repo package (bare name or org/channel/package FQN)
+    %   - repo package (bare name or <owner>/<channel>/<package> FQN)
     mhlSources = {};
     localPaths = {};
     repoPackages = {};
@@ -122,7 +123,7 @@ function install(varargin)
             catch
                 error('mip:install:invalidPackageSpec', ...
                       ['Invalid package specifier "%s".\n' ...
-                       'Use "package" for a bare name or "org/channel/package" for a fully qualified name.\n' ...
+                       'Use "<package>" for a bare name or "<owner>/<channel>/<package>" for a fully qualified name.\n' ...
                        'To install a local package, prefix the path with "./":\n' ...
                        '  mip install ./%s'], pkg, pkg);
             end
@@ -230,7 +231,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     if isempty(channel)
         channel = 'mip-org/core';
     end
-    [defaultOrg, defaultChan] = mip.parse.parse_channel_spec(channel);
+    [defaultOwner, defaultChan] = mip.parse.parse_channel_spec(channel);
 
     % Pre-parse args so we can distinguish FQN args from bare-name args
     % before assigning channels to the latter.
@@ -254,7 +255,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
         bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels);
     end
 
-    % Resolve each package argument to org/channel/name (with optional version).
+    % Resolve each package argument to <owner>/<channel>/<name> (with optional version).
     resolvedPackages = {};
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     for i = 1:length(repoPackages)
@@ -266,9 +267,9 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
         else
             effChannel = bareChannels{i};
         end
-        [org, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, effChannel);
-        fqn = mip.parse.make_fqn(org, ch, name);
-        resolvedPackages{end+1} = struct('org', org, 'channel', ch, 'name', name, ... %#ok<AGROW>
+        [owner, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, effChannel);
+        fqn = mip.parse.make_fqn(owner, ch, name);
+        resolvedPackages{end+1} = struct('owner', owner, 'channel', ch, 'name', name, ... %#ok<AGROW>
                                          'fqn', fqn, 'requested_version', version);
         if ~isempty(version)
             requestedVersions(fqn) = version;
@@ -277,7 +278,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
 
     if hasBareName
         if userPassedChannel || isempty(priorityChannels) || isscalar(priorityChannels)
-            fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
+            fprintf('Using channel: %s/%s\n', defaultOwner, defaultChan);
         else
             fprintf('Using channels (priority order): %s\n', strjoin(priorityChannels, ', '));
         end
@@ -302,7 +303,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     end
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
-        fetchChannelIndex([s.org '/' s.channel], packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
+        fetchChannelIndex([s.owner '/' s.channel], packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
     end
 
     % Canonicalize each requested package to the channel-published name.
@@ -369,7 +370,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
             if ~parsed.is_fqn || ~strcmp(parsed.type, 'gh')
                 error('mip:packageNotFound', 'Package "%s" not found in repository', mip.parse.display_fqn(allMissing{i}));
             end
-            missingChannel = [parsed.org '/' parsed.channel];
+            missingChannel = [parsed.owner '/' parsed.channel];
             if fetchedChannels.isKey(missingChannel)
                 continue
             end
@@ -411,7 +412,7 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
             result = mip.parse.parse_package_arg(fqn);
             existingName = mip.resolve.installed_dir(fqn);
             if ~isempty(existingName) && ~strcmp(existingName, result.name)
-                existingFqn = mip.parse.make_fqn(result.org, result.channel, existingName);
+                existingFqn = mip.parse.make_fqn(result.owner, result.channel, existingName);
                 error('mip:install:equivalentAlreadyInstalled', ...
                       ['Cannot install "%s": an equivalent package "%s" is already installed. ' ...
                        'Package names are equivalent when they match after lowercasing and ' ...
@@ -580,10 +581,10 @@ end
 function installedFqn = installFromMhl(mhlSource, ~, channel)
 % Install a package from a local .mhl file or URL.
 %
-% When no --channel was given, the package lands under the 'mhl/' source
+% When no --channel is given, the package lands under the 'mhl/' source
 % type (e.g. 'mhl/chebfun'), so a .mhl from an arbitrary path or URL
 % cannot masquerade as a member of the default core channel. Passing
-% --channel <org>/<chan> opts in to gh-channel placement.
+% --channel <owner>/<channel> opts in to gh-channel placement.
 
     installedFqn = '';
     tempDir = tempname;
@@ -592,7 +593,7 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
 
     useGhChannel = ~isempty(channel);
     if useGhChannel
-        [org, channelName] = mip.parse.parse_channel_spec(channel);
+        [channelOwner, channelName] = mip.parse.parse_channel_spec(channel);
     end
 
     try
@@ -603,7 +604,7 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
         pkgInfo = mip.config.read_package_json(extractDir);
         packageName = pkgInfo.name;
         if useGhChannel
-            fqn = mip.parse.make_fqn(org, channelName, packageName);
+            fqn = mip.parse.make_fqn(channelOwner, channelName, packageName);
         else
             fqn = mip.parse.make_mhl_fqn(packageName);
         end
@@ -611,7 +612,7 @@ function installedFqn = installFromMhl(mhlSource, ~, channel)
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
             if useGhChannel
-                existingFqn = mip.parse.make_fqn(org, channelName, existingName);
+                existingFqn = mip.parse.make_fqn(channelOwner, channelName, existingName);
             else
                 existingFqn = mip.parse.make_mhl_fqn(existingName);
             end
@@ -764,18 +765,18 @@ function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChann
         return
     end
     fprintf('Fetching package index for %s...\n', ch);
-    [chOrg, chName] = mip.parse.parse_channel_spec(ch);
+    [chOwner, chName] = mip.parse.parse_channel_spec(ch);
     chIndex = mip.channel.fetch_index(ch);
     % Project FQN-keyed requestedVersions down to name-keyed map for this channel
     chRequestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     fqnKeys = keys(requestedVersions);
     for j = 1:length(fqnKeys)
         parsed = mip.parse.parse_package_arg(fqnKeys{j});
-        if strcmp(parsed.org, chOrg) && strcmp(parsed.channel, chName)
+        if strcmp(parsed.owner, chOwner) && strcmp(parsed.channel, chName)
             chRequestedVersions(parsed.name) = requestedVersions(fqnKeys{j});
         end
     end
-    [chMap, chUnavail] = mip.resolve.build_package_info_map(chIndex, chOrg, chName, chRequestedVersions);
+    [chMap, chUnavail] = mip.resolve.build_package_info_map(chIndex, chOwner, chName, chRequestedVersions);
     chKeys = keys(chMap);
     for j = 1:length(chKeys)
         packageInfoMap(chKeys{j}) = chMap(chKeys{j});

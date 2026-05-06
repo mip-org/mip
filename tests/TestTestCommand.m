@@ -74,10 +74,10 @@ classdef TestTestCommand < matlab.unittest.TestCase
 end
 
 
-function pkgDir = createTestPackageWithTestScript(rootDir, org, channel, pkgName, testScriptName, shouldFail)
+function pkgDir = createTestPackageWithTestScript(rootDir, owner, channel, pkgName, testScriptName, shouldFail)
 %CREATETESTPACKAGEWITHTESTSCRIPT   Create a test package with a test_script field.
 
-    pkgDir = createTestPackage(rootDir, org, channel, pkgName);
+    pkgDir = createTestPackage(rootDir, owner, channel, pkgName);
 
     % Create the source subdirectory
     srcDir = fullfile(pkgDir, pkgName);

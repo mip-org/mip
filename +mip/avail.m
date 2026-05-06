@@ -3,15 +3,15 @@ function avail(varargin)
 %
 % Usage:
 %   mip avail
-%   mip avail --channel owner/channel
-%   mip avail --channel <name>             - Shorthand for --channel <name>/<name>
+%   mip avail --channel <owner>/<channel>
+%   mip avail --channel <owner>             - Shorthand for --channel <owner>/<owner>
 %
 % Options:
 %   --channel <name>  List packages from a specific channel (default: mip-org/core)
-%                     Format: 'org/channel' (e.g. 'mip-org/core'). A bare
-%                     single name '<name>' is shorthand for '<name>/<name>' —
+%                     Format: '<owner>/<channel>' (e.g. 'mip-org/core'). A bare
+%                     single name '<owner>' is shorthand for '<owner>/<owner>' —
 %                     the user's personal channel repo at
-%                     github.com/<name>/mip-<name>.
+%                     github.com/<owner>/mip-<owner>.
 %
 % Displays an alphabetical list of all available packages in the online
 % repository for the current architecture, shown with fully qualified names.
@@ -22,10 +22,10 @@ if isempty(channel)
     channel = 'mip-org/core';
 end
 
-[org, channelName] = mip.parse.parse_channel_spec(channel);
+[channelOwner, channelName] = mip.parse.parse_channel_spec(channel);
 
 try
-    fprintf('Using channel: %s/%s\n', org, channelName);
+    fprintf('Using channel: %s/%s\n', channelOwner, channelName);
     index = mip.channel.fetch_index(channel, true);
 
     % Get current architecture
@@ -51,7 +51,7 @@ try
 
             canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
             if strcmp(arch, currentArch) || strcmp(arch, 'any') || (canFallbackToWasm && strcmp(arch, 'numbl_wasm'))
-                fqn = mip.parse.make_fqn(org, channelName, pkg.name);
+                fqn = mip.parse.make_fqn(channelOwner, channelName, pkg.name);
                 if ~ismember(fqn, availablePackages)
                     availablePackages = [availablePackages, {fqn}]; %#ok<AGROW>
                 end

@@ -1,7 +1,7 @@
 classdef TestInstallMhl < matlab.unittest.TestCase
 %TESTINSTALLMHL   Tests for `mip install <path-to.mhl>` source-type routing.
 % A .mhl installed without `--channel` must land under the `mhl/` source
-% type, not under `gh/mip-org/core/`. Passing `--channel <org>/<chan>`
+% type, not under `gh/mip-org/core/`. Passing `--channel <owner>/<channel>`
 % opts in to gh-channel placement.
 
     properties
@@ -77,7 +77,7 @@ classdef TestInstallMhl < matlab.unittest.TestCase
 
         function testMhlInstall_WithChannel_StillUsesGhChannel(testCase)
             % When --channel is given, the explicit opt-in is preserved:
-            % the package is placed under gh/<org>/<channel>/.
+            % the package is placed under gh/<owner>/<channel>/.
             mhlPath = bundleTestPackage(testCase, 'mhl_pkg3');
 
             mip.install('--channel', 'mylab/custom', mhlPath);

@@ -6,8 +6,8 @@ function add_channel(channel)
 % mip-org/core first, then subscribed channels in priority order.
 %
 % Args:
-%   channel - Channel spec in 'org/channel' form, or a bare '<name>'
-%             which is shorthand for '<name>/<name>'.
+%   channel - Channel spec in '<owner>/<channel>' form, or a bare
+%             '<owner>' which is shorthand for '<owner>/<owner>'.
 
     channel = mip.parse.normalize_channel_spec(channel);
 
