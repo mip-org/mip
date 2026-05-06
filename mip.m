@@ -36,6 +36,9 @@ function varargout = mip(command, varargin)
 %   mip bundle <directory> [--output <dir>]    - Build .mhl from local package
 %   mip init <directory> [--name <name>]       - Generate a starter mip.yaml
 %   mip reset                                  - Reset mip to a clean state
+%   mip channel add <channel>                  - Subscribe to a channel
+%   mip channel remove <channel>               - Unsubscribe from a channel
+%   mip channel list                           - List subscribed channels
 %   mip help [command]                         - Show help text for command
 %
 % Channels:
@@ -45,6 +48,12 @@ function varargout = mip(command, varargin)
 %     'owner/channel'  -> user-hosted channel
 %     '<name>'         -> shorthand for '<name>/<name>', the user's
 %                         personal channel repo at github.com/<name>/mip-<name>
+%
+%   Subscribing to a channel (mip channel add <channel>) makes bare-name
+%   installs without --channel fall back to that channel when the package
+%   is not in mip-org/core. Subscribed channels are consulted in priority
+%   order (most recently added first). Subscribing an already-subscribed
+%   channel moves it to the top of the priority list.
 %
 % Package names:
 %   Packages can be specified by bare name or fully qualified name:
@@ -149,6 +158,9 @@ switch command
     case 'avail'
         mip.avail(varargin{:});
 
+    case 'channel'
+        handle_channel_command(varargin);
+
     case 'version'
         fprintf('%s\n', mip.version());
 
@@ -182,5 +194,55 @@ function safe_update_signatures()
 try
     mip.state.update_function_signatures();
 catch
+end
+end
+
+
+function handle_channel_command(args)
+% Dispatch `mip channel <subcommand>` to add/remove/list. Lives in mip.m
+% because the +mip/+channel/ subpackage prevents adding a +mip/channel.m.
+if isempty(args)
+    error('mip:noSubcommand', ...
+          'channel command requires a subcommand: add, remove, list.');
+end
+sub = lower(char(args{1}));
+switch sub
+    case 'add'
+        if length(args) < 2
+            error('mip:noChannel', ...
+                  '"mip channel add" requires a channel argument.');
+        end
+        if length(args) > 2
+            error('mip:tooManyArgs', ...
+                  '"mip channel add" takes a single channel argument.');
+        end
+        mip.state.add_channel(args{2});
+
+    case {'remove', 'rm'}
+        if length(args) < 2
+            error('mip:noChannel', ...
+                  '"mip channel remove" requires a channel argument.');
+        end
+        if length(args) > 2
+            error('mip:tooManyArgs', ...
+                  '"mip channel remove" takes a single channel argument.');
+        end
+        mip.state.remove_channel(args{2});
+
+    case 'list'
+        if length(args) > 1
+            error('mip:tooManyArgs', ...
+                  '"mip channel list" takes no arguments.');
+        end
+        channels = mip.state.get_channels();
+        fprintf('Subscribed channels (in priority order):\n');
+        fprintf('  mip-org/core   (default, always first)\n');
+        for i = 1:length(channels)
+            fprintf('  %s\n', channels{i});
+        end
+
+    otherwise
+        error('mip:unknownSubcommand', ...
+              'Unknown "mip channel" subcommand "%s". Use add, remove, or list.', sub);
 end
 end

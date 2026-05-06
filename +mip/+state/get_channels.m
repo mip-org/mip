@@ -1,0 +1,35 @@
+function channels = get_channels()
+%GET_CHANNELS   Get the list of subscribed channels in priority order.
+%
+% Returns:
+%   channels - Cell array of channel specs (e.g. 'mylab/custom') in
+%              priority order (highest priority first). Does NOT include
+%              the implicit default 'mip-org/core' channel; that channel
+%              is always consulted before any subscribed channel and
+%              need not be listed.
+%
+% Channels are persisted at <root>/packages/channels.txt, one channel
+% per line, in priority order.
+
+    channels = {};
+
+    packagesDir = mip.paths.get_packages_dir();
+    channelsFile = fullfile(packagesDir, 'channels.txt');
+
+    if ~exist(channelsFile, 'file')
+        return
+    end
+
+    fid = fopen(channelsFile, 'r');
+    if fid == -1
+        return
+    end
+
+    closer = onCleanup(@() fclose(fid));
+    while ~feof(fid)
+        line = fgetl(fid);
+        if ischar(line) && ~isempty(strtrim(line))
+            channels{end+1} = strtrim(line); %#ok<AGROW>
+        end
+    end
+end

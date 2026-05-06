@@ -223,22 +223,50 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
 
     installedFqns = {};
 
-    % Determine effective channel for bare-name packages
+    % Capture whether the user explicitly passed --channel: if not, bare-name
+    % args are resolved against the priority list (core, then subscribed
+    % channels). If yes, --channel is the only place to look for them.
+    userPassedChannel = ~isempty(channel);
     if isempty(channel)
         channel = 'mip-org/core';
     end
     [defaultOrg, defaultChan] = mip.parse.parse_channel_spec(channel);
 
+    % Pre-parse args so we can distinguish FQN args from bare-name args
+    % before assigning channels to the latter.
+    parsedArgs = cell(1, length(repoPackages));
+    hasBareName = false;
+    for i = 1:length(repoPackages)
+        parsedArgs{i} = mip.parse.parse_package_arg(repoPackages{i});
+        if ~parsedArgs{i}.is_fqn
+            hasBareName = true;
+        end
+    end
+
+    % Determine effective channel for each bare-name arg.
+    %   userPassedChannel: bare names go to that channel (existing behavior).
+    %   else: walk the priority list (core, then `mip channel add` order)
+    %         and pick the first channel that publishes the bare name.
+    bareChannels = cell(1, length(repoPackages));
+    priorityChannels = {};
+    if hasBareName && ~userPassedChannel
+        priorityChannels = [{'mip-org/core'}, mip.state.get_channels()];
+        bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels);
+    end
+
     % Resolve each package argument to org/channel/name (with optional version).
     resolvedPackages = {};
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
-    hasBareName = false;
     for i = 1:length(repoPackages)
-        parsed = mip.parse.parse_package_arg(repoPackages{i});
-        if ~parsed.is_fqn
-            hasBareName = true;
+        parsed = parsedArgs{i};
+        if parsed.is_fqn
+            effChannel = '';  % FQN provides its own channel
+        elseif userPassedChannel
+            effChannel = channel;
+        else
+            effChannel = bareChannels{i};
         end
-        [org, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, channel);
+        [org, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, effChannel);
         fqn = mip.parse.make_fqn(org, ch, name);
         resolvedPackages{end+1} = struct('org', org, 'channel', ch, 'name', name, ... %#ok<AGROW>
                                          'fqn', fqn, 'requested_version', version);
@@ -248,22 +276,28 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     end
 
     if hasBareName
-        fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
+        if userPassedChannel || isempty(priorityChannels) || isscalar(priorityChannels)
+            fprintf('Using channel: %s/%s\n', defaultOrg, defaultChan);
+        else
+            fprintf('Using channels (priority order): %s\n', strjoin(priorityChannels, ', '));
+        end
     end
 
     currentArch = mip.build.arch();
     fprintf('Detected architecture: %s\n', currentArch);
 
     % Fetch channel indexes. Always fetch mip-org/core (bare-name deps resolve
-    % there). Fetch the --channel value only when there is at least one bare-name
-    % argument. Also fetch channels referenced by FQN args. fetchChannelIndex
-    % skips channels that have already been fetched.
+    % there). When --channel was given and there is at least one bare-name
+    % argument, fetch that channel too. Channels referenced by resolved
+    % packages (FQN args plus subscription-resolved bare names) are fetched
+    % via the loop. fetchChannelIndex skips channels that have already been
+    % fetched.
     packageInfoMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
     unavailablePackages = containers.Map('KeyType', 'char', 'ValueType', 'any');
     fetchedChannels = containers.Map('KeyType', 'char', 'ValueType', 'logical');
 
     fetchChannelIndex('mip-org/core', packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
-    if hasBareName
+    if hasBareName && userPassedChannel
         fetchChannelIndex(channel, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
     end
     for i = 1:length(resolvedPackages)
@@ -653,6 +687,74 @@ function downloadAndInstall(fqn, packageInfo, pkgDir)
             rmdir(pkgDir, 's');
         end
         rethrow(ME);
+    end
+end
+
+function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
+% Walk priorityChannels in order. For each, fetch the channel's raw index
+% and check which unresolved bare-name args appear in it. The first
+% channel to publish a given bare name wins; bare names not found in any
+% subscribed channel fall back to mip-org/core so the existing
+% "package not found" path is hit cleanly downstream.
+
+    bareChannels = cell(1, length(parsedArgs));
+    for c = 1:length(priorityChannels)
+        % Stop early once every bare-name arg has been placed.
+        if ~anyUnresolved(parsedArgs, bareChannels)
+            break
+        end
+
+        chSpec = priorityChannels{c};
+        try
+            chIndex = mip.channel.fetch_index(chSpec);
+        catch ME
+            if strcmp(chSpec, 'mip-org/core')
+                rethrow(ME);
+            end
+            warning('mip:channelFetchFailed', ...
+                    'Failed to fetch index for subscribed channel %s: %s', ...
+                    chSpec, ME.message);
+            continue
+        end
+
+        availableNorms = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+        if isfield(chIndex, 'packages')
+            for k = 1:length(chIndex.packages)
+                pkg = chIndex.packages{k};
+                if isstruct(pkg) && isfield(pkg, 'name')
+                    availableNorms(mip.name.normalize(pkg.name)) = true;
+                end
+            end
+        end
+
+        for j = 1:length(parsedArgs)
+            parsed = parsedArgs{j};
+            if parsed.is_fqn || ~isempty(bareChannels{j})
+                continue
+            end
+            if availableNorms.isKey(mip.name.normalize(parsed.name))
+                bareChannels{j} = chSpec;
+            end
+        end
+    end
+
+    % Default any still-unresolved bare names to mip-org/core. The
+    % downstream "package not found" check will produce a clear error
+    % naming the (default) channel.
+    for j = 1:length(parsedArgs)
+        if ~parsedArgs{j}.is_fqn && isempty(bareChannels{j})
+            bareChannels{j} = 'mip-org/core';
+        end
+    end
+end
+
+function tf = anyUnresolved(parsedArgs, bareChannels)
+    tf = false;
+    for j = 1:length(parsedArgs)
+        if ~parsedArgs{j}.is_fqn && isempty(bareChannels{j})
+            tf = true;
+            return
+        end
     end
 end
 
