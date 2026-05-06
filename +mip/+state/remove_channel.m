@@ -10,7 +10,7 @@ function remove_channel(channel)
     channel = mip.parse.normalize_channel_spec(channel);
 
     channels = mip.state.get_channels();
-    mask = strcmpi(channels, channel);
+    mask = strcmp(channels, channel);
     if ~any(mask)
         fprintf('Channel "%s" is not subscribed.\n', channel);
         return

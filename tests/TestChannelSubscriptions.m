@@ -97,6 +97,23 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
             testCase.verifyEqual(channels, {});
         end
 
+        function testChannels_AreCaseSensitive(testCase)
+            % Owner/channel components map to GitHub paths and on-disk
+            % install dirs, which the rest of the codebase treats as
+            % case-sensitive (see mip.name.normalize). Subscription
+            % comparisons must match: 'MyLab/Dev' and 'mylab/dev' are
+            % distinct subscriptions, and removing one must not affect
+            % the other.
+            mip.state.add_channel('MyLab/Dev');
+            mip.state.add_channel('mylab/dev');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {'mylab/dev', 'MyLab/Dev'});
+
+            mip.state.remove_channel('mylab/dev');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {'MyLab/Dev'});
+        end
+
         function testChannels_PersistAcrossCalls(testCase)
             mip.state.add_channel('a/one');
             mip.state.add_channel('b/two');

@@ -719,17 +719,7 @@ function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
         end
 
         chSpec = priorityChannels{c};
-        try
-            chIndex = mip.channel.fetch_index(chSpec);
-        catch ME
-            if strcmp(chSpec, 'mip-org/core')
-                rethrow(ME);
-            end
-            warning('mip:channelFetchFailed', ...
-                    'Failed to fetch index for subscribed channel %s: %s', ...
-                    chSpec, ME.message);
-            continue
-        end
+        chIndex = mip.channel.fetch_index(chSpec);
 
         availableNorms = containers.Map('KeyType', 'char', 'ValueType', 'logical');
         if isfield(chIndex, 'packages')

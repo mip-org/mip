@@ -11,13 +11,13 @@ function add_channel(channel)
 
     channel = mip.parse.normalize_channel_spec(channel);
 
-    if strcmpi(channel, 'mip-org/core')
+    if strcmp(channel, 'mip-org/core')
         fprintf('mip-org/core is the default channel and is always consulted first.\n');
         return
     end
 
     channels = mip.state.get_channels();
-    channels(strcmpi(channels, channel)) = [];
+    channels(strcmp(channels, channel)) = [];
     channels = [{channel}, channels];
     mip.state.set_channels(channels);
 
