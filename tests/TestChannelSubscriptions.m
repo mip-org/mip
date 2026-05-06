@@ -75,6 +75,43 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
                 'mip:invalidChannel');
         end
 
+        function testAppendChannel_PersistsAtBottom(testCase)
+            mip.state.add_channel('a/one');
+            mip.state.add_channel('b/two');
+            mip.state.append_channel('c/three');
+            channels = mip.state.get_channels();
+            % Append goes to the bottom (lowest priority).
+            testCase.verifyEqual(channels, {'b/two', 'a/one', 'c/three'});
+        end
+
+        function testAppendChannel_MovesExistingToBottom(testCase)
+            mip.state.add_channel('a/one');
+            mip.state.add_channel('b/two');
+            mip.state.add_channel('c/three');
+            mip.state.append_channel('c/three');  % move-to-bottom
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {'b/two', 'a/one', 'c/three'});
+        end
+
+        function testAppendChannel_ShorthandExpansion(testCase)
+            mip.state.append_channel('mylab');  % shorthand for mylab/mylab
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {'mylab/mylab'});
+        end
+
+        function testAppendChannel_RejectsCore(testCase)
+            mip.state.append_channel('mip-org/core');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {});
+        end
+
+        function testAppendChannel_InvalidFormatErrors(testCase)
+            testCase.verifyError(@() mip.state.append_channel('a/b/c'), ...
+                'mip:invalidChannel');
+            testCase.verifyError(@() mip.state.append_channel(''), ...
+                'mip:invalidChannel');
+        end
+
         function testRemoveChannel_RemovesEntry(testCase)
             mip.state.add_channel('a/one');
             mip.state.add_channel('b/two');
@@ -141,6 +178,17 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
             testCase.verifyError(@() mip('channel', 'add'), 'mip:noChannel');
         end
 
+        function testCmd_AppendRequiresArgument(testCase)
+            testCase.verifyError(@() mip('channel', 'append'), 'mip:noChannel');
+        end
+
+        function testCmd_AppendViaTopLevel(testCase)
+            mip('channel', 'add', 'a/one');
+            mip('channel', 'append', 'b/two');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {'a/one', 'b/two'});
+        end
+
         function testCmd_RemoveRequiresArgument(testCase)
             testCase.verifyError(@() mip('channel', 'remove'), 'mip:noChannel');
         end
@@ -152,6 +200,25 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
         function testCmd_UnknownSubcommand(testCase)
             testCase.verifyError(@() mip('channel', 'bogus'), ...
                 'mip:unknownSubcommand');
+        end
+
+        function testCmd_ListAlwaysIncludesCoreAtTop(testCase)
+            % mip-org/core is the implicit default and must always appear
+            % at the top of `mip channel list` output, even when no
+            % channels are subscribed and even though it is never stored
+            % in channels.txt.
+            output = evalc("mip('channel', 'list')");
+            lines = splitlines(strtrim(output));
+            testCase.verifyEqual(lines{1}, 'Channels (in priority order):');
+            testCase.verifyEqual(strtrim(lines{2}), 'mip-org/core');
+
+            mip.state.add_channel('mylab/dev');
+            mip.state.add_channel('acme/extras');
+            output = evalc("mip('channel', 'list')");
+            lines = splitlines(strtrim(output));
+            testCase.verifyEqual(strtrim(lines{2}), 'mip-org/core');
+            testCase.verifyEqual(strtrim(lines{3}), 'acme/extras');
+            testCase.verifyEqual(strtrim(lines{4}), 'mylab/dev');
         end
 
         %% --- Bare-name install resolution against subscribed channels ---
