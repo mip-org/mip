@@ -9,7 +9,7 @@ function add_channel(channel)
 %   channel - Channel spec in 'org/channel' form, or a bare '<name>'
 %             which is shorthand for '<name>/<name>'.
 
-    channel = normalizeChannel(channel);
+    channel = mip.parse.normalize_channel_spec(channel);
 
     if strcmpi(channel, 'mip-org/core')
         fprintf('mip-org/core is the default channel and is always consulted first.\n');
@@ -22,22 +22,4 @@ function add_channel(channel)
     mip.state.set_channels(channels);
 
     fprintf('Subscribed to channel "%s".\n', channel);
-end
-
-
-function channel = normalizeChannel(channel)
-    if isstring(channel)
-        channel = char(channel);
-    end
-    if ~ischar(channel) || isempty(channel)
-        error('mip:invalidChannel', 'Channel must be a non-empty string.');
-    end
-    if ~contains(channel, '/')
-        channel = [channel '/' channel];
-    end
-    parts = strsplit(channel, '/');
-    if length(parts) ~= 2 || any(cellfun('isempty', parts))
-        error('mip:invalidChannel', ...
-              'Invalid channel format "%s". Use "org/channel".', channel);
-    end
 end

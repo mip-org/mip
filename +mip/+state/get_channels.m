@@ -22,7 +22,12 @@ function channels = get_channels()
 
     fid = fopen(channelsFile, 'r');
     if fid == -1
-        return
+        % File exists (checked above) but cannot be opened. Failing here
+        % rather than returning {} avoids set_channels later silently
+        % overwriting the file with a one-entry list, dropping the user's
+        % prior subscriptions.
+        error('mip:fileError', ...
+              'Could not read channels file: %s', channelsFile);
     end
 
     closer = onCleanup(@() fclose(fid));
