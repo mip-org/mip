@@ -180,6 +180,31 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
                 'mip:packageNotFound');
         end
 
+        function testInstall_BareName_NotFound_ErrorListsConsultedChannels(testCase)
+            % When a bare name is absent from core and all subscribed
+            % channels, the error must list every channel consulted so
+            % the user can see the priority-list resolution that ran.
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
+            writeChannelIndex(testCase.TestRoot, 'mylab/dev', {});
+            writeChannelIndex(testCase.TestRoot, 'other/place', {});
+
+            mip.state.add_channel('mylab/dev');
+            mip.state.add_channel('other/place');
+
+            try
+                mip.install('missingpkg');
+                testCase.verifyFail('Expected mip:packageNotFound');
+            catch ME
+                testCase.verifyEqual(ME.identifier, 'mip:packageNotFound');
+                testCase.verifyTrue(contains(ME.message, 'mip-org/core'), ...
+                    'Error should mention mip-org/core');
+                testCase.verifyTrue(contains(ME.message, 'mylab/dev'), ...
+                    'Error should mention mylab/dev');
+                testCase.verifyTrue(contains(ME.message, 'other/place'), ...
+                    'Error should mention other/place');
+            end
+        end
+
         function testInstall_BareName_CorePrioritizedOverSubscribed(testCase)
             % Both core and a subscribed channel publish 'baz'. Core wins.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'baz');

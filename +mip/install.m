@@ -248,11 +248,20 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
     %   userPassedChannel: bare names go to that channel (existing behavior).
     %   else: walk the priority list (core, then `mip channel add` order)
     %         and pick the first channel that publishes the bare name.
+    %   unresolvedBareIdx tracks bare names not found in any priority channel,
+    %   so the downstream "not found" error can list the channels consulted.
     bareChannels = cell(1, length(repoPackages));
+    unresolvedBareIdx = false(1, length(repoPackages));
     priorityChannels = {};
     if hasBareName && ~userPassedChannel
         priorityChannels = [{'mip-org/core'}, mip.state.get_channels()];
         bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels);
+        for j = 1:length(parsedArgs)
+            if ~parsedArgs{j}.is_fqn && isempty(bareChannels{j})
+                bareChannels{j} = 'mip-org/core';
+                unresolvedBareIdx(j) = true;
+            end
+        end
     end
 
     % Resolve each package argument to <owner>/<channel>/<name> (with optional version).
@@ -332,6 +341,10 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
                         mip.parse.display_fqn(s.fqn), currentArch);
                 fprintf('Available architectures: %s\n', strjoin(archs, ', '));
                 error('mip:packageUnavailable', 'Package not available for this architecture');
+            elseif unresolvedBareIdx(i)
+                error('mip:packageNotFound', ...
+                      'Package "%s" not found in any of: %s', ...
+                      parsedArgs{i}.name, strjoin(priorityChannels, ', '));
             else
                 error('mip:packageNotFound', ...
                       'Package "%s" not found in repository', mip.parse.display_fqn(s.fqn));
@@ -694,9 +707,9 @@ end
 function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
 % Walk priorityChannels in order. For each, fetch the channel's raw index
 % and check which unresolved bare-name args appear in it. The first
-% channel to publish a given bare name wins; bare names not found in any
-% subscribed channel fall back to mip-org/core so the existing
-% "package not found" path is hit cleanly downstream.
+% channel to publish a given bare name wins. Bare names not found in any
+% priority channel are returned as ''; the caller defaults them and
+% surfaces the consulted channel list in the "not found" error.
 
     bareChannels = cell(1, length(parsedArgs));
     for c = 1:length(priorityChannels)
@@ -736,15 +749,6 @@ function bareChannels = resolveBareNameChannels(parsedArgs, priorityChannels)
             if availableNorms.isKey(mip.name.normalize(parsed.name))
                 bareChannels{j} = chSpec;
             end
-        end
-    end
-
-    % Default any still-unresolved bare names to mip-org/core. The
-    % downstream "package not found" check will produce a clear error
-    % naming the (default) channel.
-    for j = 1:length(parsedArgs)
-        if ~parsedArgs{j}.is_fqn && isempty(bareChannels{j})
-            bareChannels{j} = 'mip-org/core';
         end
     end
 end
