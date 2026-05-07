@@ -11,7 +11,11 @@ function test(varargin)
 %
 % The test script should error on failure and print 'SUCCESS' on success.
 %
-% Accepts both bare package names and fully qualified names.
+% Accepts both bare package names and fully qualified names. Bare-name
+% resolution prefers a currently loaded package over an installed-but-
+% unloaded one; if multiple loaded packages share the bare name, the most
+% recently loaded one wins. Otherwise, falls back to the installed-package
+% priority (gh/mip-org/core first, then alphabetical).
 
 if nargin < 1
     error('mip:test:noPackage', 'Package name is required for test command.');
@@ -19,8 +23,7 @@ end
 
 packageArg = varargin{1};
 
-% Resolve to installed FQN
-r = mip.resolve.resolve_to_installed(packageArg);
+r = resolveTestTarget(packageArg);
 if isempty(r)
     error('mip:test:notInstalled', ...
           'Package "%s" is not installed.', packageArg);
@@ -90,4 +93,38 @@ catch ME
 end
 cd(originalDir);
 
+end
+
+function r = resolveTestTarget(packageArg)
+% Resolve a test argument to an installed package. For bare names,
+% search loaded packages first and pick the most recently loaded match;
+% otherwise fall back to mip.resolve.resolve_to_installed (which applies
+% the gh/mip-org/core-first / alphabetical priority).
+
+    if isstring(packageArg)
+        packageArg = char(packageArg);
+    end
+
+    parsed = mip.parse.parse_package_arg(packageArg);
+
+    if parsed.is_fqn
+        r = mip.resolve.resolve_to_installed(packageArg);
+        return
+    end
+
+    loadedPackages = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+    matchIdx = [];
+    for i = 1:length(loadedPackages)
+        loadedInfo = mip.parse.parse_package_arg(loadedPackages{i});
+        if loadedInfo.is_fqn && mip.name.match(loadedInfo.name, parsed.name)
+            matchIdx(end+1) = i; %#ok<AGROW>
+        end
+    end
+
+    if ~isempty(matchIdx)
+        r = mip.resolve.resolve_to_installed(loadedPackages{matchIdx(end)});
+        return
+    end
+
+    r = mip.resolve.resolve_to_installed(packageArg);
 end

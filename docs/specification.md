@@ -219,6 +219,17 @@ Used by: the install process when building the dependency graph from channel ind
 
 This is consistent with the general dependency resolution rule (2.4.4).
 
+#### 2.4.6 Resolving a Bare Name for Test (`mip test`)
+
+Used by: `mip test` (when given a bare name)
+
+Loaded packages take priority over installed-but-unloaded ones, so that `mip load --channel <other> <name>` followed by `mip test <name>` exercises the freshly loaded package rather than the unrelated installed copy under `gh/mip-org/core`:
+
+1. Search **loaded** packages for a name match. If one or more match, use the **most recently loaded** match (last in the `MIP_LOADED_PACKAGES` list).
+2. If no loaded package matches, fall back to `resolve_bare_name` ([§2.4.1](#241-resolving-a-bare-name-among-installed-packages-resolve_bare_name)) — `gh/mip-org/core` first, then alphabetical.
+
+FQN arguments to `mip test` bypass this and resolve directly against installed packages.
+
 ### 2.5 Resolving a Package Name with Channel Context (`resolve_package_name`)
 
 Used by: `mip install` for remote packages
@@ -845,6 +856,8 @@ Output filename: `<name>-<version>-<architecture>.mhl`. Because `-` is the field
 ### 9.7 `mip test <package>`
 
 Loads the package (if not already loaded) and runs its `test_script` (defined in `mip.yaml`). If no test script is defined, prints a message and returns.
+
+Bare-name resolution is loaded-first: a currently loaded package wins over an installed-but-unloaded copy of the same name, and among multiple loaded matches the most recently loaded one is used. See [§2.4.6](#246-resolving-a-bare-name-for-test-mip-test) for the full rule. FQN arguments are resolved directly against installed packages.
 
 ### 9.8 `mip init`
 

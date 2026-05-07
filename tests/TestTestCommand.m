@@ -70,6 +70,63 @@ classdef TestTestCommand < matlab.unittest.TestCase
             testCase.verifyTrue(contains(output, 'Running test script'));
         end
 
+        function testTest_PrefersLoadedOverInstalledCore(testCase)
+            % Both core and staging install a package called "shared".
+            % The core copy passes, the staging copy fails. After loading
+            % the staging copy, "mip test shared" must run the loaded
+            % staging copy (and therefore fail), not the unloaded core
+            % copy that resolve_bare_name would prefer.
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'core', 'shared', 'run_test.m', false);
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'staging', 'shared', 'run_test.m', true);
+            evalc('mip.load(''mip-org/staging/shared'')');
+            testCase.verifyError(@() mip.test('shared'), 'mip:test:failed');
+        end
+
+        function testTest_MostRecentlyLoadedAmongMultiple(testCase)
+            % Three installed copies of "shared". core passes, alpha
+            % passes, beta fails. Loading core then alpha then beta means
+            % beta is the most recently loaded — "mip test shared" must
+            % run beta and fail.
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'core', 'shared', 'run_test.m', false);
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'alpha', 'shared', 'run_test.m', false);
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'beta', 'shared', 'run_test.m', true);
+            evalc('mip.load(''mip-org/core/shared'')');
+            evalc('mip.load(''mip-org/alpha/shared'')');
+            evalc('mip.load(''mip-org/beta/shared'')');
+            testCase.verifyError(@() mip.test('shared'), 'mip:test:failed');
+        end
+
+        function testTest_FallsBackToCoreWhenNoneLoaded(testCase)
+            % With nothing loaded, bare-name "mip test shared" falls back
+            % to resolve_bare_name which prefers gh/mip-org/core. The
+            % core copy passes; the staging copy would fail.
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'core', 'shared', 'run_test.m', false);
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'staging', 'shared', 'run_test.m', true);
+            output = evalc('mip.test(''shared'')');
+            testCase.verifyTrue(contains(output, 'mip-org/core/shared'));
+            testCase.verifyTrue(contains(output, 'Running test script'));
+        end
+
+        function testTest_FqnIgnoresLoadedPriority(testCase)
+            % Even when a non-core copy is loaded, an explicit FQN must
+            % resolve to that exact FQN — not the most recently loaded.
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'core', 'shared', 'run_test.m', false);
+            createTestPackageWithTestScript(testCase.TestRoot, ...
+                'mip-org', 'staging', 'shared', 'run_test.m', true);
+            evalc('mip.load(''mip-org/staging/shared'')');
+            output = evalc('mip.test(''mip-org/core/shared'')');
+            testCase.verifyTrue(contains(output, 'mip-org/core/shared'));
+            testCase.verifyTrue(contains(output, 'Running test script'));
+        end
+
     end
 end
 
