@@ -448,7 +448,7 @@ function installMissingDeps(remoteFqns)
             continue
         end
         for j = 1:length(deps)
-            depFqn = mip.resolve.resolve_dependency(deps{j});
+            depFqn = mip.resolve.resolve_dependency(deps{j}, fqn);
             depDir = mip.paths.get_package_dir(depFqn);
             if ~exist(depDir, 'dir')
                 missingDeps{end+1} = deps{j}; %#ok<AGROW>
