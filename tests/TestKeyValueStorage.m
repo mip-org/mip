@@ -82,5 +82,32 @@ classdef TestKeyValueStorage < matlab.unittest.TestCase
             testCase.verifyEqual(val, {'new1', 'new2'});
         end
 
+        function testMoveToEndAppendsWhenAbsent(testCase)
+            mip.state.key_value_set(testCase.TestKey, {'a', 'b'});
+            mip.state.key_value_move_to_end(testCase.TestKey, 'c');
+            val = mip.state.key_value_get(testCase.TestKey);
+            testCase.verifyEqual(val, {'a', 'b', 'c'});
+        end
+
+        function testMoveToEndOnEmpty(testCase)
+            mip.state.key_value_move_to_end(testCase.TestKey, 'x');
+            val = mip.state.key_value_get(testCase.TestKey);
+            testCase.verifyEqual(val, {'x'});
+        end
+
+        function testMoveToEndRepositionsExisting(testCase)
+            mip.state.key_value_set(testCase.TestKey, {'a', 'b', 'c'});
+            mip.state.key_value_move_to_end(testCase.TestKey, 'a');
+            val = mip.state.key_value_get(testCase.TestKey);
+            testCase.verifyEqual(val, {'b', 'c', 'a'});
+        end
+
+        function testMoveToEndAlreadyLast(testCase)
+            mip.state.key_value_set(testCase.TestKey, {'a', 'b', 'c'});
+            mip.state.key_value_move_to_end(testCase.TestKey, 'c');
+            val = mip.state.key_value_get(testCase.TestKey);
+            testCase.verifyEqual(val, {'a', 'b', 'c'});
+        end
+
     end
 end
