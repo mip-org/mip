@@ -158,6 +158,50 @@ classdef TestFunctionSignatures < matlab.unittest.TestCase
             testCase.verifyTrue(contains(updateSig, '''mip'''));
         end
 
+        function testGeneratedFileIsValidJson(testCase)
+            % Regression for issue #266: tab completion reported
+            % "Failed to parse JSON file ... expected value" because a
+            % concurrent reader sometimes saw the file mid-write. The
+            % file we leave on disk must always be valid JSON.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'alpha');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'beta');
+            mip.state.key_value_append('MIP_LOADED_PACKAGES', 'gh/mip-org/core/alpha');
+            mip.state.add_pinned('gh/mip-org/core/beta');
+
+            mip.state.update_function_signatures(testCase.ResourcesDir);
+
+            jsonPath = fullfile(testCase.ResourcesDir, 'functionSignatures.json');
+            content = readJson(testCase.ResourcesDir);
+            testCase.verifyNotEmpty(strtrim(content), ...
+                'Generated functionSignatures.json must not be empty');
+            try
+                jsondecode(content);
+            catch err
+                testCase.verifyFail(sprintf( ...
+                    'Generated functionSignatures.json failed to parse: %s', err.message));
+            end
+
+            % No temp file should be left behind after a successful write.
+            testCase.verifyFalse(exist([jsonPath '.tmp'], 'file') == 2, ...
+                'Temp file should not remain after atomic rename');
+        end
+
+        function testRepeatedRegenerationStaysValid(testCase)
+            % Each call must leave the file in a valid state, even if
+            % invoked many times in quick succession.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'alpha');
+            for k = 1:5
+                mip.state.update_function_signatures(testCase.ResourcesDir);
+                content = readJson(testCase.ResourcesDir);
+                try
+                    jsondecode(content);
+                catch err
+                    testCase.verifyFail(sprintf( ...
+                        'JSON invalid after iteration %d: %s', k, err.message));
+                end
+            end
+        end
+
         function testDuplicateBareNamesAreDeduplicated(testCase)
             % Same bare name on two different channels should appear once
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkg');
