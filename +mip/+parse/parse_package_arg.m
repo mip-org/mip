@@ -64,10 +64,7 @@ function result = parse_package_arg(arg)
 %   parse_package_arg('fex/some_pkg@1.0')
 %     -> name='some_pkg', type='fex', fqn='fex/some_pkg', version='1.0'
 
-% Reserved source-type prefixes for non-gh FQNs. A 2-part '<a>/<b>' input
-% whose first segment matches one of these is parsed as a non-gh FQN; any
-% other first segment is treated as the owner of a personal channel.
-reservedTypes = {'gh', 'local', 'fex', 'web', 'mhl'};
+reservedTypes = mip.parse.reserved_types();
 
 % Extract @version suffix if present
 atIdx = strfind(arg, '@');

@@ -367,5 +367,20 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 mip.parse.display_fqn('web/bar'), 'web/bar');
         end
 
+        function testDisplayFqnDoesNotCollapseReservedOwner(testCase)
+            % If the owner matches a reserved source-type prefix, the
+            % personal-channel collapse is skipped: the collapsed form
+            % '<reserved>/<pkg>' would be re-parsed as a non-gh FQN
+            % (e.g. 'local/foo' is a local install), breaking the
+            % display→parse round-trip.
+            for owner = {'local', 'fex', 'web', 'mhl', 'gh'}
+                fqn = ['gh/' owner{1} '/' owner{1} '/foo'];
+                expected = [owner{1} '/' owner{1} '/foo'];
+                testCase.verifyEqual( ...
+                    mip.parse.display_fqn(fqn), expected, ...
+                    sprintf('owner=%s should not collapse', owner{1}));
+            end
+        end
+
     end
 end

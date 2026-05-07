@@ -6,8 +6,11 @@ function out = display_fqn(fqn)
 % is always stripped for display. For personal channels — where the
 % channel name equals the owner (e.g. 'gh/magland/magland/chunkie') —
 % the duplicated owner segment is collapsed, yielding the 2-part form
-% '<owner>/<pkg>'. Other source types ('local/mypkg', 'fex/some_pkg',
-% etc.) are returned unchanged.
+% '<owner>/<pkg>'. The collapse is skipped when the owner matches a
+% reserved source-type prefix (mip.parse.reserved_types), since the
+% collapsed form would be parsed back as a non-gh FQN rather than
+% round-tripping to the original. Other source types ('local/mypkg',
+% 'fex/some_pkg', etc.) are returned unchanged.
 %
 % Args:
 %   fqn - Internal fully qualified name
@@ -23,7 +26,8 @@ function out = display_fqn(fqn)
 if startsWith(fqn, 'gh/')
     rest = fqn(4:end);
     parts = strsplit(rest, '/');
-    if numel(parts) == 3 && strcmp(parts{1}, parts{2})
+    if numel(parts) == 3 && strcmp(parts{1}, parts{2}) && ...
+            ~ismember(parts{1}, mip.parse.reserved_types())
         out = [parts{1} '/' parts{3}];
     else
         out = rest;
