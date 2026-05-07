@@ -45,13 +45,38 @@ function update_function_signatures(targetResourcesDir)
 
     json = build_signatures(installed, loadable, loaded, pinned);
 
+    % Validate before writing: tab completion reads this file
+    % asynchronously, and a malformed file produces a "Failed to parse
+    % JSON" error in the Command Window.
+    try
+        jsondecode(json);
+    catch
+        return
+    end
+
+    % Write atomically. fopen(..., 'w') truncates the destination
+    % immediately, leaving a window where a concurrent reader sees an
+    % empty file. Stage to a sibling temp file and rename into place.
     jsonPath = fullfile(targetResourcesDir, 'functionSignatures.json');
-    fid = fopen(jsonPath, 'w');
+    tmpPath  = [jsonPath '.tmp'];
+
+    fid = fopen(tmpPath, 'w');
     if fid == -1
         return
     end
-    cleaner = onCleanup(@() fclose(fid));
-    fwrite(fid, json);
+    nWritten = fwrite(fid, json);
+    fclose(fid);
+    if nWritten ~= numel(json)
+        if exist(tmpPath, 'file')
+            delete(tmpPath);
+        end
+        return
+    end
+
+    [ok, ~, ~] = movefile(tmpPath, jsonPath, 'f');
+    if ~ok && exist(tmpPath, 'file')
+        delete(tmpPath);
+    end
 end
 
 
