@@ -253,13 +253,13 @@ function pruneUnusedPackages()
     % Prune each unnecessary package
     if ~isempty(packagesToPrune)
         displayPrune = cellfun(@mip.parse.display_fqn, packagesToPrune, 'UniformOutput', false);
-        fprintf('Pruning unnecessary packages: %s\n', strjoin(displayPrune, ', '));
+        fprintf('Unloading transitive dependencies: %s\n', strjoin(displayPrune, ', '));
         for i = 1:length(packagesToPrune)
             pkg = packagesToPrune{i};
             packageDir = mip.paths.get_package_dir(pkg);
             executeUnload(packageDir, pkg);
             mip.state.key_value_remove('MIP_LOADED_PACKAGES', pkg);
-            fprintf('  Pruned package "%s"\n', mip.parse.display_fqn(pkg));
+            fprintf('  Unloaded transitive dependency "%s"\n', mip.parse.display_fqn(pkg));
         end
     end
 
