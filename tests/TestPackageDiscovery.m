@@ -81,11 +81,30 @@ classdef TestPackageDiscovery < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, 'gh/mip-org/core/chebfun');
         end
 
-        function testResolveDependency_BareNameIgnoresSameChannel(testCase)
-            % Even when a package with the same name exists on a non-core
-            % channel, bare-name deps always resolve to gh/mip-org/core.
+        function testResolveDependency_BareNamePrefersSameChannel(testCase)
+            % When the depending package lives on owner/chan and the dep
+            % is installed there, bare-name resolution prefers that
+            % channel over mip-org/core.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'parentpkg');
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
-            fqn = mip.resolve.resolve_dependency('somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mylab/custom/parentpkg');
+            testCase.verifyEqual(fqn, 'gh/mylab/custom/somepkg');
+        end
+
+        function testResolveDependency_BareNameFallsBackToCore(testCase)
+            % If the dep isn't installed on the depending package's
+            % channel, fall back to mip-org/core.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'parentpkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mylab/custom/parentpkg');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
+        function testResolveDependency_BareNameFromCoreParent(testCase)
+            % A core-channel parent has no preferred non-core channel —
+            % bare names go straight to mip-org/core regardless of what
+            % is installed on other channels.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mip-org/core/parentpkg');
             testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
         end
 

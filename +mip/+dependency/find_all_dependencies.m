@@ -2,8 +2,9 @@ function deps = find_all_dependencies(fqn, visited)
 %FIND_ALL_DEPENDENCIES   Recursively collect all transitive dependencies of an installed package.
 %
 % Reads mip.json from the installed package directory and resolves bare
-% dependency names to mip-org/core/<name>. Cycles are tolerated: a package
-% already in `visited` is not re-entered.
+% dependency names via mip.resolve.resolve_dependency, which prefers the
+% depending package's own channel before falling back to mip-org/core.
+% Cycles are tolerated: a package already in `visited` is not re-entered.
 %
 % Args:
 %   fqn     - Fully qualified package name (<owner>/<channel>/<name>)
@@ -44,7 +45,7 @@ try
     for i = 1:length(depNames)
         dep = depNames{i};
         try
-            depFqn = mip.resolve.resolve_dependency(dep);
+            depFqn = mip.resolve.resolve_dependency(dep, fqn);
         catch
             continue
         end

@@ -90,6 +90,28 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyFalse(mip.state.is_directly_loaded('mip-org/core/depA'));
         end
 
+        function testLoadPackage_BareDepPrefersOwnChannel(testCase)
+            % A package on owner/chan with a bare-name dep should load
+            % the dep from its own channel if that's where it's installed.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'depA');
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mainpkg', ...
+                'dependencies', {'depA'});
+            mip.load('mylab/custom/mainpkg');
+            testCase.verifyTrue(mip.state.is_loaded('mylab/custom/mainpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mylab/custom/depA'));
+        end
+
+        function testLoadPackage_BareDepFallsBackToCore(testCase)
+            % If the bare-name dep is not installed on the depending
+            % package's own channel, fall back to mip-org/core.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'mainpkg', ...
+                'dependencies', {'depA'});
+            mip.load('mylab/custom/mainpkg');
+            testCase.verifyTrue(mip.state.is_loaded('mylab/custom/mainpkg'));
+            testCase.verifyTrue(mip.state.is_loaded('mip-org/core/depA'));
+        end
+
         function testLoadPackage_ChainedDependencies(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depB');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA', ...
