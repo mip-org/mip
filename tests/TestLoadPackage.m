@@ -275,27 +275,31 @@ classdef TestLoadPackage < matlab.unittest.TestCase
         end
 
         function testLoadPackage_TransitiveReloadDoesNotMoveDirectlyLoaded(testCase)
-            % A transitive re-load (e.g. as a dependency of another load)
-            % must NOT move the package within MIP_DIRECTLY_LOADED_PACKAGES,
-            % because the load was not direct.
+            % A transitive re-load must move the package to the end of
+            % MIP_LOADED_PACKAGES but must NOT reorder
+            % MIP_DIRECTLY_LOADED_PACKAGES, because the load was not direct.
+            % The --transitive flag forces re-entry into loadSingle for an
+            % already-loaded package; the normal deps loop short-circuits on
+            % is_loaded and would never exercise this branch otherwise.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
-            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mainpkg', ...
-                'dependencies', {'depA'});
             mip.load('mip-org/core/depA');
             mip.load('mip-org/core/pkgB');
-            % depA was directly loaded first; pkgB should now be at the end
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
             direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgB');
             testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
 
-            % Loading mainpkg pulls in depA as a transitive dep.
-            mip.load('mip-org/core/mainpkg');
+            % Force a transitive re-load of depA (already directly loaded).
+            mip.load('mip-org/core/depA', '--transitive');
+
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
             direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
-            % mainpkg is now at the end; depA should stay where it was
-            % (NOT moved to the end), since the transitive re-load is not direct.
-            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/mainpkg');
+            % MIP_LOADED_PACKAGES: depA moved to the end.
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/depA');
+            % MIP_DIRECTLY_LOADED_PACKAGES: depA NOT moved -- pkgB is still last.
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
             testCase.verifyTrue(ismember('gh/mip-org/core/depA', direct));
-            testCase.verifyTrue(ismember('gh/mip-org/core/pkgB', direct));
         end
 
         function testLoadPackage_LoadedDepSurvivesParentUninstall(testCase)
