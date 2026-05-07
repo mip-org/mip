@@ -22,7 +22,11 @@ function set_channels(channels)
     end
 
     try
-        for i = 1:length(channels)
+        % Persist in stack-like order: highest-priority (most recently
+        % added) channel last, matching MIP_LOADED_PACKAGES semantics.
+        % Callers pass `channels` in priority order (highest first), so
+        % iterate in reverse when writing to disk.
+        for i = length(channels):-1:1
             fprintf(fid, '%s\n', channels{i});
         end
         fclose(fid);
