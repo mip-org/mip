@@ -36,6 +36,10 @@ function varargout = mip(command, varargin)
 %   mip bundle <directory> [--output <dir>]         - Build .mhl from local package
 %   mip init <directory> [--name <name>]            - Generate a starter mip.yaml
 %   mip reset                                       - Reset mip to a clean state
+%   mip channel add <channel>                       - Subscribe at highest priority
+%   mip channel append <channel>                    - Subscribe at lowest priority
+%   mip channel remove <channel>                    - Unsubscribe from a channel
+%   mip channel list                                - List channels in priority order
 %   mip help [command]                              - Show help text for command
 %
 % Channels:
@@ -46,6 +50,12 @@ function varargout = mip(command, varargin)
 %     '<owner>'           -> shorthand for '<owner>/<owner>', the user's
 %                            personal channel repo at
 %                            github.com/<owner>/mip-<owner>.
+%
+%   Subscribing to a channel (mip channel add <channel>) makes bare-name
+%   installs without --channel fall back to that channel when the package
+%   is not in mip-org/core. Subscribed channels are consulted in priority
+%   order (most recently added first). Subscribing an already-subscribed
+%   channel moves it to the top of the priority list.
 %
 % Package names:
 %   Packages can be specified by bare name or fully qualified name:
@@ -149,6 +159,9 @@ switch command
 
     case 'avail'
         mip.avail(varargin{:});
+
+    case 'channel'
+        mip.channel(varargin{:});
 
     case 'version'
         fprintf('%s\n', mip.version());
