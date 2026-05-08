@@ -68,6 +68,19 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
             testCase.verifyEqual(channels, {});
         end
 
+        function testAddChannel_RejectsCoreCaseInsensitive(testCase)
+            % mip-org/core is a known singleton served from a single
+            % case-folded GitHub Pages URL. Case variants must hit the
+            % same guard or the user gets a duplicate subscription that
+            % resolves to the same upstream while installing into a
+            % parallel on-disk tree.
+            mip.state.add_channel('MIP-ORG/CORE');
+            mip.state.add_channel('Mip-Org/Core');
+            mip.state.add_channel('mip-ORG/core');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {});
+        end
+
         function testAddChannel_InvalidFormatErrors(testCase)
             testCase.verifyError(@() mip.state.add_channel('a/b/c'), ...
                 'mip:invalidChannel');
@@ -101,6 +114,14 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
 
         function testAppendChannel_RejectsCore(testCase)
             mip.state.append_channel('mip-org/core');
+            channels = mip.state.get_channels();
+            testCase.verifyEqual(channels, {});
+        end
+
+        function testAppendChannel_RejectsCoreCaseInsensitive(testCase)
+            % Mirror of testAddChannel_RejectsCoreCaseInsensitive.
+            mip.state.append_channel('MIP-ORG/CORE');
+            mip.state.append_channel('Mip-Org/Core');
             channels = mip.state.get_channels();
             testCase.verifyEqual(channels, {});
         end

@@ -11,7 +11,9 @@ function add_channel(channel)
 
     channel = mip.parse.normalize_channel_spec(channel);
 
-    if strcmp(channel, 'mip-org/core')
+    % Note: this check is case-insensitive on purpose. Since mip-org/core is a
+    % known singleton, case variants would create a duplicate subscription.
+    if strcmpi(channel, 'mip-org/core')
         fprintf('mip-org/core is the default channel and is always consulted first.\n');
         return
     end

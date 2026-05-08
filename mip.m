@@ -161,25 +161,19 @@ switch command
         mip.avail(varargin{:});
 
     case 'channel'
-        handle_channel_command(varargin);
+        mip.channel(varargin{:});
 
     case 'version'
         fprintf('%s\n', mip.version());
 
     case 'help'
         if nargin > 1
-            % Show help text for command. The 'channel' command lives in
-            % mip.m (no +mip/channel.m exists, since +mip/+channel/ is a
-            % subpackage), so route it to a dedicated help printer.
-            if strcmp(varargin{1}, 'channel')
-                print_channel_help();
-            else
-                command = ['+mip/' strrep(varargin{1}, '-', '_') '.m'];
-                if ~exist(command, 'file')
-                    error('mip:unknownCommand', ['Unknown mip command ''' varargin{1} '''.']);
-                end
-                help(command);
+            % Show help text for command
+            command = ['+mip/' strrep(varargin{1}, '-', '_') '.m'];
+            if ~exist(command, 'file')
+                error('mip:unknownCommand', ['Unknown mip command ''' varargin{1} '''.']);
             end
+            help(command);
         else
             help mip;
         end
@@ -203,94 +197,4 @@ try
     mip.state.update_function_signatures();
 catch
 end
-end
-
-
-function handle_channel_command(args)
-% Dispatch `mip channel <subcommand>` to add/remove/list. Lives in mip.m
-% because the +mip/+channel/ subpackage prevents adding a +mip/channel.m.
-if isempty(args)
-    error('mip:noSubcommand', ...
-          'channel command requires a subcommand: add, append, remove, list.');
-end
-sub = lower(char(args{1}));
-switch sub
-    case 'add'
-        if length(args) < 2
-            error('mip:noChannel', ...
-                  '"mip channel add" requires a channel argument.');
-        end
-        if length(args) > 2
-            error('mip:tooManyArgs', ...
-                  '"mip channel add" takes a single channel argument.');
-        end
-        mip.state.add_channel(args{2});
-
-    case 'append'
-        if length(args) < 2
-            error('mip:noChannel', ...
-                  '"mip channel append" requires a channel argument.');
-        end
-        if length(args) > 2
-            error('mip:tooManyArgs', ...
-                  '"mip channel append" takes a single channel argument.');
-        end
-        mip.state.append_channel(args{2});
-
-    case {'remove', 'rm'}
-        if length(args) < 2
-            error('mip:noChannel', ...
-                  '"mip channel remove" requires a channel argument.');
-        end
-        if length(args) > 2
-            error('mip:tooManyArgs', ...
-                  '"mip channel remove" takes a single channel argument.');
-        end
-        mip.state.remove_channel(args{2});
-
-    case 'list'
-        if length(args) > 1
-            error('mip:tooManyArgs', ...
-                  '"mip channel list" takes no arguments.');
-        end
-        % mip-org/core is always listed first. It is the implicit default
-        % channel: not stored in channels.txt, cannot be removed, and
-        % consulted before any subscribed channel during bare-name resolution.
-        channels = [{'mip-org/core'}, mip.state.get_channels()];
-        fprintf('Channels (in priority order):\n');
-        for i = 1:length(channels)
-            fprintf('  %s\n', channels{i});
-        end
-
-    otherwise
-        error('mip:unknownSubcommand', ...
-              'Unknown "mip channel" subcommand "%s". Use add, append, remove, or list.', sub);
-end
-end
-
-
-function print_channel_help()
-% Help text for `mip help channel`. Kept inline here because the
-% +mip/+channel/ subpackage blocks the usual `+mip/<cmd>.m` help target.
-fprintf([ ...
-    ' MIP CHANNEL   Manage channel subscriptions for bare-name install\n' ...
-    ' resolution.\n' ...
-    '\n' ...
-    ' Usage:\n' ...
-    '   mip channel add <channel>     - Subscribe at highest priority\n' ...
-    '   mip channel append <channel>  - Subscribe at lowest priority\n' ...
-    '   mip channel remove <channel>  - Unsubscribe from a channel\n' ...
-    '   mip channel list              - List channels in priority order\n' ...
-    '\n' ...
-    ' <channel> is in ''<owner>/<channel>'' form, or a bare ''<owner>''\n' ...
-    ' which is shorthand for ''<owner>/<owner>''.\n' ...
-    '\n' ...
-    ' When a bare-name install is invoked without --channel, mip-org/core\n' ...
-    ' is consulted first, then each subscribed channel in priority order\n' ...
-    ' (most recently added first). The first channel that publishes the\n' ...
-    ' package wins. Re-running ''add'' on an already-subscribed channel\n' ...
-    ' moves it to the top of the priority list; re-running ''append''\n' ...
-    ' moves it to the bottom.\n' ...
-    '\n' ...
-    ' Subscriptions are persisted at <root>/packages/channels.txt.\n']);
 end
