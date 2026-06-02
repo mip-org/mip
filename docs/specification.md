@@ -203,21 +203,23 @@ Used by: `mip uninstall` (when given a bare name)
 
 #### 2.4.4 Resolving a Bare-Name Dependency (`resolve_dependency`)
 
-Used by: all contexts that resolve dependencies listed in `mip.json` — loading, pruning (unload/uninstall), and broken-dependency checks.
+Used by: all contexts that resolve dependencies listed in `mip.json` of an **installed** package — loading, pruning (unload/uninstall), broken-dependency checks, and update.
 
-- If the dependency is a FQN, use as-is
-- If bare name, **always** resolve to `gh/mip-org/core/<name>`
+`resolve_dependency(depName, parentFqn)` takes a dependency name and, optionally, the FQN of the package that declares it.
 
-To depend on a package from a different channel, use the fully qualified name in `mip.yaml`.
+- If the dependency is a FQN, use as-is.
+- If a bare name: resolve to the **depending package's own channel** — `gh/<parentOwner>/<parentChannel>/<name>` — when `parentFqn` is a `gh` FQN on a channel other than `mip-org/core` **and** that channel has the dependency installed. Otherwise — no `parentFqn`, a `mip-org/core` parent, or the dependency is not installed in the parent's channel — resolve to `gh/mip-org/core/<name>`.
+
+This lets a package in a non-core channel depend, by bare name, on sibling packages published in the **same** channel (e.g. `gh/magland/core/chunkie` depending on `fmm2d` resolves to `gh/magland/core/fmm2d` when that is installed), while bare dependencies of `mip-org/core` packages — and bare dependencies not present in the parent's own channel — keep resolving to `mip-org/core`. To depend on a package from an unrelated channel, use the fully qualified name in `mip.yaml`.
 
 #### 2.4.5 Resolving a Dependency During Remote Install (`build_dependency_graph`)
 
 Used by: the install process when building the dependency graph from channel indexes
 
 - If the dependency is a FQN, use as-is
-- If bare name, **always** resolve to `gh/mip-org/core/<name>`
+- If a bare name, resolve to `<name>` in the install's active channel context — the channel given by `--channel`, otherwise `mip-org/core`
 
-This is consistent with the general dependency resolution rule (2.4.4).
+Post-install resolution of the same dependencies (loading, pruning, etc.) then follows [§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency), which prefers the installed package in the depending package's own channel.
 
 #### 2.4.6 Resolving a Bare Name for Test (`mip test`)
 

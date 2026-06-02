@@ -244,7 +244,7 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
                 displayFqn, strjoin(deps, ', '));
         for i = 1:length(deps)
             dep = deps{i};
-            depFqn = mip.resolve.resolve_dependency(dep);
+            depFqn = mip.resolve.resolve_dependency(dep, fqn);
             if ~mip.state.is_loaded(depFqn)
                 loadSingle(depFqn, installIfMissing, false, channel, false, loadingStack, {}, {}, {});
             else

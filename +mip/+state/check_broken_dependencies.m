@@ -45,9 +45,9 @@ for i = 1:length(packages)
         for j = 1:length(depNames)
             dep = depNames{j};
             if strcmp(mode, 'installed')
-                depMissing = isDependencyUninstalled(dep);
+                depMissing = isDependencyUninstalled(dep, pkg);
             else
-                depMissing = isDependencyUnloaded(dep);
+                depMissing = isDependencyUnloaded(dep, pkg);
             end
             if depMissing
                 brokenDeps{end+1} = sprintf('Package "%s" depends on "%s" which is %s', pkg, dep, missingVerb); %#ok<AGROW>
@@ -66,13 +66,13 @@ end
 
 end
 
-function tf = isDependencyUninstalled(dep)
-    depFqn = mip.resolve.resolve_dependency(dep);
+function tf = isDependencyUninstalled(dep, parentFqn)
+    depFqn = mip.resolve.resolve_dependency(dep, parentFqn);
     depDir = mip.paths.get_package_dir(depFqn);
     tf = ~exist(depDir, 'dir');
 end
 
-function tf = isDependencyUnloaded(dep)
-    depFqn = mip.resolve.resolve_dependency(dep);
+function tf = isDependencyUnloaded(dep, parentFqn)
+    depFqn = mip.resolve.resolve_dependency(dep, parentFqn);
     tf = ~mip.state.is_loaded(depFqn);
 end

@@ -44,7 +44,7 @@ try
     for i = 1:length(depNames)
         dep = depNames{i};
         try
-            depFqn = mip.resolve.resolve_dependency(dep);
+            depFqn = mip.resolve.resolve_dependency(dep, fqn);
         catch
             continue
         end

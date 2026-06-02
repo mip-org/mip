@@ -81,11 +81,34 @@ classdef TestPackageDiscovery < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, 'gh/mip-org/core/chebfun');
         end
 
-        function testResolveDependency_BareNameIgnoresSameChannel(testCase)
-            % Even when a package with the same name exists on a non-core
-            % channel, bare-name deps always resolve to gh/mip-org/core.
+        function testResolveDependency_BareNameNoParentResolvesToCore(testCase)
+            % With no parent package given, a bare dep resolves to
+            % gh/mip-org/core even if a same-named package exists elsewhere.
             createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
             fqn = mip.resolve.resolve_dependency('somepkg');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
+        function testResolveDependency_BareNamePrefersParentChannel(testCase)
+            % A bare dep of a non-core package resolves to that package's own
+            % channel when the dependency is installed there.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mylab/custom/parent');
+            testCase.verifyEqual(fqn, 'gh/mylab/custom/somepkg');
+        end
+
+        function testResolveDependency_BareNameFallsBackToCoreWhenAbsent(testCase)
+            % If the parent's own channel does not have the dependency
+            % installed, fall back to gh/mip-org/core.
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mylab/custom/parent');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
+        function testResolveDependency_BareNameCoreParentResolvesToCore(testCase)
+            % A bare dep of a mip-org/core package resolves to core even if a
+            % same-named package exists on another channel.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mip-org/core/parent');
             testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
         end
 
