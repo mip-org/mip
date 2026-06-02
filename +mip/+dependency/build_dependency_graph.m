@@ -13,7 +13,9 @@ function [depList, missingFqns] = build_dependency_graph(packageFqn, packageInfo
 %                 When non-empty, depList is incomplete. The caller should
 %                 fetch the channels for the missing packages and retry.
 %
-% Bare-name dependencies are always resolved to mip-org/core/<name>.
+% Bare-name dependencies resolve to the depending package's own channel
+% when that channel's index (packageInfoMap) provides them, otherwise to
+% mip-org/core/<name>.
 %
 % Example:
 %   [deps, missing] = mip.dependency.build_dependency_graph('mip-org/core/mypackage', pkgMap);
@@ -62,7 +64,7 @@ for i = 1:length(dependencies)
     if depResult.is_fqn
         depFqn = depResult.fqn;
     else
-        depFqn = mip.parse.make_fqn('mip-org', 'core', depResult.name);
+        depFqn = resolveBareDep(depResult.name, packageFqn, packageInfoMap);
     end
 
     [subDeps, subMissing] = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
@@ -73,4 +75,23 @@ end
 % Then add this package
 depList = [depList, {packageFqn}];
 
+end
+
+function depFqn = resolveBareDep(name, parentFqn, packageInfoMap)
+% Resolve a bare-name dependency relative to the depending package's
+% channel: prefer <parentOwner>/<parentChannel>/<name> when the parent is
+% on a non-core channel and that channel's fetched index provides it,
+% otherwise fall back to mip-org/core/<name>. Mirrors the post-install rule
+% in mip.resolve.resolve_dependency, using the channel index rather than
+% installed state.
+    p = mip.parse.parse_package_arg(parentFqn);
+    if p.is_fqn && strcmp(p.type, 'gh') ...
+            && ~(strcmp(p.owner, 'mip-org') && strcmp(p.channel, 'core'))
+        ownFqn = mip.parse.make_fqn(p.owner, p.channel, name);
+        if isKey(packageInfoMap, ownFqn)
+            depFqn = ownFqn;
+            return
+        end
+    end
+    depFqn = mip.parse.make_fqn('mip-org', 'core', name);
 end

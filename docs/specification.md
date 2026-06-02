@@ -217,9 +217,9 @@ This lets a package in a non-core channel depend, by bare name, on sibling packa
 Used by: the install process when building the dependency graph from channel indexes
 
 - If the dependency is a FQN, use as-is
-- If a bare name, resolve to `<name>` in the install's active channel context — the channel given by `--channel`, otherwise `mip-org/core`
+- If a bare name, resolve to the depending package's own channel — `<parentOwner>/<parentChannel>/<name>` — when the parent is on a non-core channel and that channel's fetched index provides the dependency; otherwise resolve to `mip-org/core/<name>`
 
-Post-install resolution of the same dependencies (loading, pruning, etc.) then follows [§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency), which prefers the installed package in the depending package's own channel.
+This mirrors the post-install rule ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)), using the fetched channel index rather than installed state, so a package installed from a channel pulls its bare-name dependencies from that same channel (e.g. installing `magland/core/chunkie` resolves its `fmm2d`/`flam` dependencies to `magland/core`).
 
 #### 2.4.6 Resolving a Bare Name for Test (`mip test`)
 
