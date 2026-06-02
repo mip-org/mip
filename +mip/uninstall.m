@@ -16,6 +16,10 @@ function uninstall(varargin)
               'At least one package name is required for uninstall command.');
     end
 
+    % Opportunistically remove package dirs that an earlier Windows
+    % uninstall could only move aside (binary loaded in that session).
+    purgeTrash();
+
     packageArgs = varargin;
 
     % Resolve all package arguments to FQNs
@@ -92,14 +96,9 @@ function uninstall(varargin)
             mip.unload(fqn);
         end
 
-        try
-            fprintf('Uninstalling "%s"...\n', displayFqn);
-            rmdir(pkgDir, 's');
-            fprintf('Uninstalled package "%s"\n', displayFqn);
-        catch ME
-            error('mip:uninstallFailed', ...
-                  'Failed to uninstall package "%s": %s', displayFqn, ME.message);
-        end
+        fprintf('Uninstalling "%s"...\n', displayFqn);
+        removePackageDir(pkgDir, displayFqn);
+        fprintf('Uninstalled package "%s"\n', displayFqn);
 
         % Remove from directly installed and pinned packages
         mip.state.remove_directly_installed(fqn);
@@ -114,6 +113,73 @@ function uninstall(varargin)
 
     % After pruning, check for broken dependencies
     mip.state.check_broken_dependencies('installed');
+end
+
+function removePackageDir(pkgDir, displayFqn)
+% Remove an installed package directory.
+%
+% On Windows a loaded native binary (notably an OpenMP MEX, whose thread
+% pool pins the DLL) keeps its file open for the life of the MATLAB
+% process, so rmdir fails with a misleading "read-only" error and the
+% binary cannot be unloaded in-session. Windows does, however, allow
+% renaming such a file, so move the package directory into the mip trash
+% area: the uninstall completes immediately and the trashed dir is deleted
+% by purgeTrash() on a later mip run once nothing has the binary loaded.
+    try
+        rmdir(pkgDir, 's');
+        return
+    catch rmErr
+        if ~ispc
+            error('mip:uninstallFailed', ...
+                  'Failed to uninstall package "%s": %s', displayFqn, rmErr.message);
+        end
+    end
+
+    trashDir = trashRoot();
+    if ~exist(trashDir, 'dir')
+        mkdir(trashDir);
+    end
+    [moved, msg] = movefile(pkgDir, tempname(trashDir), 'f');
+    if ~moved
+        error('mip:uninstallFailed', ...
+              'Failed to uninstall package "%s": %s', displayFqn, msg);
+    end
+    fprintf(['  Note: a package binary was in use by this MATLAB session; ' ...
+             'moved it aside for deletion on a later mip run.\n']);
+end
+
+function purgeTrash()
+% Best-effort deletion of package dirs left by a previous Windows uninstall
+% that could only move them aside. Entries whose binary is still loaded in
+% this session stay locked and are left for a future run.
+    trashDir = trashRoot();
+    if ~exist(trashDir, 'dir')
+        return
+    end
+    entries = dir(trashDir);
+    for i = 1:numel(entries)
+        nm = entries(i).name;
+        if strcmp(nm, '.') || strcmp(nm, '..')
+            continue
+        end
+        target = fullfile(trashDir, nm);
+        try
+            if entries(i).isdir
+                rmdir(target, 's');
+            else
+                delete(target);
+            end
+        catch
+            % Still locked; leave it for a later run.
+        end
+    end
+end
+
+function d = trashRoot()
+% Trash area for package dirs that could not be removed in-session. Lives
+% beside packages/ under MIP_ROOT, so it is outside the scanned package
+% tree.
+    d = fullfile(mip.paths.root(), '.trash');
 end
 
 function cleanupPackageParents(fqn)
