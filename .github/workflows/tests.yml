@@ -14,22 +14,30 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: matlab-actions/setup-matlab@v2
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          # Pin the release: the unset/`latest` default resolves to R2026a,
+          # which mpm currently refuses to install (see setup-matlab#199).
+          release: R2025b
 
-      - uses: matlab-actions/run-command@v2
+      - uses: matlab-actions/run-command@v3
         with:
           command: "addpath('tests'); addpath('tests/helpers'); results = run_tests(); assert(all([results.Passed]), 'Some tests failed');"
 
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: matlab-actions/setup-matlab@v2
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          # Pin the release: the unset/`latest` default resolves to R2026a,
+          # which mpm currently refuses to install (see setup-matlab#199).
+          release: R2025b
 
-      - uses: matlab-actions/run-command@v2
+      - uses: matlab-actions/run-command@v3
         with:
           command: "addpath('tests'); addpath('tests/helpers'); results = run_tests('Coverage', true); assert(all([results.Passed]), 'Some tests failed');"
 
