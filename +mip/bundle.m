@@ -70,10 +70,6 @@ function bundle(varargin)
     end
     outputDir = mip.paths.get_absolute_path(outputDir);
 
-    % Opportunistically remove staging dirs that an earlier Windows bundle
-    % could only move aside (a MEX built in that session was still loaded).
-    purgeBundleTrash();
-
     % Prepare in a staging directory
     stagingDir = tempname;
 
@@ -131,72 +127,37 @@ end
 function removeStagingDir(stagingDir)
 % Remove the bundle staging directory.
 %
-% On Windows a native binary built during bundling can end up loaded in
-% this MATLAB session (or held by the OS file scanner just after it is
-% written), and a held .mexw64 cannot be deleted, so rmdir fails. Windows
-% still allows renaming such a file, so move the staging dir into a trash
-% area on the same volume -- a metadata-only rename that succeeds even while
-% the binary is held -- and let purgeBundleTrash() delete it on a later
-% bundle once nothing has it open. The .mhl is already written by this
-% point, so cleanup never fails the bundle. Non-Windows does a plain rmdir.
+% On Windows a freshly written .mexw64 is briefly held by the OS file
+% scanner that opens every newly written PE/DLL, and a held file can be
+% neither deleted nor renamed (it is opened without FILE_SHARE_DELETE), so
+% an immediate rmdir fails. The hold is transient, so retry for a few
+% seconds to let the scanner release. If it is still held after that (e.g.
+% a binary genuinely loaded into this MATLAB session), fall back to a
+% warning and leave the uniquely named temp dir for the OS to reclaim --
+% the .mhl is already written, so cleanup must not fail the bundle.
+% Non-Windows rethrows immediately: a failed rmdir there is a real error.
     if ~exist(stagingDir, 'dir')
         return
     end
-    try
-        rmdir(stagingDir, 's');
-        return
-    catch rmErr
-        if ~ispc
-            rethrow(rmErr);
-        end
-    end
-
-    trashDir = bundleTrashRoot();
-    if ~exist(trashDir, 'dir')
-        mkdir(trashDir);
-    end
-    % tempname(trashDir) is on the same volume as stagingDir (both under
-    % tempdir), so the move is a rename, not a copy+delete that would trip
-    % over the held file.
-    [moved, msg] = movefile(stagingDir, tempname(trashDir), 'f');
-    if ~moved
-        warning('mip:bundle:stagingNotRemoved', ...
-                'Could not remove or move aside staging dir "%s": %s', ...
-                stagingDir, msg);
-    end
-end
-
-function purgeBundleTrash()
-% Best-effort deletion of staging dirs left by a previous Windows bundle
-% that could only be moved aside (a binary built then was still held).
-% Entries still held stay locked and are left for a later run.
-    trashDir = bundleTrashRoot();
-    if ~exist(trashDir, 'dir')
-        return
-    end
-    entries = dir(trashDir);
-    for i = 1:numel(entries)
-        nm = entries(i).name;
-        if strcmp(nm, '.') || strcmp(nm, '..')
-            continue
-        end
-        target = fullfile(trashDir, nm);
+    maxAttempts = 3;
+    for attempt = 1:maxAttempts
         try
-            if entries(i).isdir
-                rmdir(target, 's');
-            else
-                delete(target);
+            rmdir(stagingDir, 's');
+            return
+        catch rmErr
+            if ~ispc
+                rethrow(rmErr);
             end
-        catch
-            % Still held; leave it for a later run.
+            if attempt == maxAttempts
+                warning('mip:bundle:stagingNotRemoved', ...
+                        ['Could not remove staging dir "%s" after %d ' ...
+                         'attempts (a freshly built binary is still held ' ...
+                         'by another process); leaving it for the OS to ' ...
+                         'reclaim: %s'], stagingDir, maxAttempts, ...
+                        rmErr.message);
+                return
+            end
+            pause(1);
         end
     end
-end
-
-function d = bundleTrashRoot()
-% Trash area for staging dirs that could not be removed in-session. Kept
-% under tempdir so a move from a tempname() staging dir is a same-volume
-% rename (cross-volume movefile would copy the held file and then fail to
-% delete the source).
-    d = fullfile(tempdir, '.mip-trash');
 end
