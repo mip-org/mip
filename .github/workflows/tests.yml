@@ -17,6 +17,10 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: matlab-actions/setup-matlab@v3
+        with:
+          # Pin the release: the unset/`latest` default resolves to R2026a,
+          # which mpm currently refuses to install (see setup-matlab#199).
+          release: R2025b
 
       - uses: matlab-actions/run-command@v3
         with:
@@ -28,6 +32,10 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: matlab-actions/setup-matlab@v3
+        with:
+          # Pin the release: the unset/`latest` default resolves to R2026a,
+          # which mpm currently refuses to install (see setup-matlab#199).
+          release: R2025b
 
       - uses: matlab-actions/run-command@v3
         with:
