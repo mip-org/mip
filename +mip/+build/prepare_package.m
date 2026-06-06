@@ -65,10 +65,10 @@ if exist(gitDir, 'dir')
     rmdir(gitDir, 's');
 end
 
-% Strip pre-existing mex binaries
-numStripped = mip.build.strip_mex_binaries(pkgSubdir);
+% Strip pre-existing compiled binaries (vendored/stale MEX, libs, executables)
+numStripped = mip.build.strip_prebuilt_binaries(pkgSubdir);
 if numStripped > 0
-    fprintf('Stripping pre-existing MEX binaries...\n');
+    fprintf('Stripping pre-existing compiled binaries...\n');
 end
 
 % Compute resolved path lists relative to the source subdir
