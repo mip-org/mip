@@ -11,7 +11,8 @@ function reset()
 mip.unload('--all', '--force');
 
 % Remove all MIP key-value stores
-keys = {'MIP_LOADED_PACKAGES', 'MIP_DIRECTLY_LOADED_PACKAGES', 'MIP_STICKY_PACKAGES'};
+keys = {'MIP_LOADED_PACKAGES', 'MIP_DIRECTLY_LOADED_PACKAGES', ...
+        'MIP_STICKY_PACKAGES', 'MIP_TEST_CONTEXT'};
 for i = 1:length(keys)
     if isappdata(0, keys{i})
         rmappdata(0, keys{i});

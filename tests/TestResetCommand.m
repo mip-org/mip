@@ -45,12 +45,15 @@ classdef TestResetCommand < matlab.unittest.TestCase
         function testReset_ClearsAllKeyValueStores(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
             mip.load('mip-org/core/pkgA', '--sticky');
+            % Stand in for a test context that outlived its `mip test` run.
+            mip.state.key_value_set('MIP_TEST_CONTEXT', 'gh/mip-org/core/pkgA');
 
             mip.reset();
 
             testCase.verifyFalse(isappdata(0, 'MIP_LOADED_PACKAGES'));
             testCase.verifyFalse(isappdata(0, 'MIP_DIRECTLY_LOADED_PACKAGES'));
             testCase.verifyFalse(isappdata(0, 'MIP_STICKY_PACKAGES'));
+            testCase.verifyFalse(isappdata(0, 'MIP_TEST_CONTEXT'));
         end
 
         function testReset_WorksWhenNothingLoaded(testCase)

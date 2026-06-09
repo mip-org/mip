@@ -60,6 +60,14 @@ if ~exist(scriptPath, 'file')
           'Test script not found: %s', scriptPath);
 end
 
+% Publish the fully-qualified name of the package under test so the test
+% script can identify itself via mip.test.get_fqn() (and from there query
+% mip.build.effective_arch / mip.build.has_mex, e.g. to skip MEX checks on a
+% pure-MATLAB `any` build) without resolving its own ambiguous bare name.
+% Cleared when this function returns, whether the test passes or errors.
+mip.state.key_value_set('MIP_TEST_CONTEXT', r.fqn);
+testCtxCleanup = onCleanup(@() mip.state.key_value_set('MIP_TEST_CONTEXT', {})); %#ok<NASGU>
+
 fprintf('Running test script for "%s": %s\n', displayFqn, testScript);
 originalDir = pwd;
 try
