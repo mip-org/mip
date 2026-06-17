@@ -28,8 +28,11 @@ try
     fprintf('Using channel: %s/%s\n', channelOwner, channelName);
     index = mip.channel.fetch_index(channel, true);
 
-    % Get current architecture
+    % Get current architecture and the ordered list of architectures this
+    % host can install (the CPU's supported x86-64 SIMD levels, then the base
+    % arch, then 'any').
     currentArch = mip.build.arch();
+    archPrefs = mip.build.compatible_archs(currentArch);
 
     % Find all packages compatible with current architecture
     packages = index.packages;
@@ -49,8 +52,7 @@ try
                 continue
             end
 
-            canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
-            if strcmp(arch, currentArch) || strcmp(arch, 'any') || (canFallbackToWasm && strcmp(arch, 'numbl_wasm'))
+            if ismember(arch, archPrefs)
                 fqn = mip.parse.make_fqn(channelOwner, channelName, pkg.name);
                 if ~ismember(fqn, availablePackages)
                     availablePackages = [availablePackages, {fqn}]; %#ok<AGROW>

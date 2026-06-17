@@ -1,54 +1,48 @@
-function bestVariant = select_best_variant(variants, currentArch)
-%SELECT_BEST_VARIANT   Select the best package variant for an architecture.
+function bestVariant = select_best_variant(variants, archPrefs)
+%SELECT_BEST_VARIANT   Select the best package variant for the host.
 %
 % Args:
-%   variants - Cell array of package info structs (different arch variants)
-%   currentArch - Architecture string (e.g., 'linux_x86_64')
+%   variants  - Cell array of package info structs (different arch variants).
+%   archPrefs - Ordered cell array of acceptable architecture tags, most
+%               preferred first (from mip.build.compatible_archs). A single
+%               architecture string is also accepted for convenience and is
+%               expanded to the historical exact > numbl_wasm > 'any' order.
 %
 % Returns:
-%   bestVariant - The best matching variant struct, or [] if none compatible
+%   bestVariant - The variant whose architecture appears earliest in archPrefs,
+%                 or [] if none of the variants matches.
 
 if isempty(variants)
     bestVariant = [];
     return
 end
 
-% For numbl_* architectures, numbl_wasm is a valid fallback
-canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
-
-% Filter to compatible variants (exact match, numbl_wasm fallback, or 'any')
-compatible = {};
-for i = 1:length(variants)
-    v = variants{i};
-    if isfield(v, 'architecture')
-        arch = v.architecture;
-    else
-        continue
-    end
-
-    if strcmp(arch, currentArch) || strcmp(arch, 'any') || (canFallbackToWasm && strcmp(arch, 'numbl_wasm'))
-        compatible = [compatible, {v}]; %#ok<AGROW>
-    end
+if ~iscell(archPrefs)
+    archPrefs = legacy_prefs(archPrefs);
 end
 
-if isempty(compatible)
-    bestVariant = [];
-    return
-end
-
-% Prefer exact match > numbl_wasm fallback > 'any'
-for i = 1:length(compatible)
-    if strcmp(compatible{i}.architecture, currentArch)
-        bestVariant = compatible{i};
-        return
+% Walk the preference list; the first architecture with a matching variant wins.
+bestVariant = [];
+for p = 1:numel(archPrefs)
+    want = archPrefs{p};
+    for i = 1:numel(variants)
+        v = variants{i};
+        if isfield(v, 'architecture') && strcmp(v.architecture, want)
+            bestVariant = v;
+            return
+        end
     end
 end
-for i = 1:length(compatible)
-    if strcmp(compatible{i}.architecture, 'numbl_wasm')
-        bestVariant = compatible{i};
-        return
-    end
-end
-bestVariant = compatible{1};
 
+end
+
+
+function prefs = legacy_prefs(currentArch)
+%LEGACY_PREFS  Expand a single architecture string into a preference list
+% matching the historical exact > numbl_wasm > 'any' selection order.
+prefs = {currentArch};
+if startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm')
+    prefs{end+1} = 'numbl_wasm';
+end
+prefs{end+1} = 'any';
 end
