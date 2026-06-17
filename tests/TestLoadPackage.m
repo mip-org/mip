@@ -232,6 +232,76 @@ classdef TestLoadPackage < matlab.unittest.TestCase
                 ismember('gh/mip-org/core/depA', mip.state.get_directly_installed()));
         end
 
+        %% Reloading moves the package to the end of the load order
+
+        function testLoadPackage_ReloadMovesToEndOfLoadedPackages(testCase)
+            % Re-loading an already-loaded package must move its FQN to the
+            % end of MIP_LOADED_PACKAGES so the order reflects the most
+            % recent load.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgB');
+
+            mip.load('mip-org/core/pkgA');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgA');
+        end
+
+        function testLoadPackage_ReloadMovesToEndOfDirectlyLoaded(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
+
+            mip.load('mip-org/core/pkgA');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgA');
+        end
+
+        function testLoadPackage_ReloadDoesNotDuplicate(testCase)
+            % Re-loading must not introduce duplicate entries in the state lists.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgA');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(sum(strcmp(loaded, 'gh/mip-org/core/pkgA')), 1);
+            testCase.verifyEqual(sum(strcmp(direct, 'gh/mip-org/core/pkgA')), 1);
+        end
+
+        function testLoadPackage_TransitiveReloadDoesNotMoveDirectlyLoaded(testCase)
+            % A transitive re-load must move the package to the end of
+            % MIP_LOADED_PACKAGES but must NOT reorder
+            % MIP_DIRECTLY_LOADED_PACKAGES, because the load was not direct.
+            % The --transitive flag forces re-entry into loadSingle for an
+            % already-loaded package; the normal deps loop short-circuits on
+            % is_loaded and would never exercise this branch otherwise.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/depA');
+            mip.load('mip-org/core/pkgB');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgB');
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
+
+            % Force a transitive re-load of depA (already directly loaded).
+            mip.load('mip-org/core/depA', '--transitive');
+
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            % MIP_LOADED_PACKAGES: depA moved to the end.
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/depA');
+            % MIP_DIRECTLY_LOADED_PACKAGES: depA NOT moved -- pkgB is still last.
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
+            testCase.verifyTrue(ismember('gh/mip-org/core/depA', direct));
+        end
+
         function testLoadPackage_LoadedDepSurvivesParentUninstall(testCase)
             % Full issue #224 scenario: install mainpkg (which pulls in
             % depA as a transitive dep), then `mip load depA`, then
