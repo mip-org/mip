@@ -84,6 +84,10 @@ if isfield(resolvedConfig, 'compile_script') && ...
         ~isempty(resolvedConfig.compile_script)
     fprintf('Compiling...\n');
     mip.build.run_compile(pkgSubdir, resolvedConfig.compile_script);
+    % Vendor runtime-library deps (libgfortran, libgomp, ...) next to any
+    % freshly built MEX files so the bundle is self-contained. No-op outside
+    % a channel build (see mip.build.bundle_mex_libs).
+    mip.build.bundle_mex_libs(pkgSubdir);
 end
 
 % Create mip.json
