@@ -17,7 +17,7 @@ function update(varargin)
 %   --no-compile      Skip compilation when updating editable local installs
 %
 % For each requested package, checks whether an update is needed. For
-% remote packages, the installed version (and commit hash) is compared
+% remote packages, the installed version (and build timestamp) is compared
 % against the latest in the channel index. Local packages are always
 % considered to need an update. If a package does not need updating,
 % nothing happens for that package (unless --force is specified).
