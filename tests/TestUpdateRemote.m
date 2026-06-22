@@ -72,13 +72,13 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
                 'Timestamp should not change when already up to date');
         end
 
-        %% --- Non-numeric version hash refresh ---
+        %% --- Non-numeric version timestamp refresh ---
 
-        function testUpdate_NonNumericHashRefresh_StaysOnSameVersion(testCase)
+        function testUpdate_NonNumericTimestampRefresh_StaysOnSameVersion(testCase)
             % hello_mip is published only as 'main' in the mip-hello
             % channel and tracks the hello_mip repo's main branch.
-            % Install it, corrupt the installed commit_hash on disk, then
-            % `mip update`. The update must detect the hash mismatch,
+            % Install it, backdate the installed timestamp on disk, then
+            % `mip update`. The update must detect the timestamp mismatch,
             % refresh the package, and leave the version on 'main' (per
             % specification §7.1.1 — non-numeric versions stay on their
             % branch or version).
@@ -89,12 +89,12 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
                 'gh', 'mip-org', 'hello', 'hello_mip');
             info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info1.version, 'main');
-            realHash = info1.commit_hash;
-            testCase.verifyNotEmpty(realHash, ...
-                'Expected a non-empty commit_hash from the real channel.');
+            realTimestamp = info1.timestamp;
+            testCase.verifyNotEmpty(realTimestamp, ...
+                'Expected a non-empty timestamp from the real channel.');
 
-            % Corrupt the installed commit_hash so update sees a mismatch.
-            info1.commit_hash = '0000000000000000000000000000000000000000';
+            % Backdate the installed timestamp so update sees a mismatch.
+            info1.timestamp = '2000-01-01T00:00:00Z';
             fid = fopen(fullfile(pkgDir, 'mip.json'), 'w');
             fwrite(fid, jsonencode(info1));
             fclose(fid);
@@ -104,8 +104,8 @@ classdef TestUpdateRemote < matlab.unittest.TestCase
             info2 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info2.version, 'main', ...
                 'Update must not switch from main to any other version.');
-            testCase.verifyEqual(info2.commit_hash, realHash, ...
-                'Update must refresh commit_hash to match the channel.');
+            testCase.verifyEqual(info2.timestamp, realTimestamp, ...
+                'Update must refresh timestamp to match the channel.');
         end
 
         %% --- Force update ---

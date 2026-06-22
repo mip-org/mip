@@ -662,9 +662,9 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
-   - Remote package: fetch the channel index and pick the target version (see [§7.1.1](#711-target-version-selection-for-update)), then compare installed version + commit hash with the target:
-     - Same version **and** same commit hash (or no hash available): "already up to date", skip.
-     - Same version but different commit hash: update (content changed within the same version).
+   - Remote package: fetch the channel index and pick the target version (see [§7.1.1](#711-target-version-selection-for-update)), then compare installed version + build timestamp with the target:
+     - Same version **and** same timestamp (or the channel entry has no timestamp): "already up to date", skip.
+     - Same version but different timestamp: update (the channel has a newer build of the same version).
      - Different version: update.
 7. Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`, then walk the batch in argument order, running each package's full lifecycle (skip messages, "Checking for updates" output, download/replace, etc.) before moving on to the next package. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next.
    - **Pinned packages** (named explicitly): print "Skipping pinned package …" and continue.
@@ -679,11 +679,11 @@ Because the up-to-date check now runs inside the per-package walk, a `mip:update
 
 #### 7.1.1 Target Version Selection for Update
 
-`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`), the update stays on that branch or version — the target is the same version in the channel, and only the commit hash is refreshed. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
+`mip update` does **not** always pick the channel's best version as the update target. If the installed version is **non-numeric** (e.g., `main`, `master`), the update stays on that branch or version — the target is the same version in the channel, and a newer build (detected via the build timestamp) is pulled in. This preserves the user's deliberate choice to follow a branch and prevents `mip update` from silently switching to a numeric release that appears alongside it.
 
 Behavior by installed version:
 
-- **Non-numeric installed version** (e.g., `main`): target = same non-numeric version in the channel. If that version no longer exists in the channel, `mip:update:versionNotInChannel` is raised (with guidance pointing at `mip install X@<version>`) and the installed package is left untouched.
+- **Non-numeric installed version** (e.g., `main`): target = same non-numeric version in the channel; a differing build timestamp triggers a refresh. If that version no longer exists in the channel, `mip:update:versionNotInChannel` is raised (with guidance pointing at `mip install X@<version>`) and the installed package is left untouched.
 - **Numeric installed version** (e.g., `1.0.0`): target = channel's best version per [§3.1.3](#313-version-selection-select_best_version) (typically the highest numeric version).
 
 This rule only governs **implicit** `mip update X` calls. `mip install X@<version>` always honors the explicit request regardless of what is currently installed.
@@ -697,7 +697,7 @@ Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, t
 
 ### 7.3 Force Update (`--force`)
 
-Skips the up-to-date check. The named package is replaced with the latest version from the channel even when version and commit hash match. Dependencies are still not updated (unless `--deps` is also specified) — only the named packages are replaced. To update a dependency, name it explicitly (`mip update dep`) or use `--deps`.
+Skips the up-to-date check. The named package is replaced with the latest version from the channel even when version and build timestamp match. Dependencies are still not updated (unless `--deps` is also specified) — only the named packages are replaced. To update a dependency, name it explicitly (`mip update dep`) or use `--deps`.
 
 ### 7.4 Update All (`--all`)
 
