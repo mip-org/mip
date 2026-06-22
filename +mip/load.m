@@ -191,6 +191,13 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
 
     % Check if package is already loaded
     if mip.state.is_loaded(fqn)
+        % Move to the end of MIP_LOADED_PACKAGES so a re-load refreshes
+        % the package's recency. "Most recently loaded" (last in the
+        % list) is the tiebreaker used by bare-name resolution, ambiguous
+        % unload, and the default `mip list` sort, so re-loading must not
+        % be a no-op for ordering.
+        mip.state.key_value_remove('MIP_LOADED_PACKAGES', fqn);
+        mip.state.key_value_append('MIP_LOADED_PACKAGES', fqn);
         % If this is a direct load and the package was previously
         % loaded as a dependency, mark it as direct now
         if isDirect && ~mip.state.is_directly_loaded(fqn)

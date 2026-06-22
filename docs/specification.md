@@ -451,6 +451,7 @@ Validation happens *before* extraction so that a malicious entry can never write
 3. Check for circular dependencies in the loading stack.
 4. Look up the package directory. If it doesn't exist, raise `mip:packageNotFound`.
 5. If already loaded:
+   - Move the package to the end of `MIP_LOADED_PACKAGES` so it becomes the **most recently loaded** entry. Re-loading an already-loaded package is therefore not an ordering no-op: it refreshes recency, which is the tiebreaker used by bare-name resolution ([§2.4.1](#241-resolving-a-bare-name-among-installed-packages-resolve_bare_name)), ambiguous unload ([§5.2](#52-bare-name-disambiguation-for-unload)), and the default `mip list` sort ([§9.1](#91-mip-list)).
    - If this is a direct load and the package was previously loaded as a dependency, promote it to "directly loaded".
    - If this is a direct load, also mark the package as directly installed (idempotent; promotes a previously transitive install).
    - If `--sticky` is specified, add to sticky packages.

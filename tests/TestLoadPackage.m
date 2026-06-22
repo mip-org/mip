@@ -50,6 +50,24 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyTrue(mip.state.is_loaded('mip-org/core/testpkg'));
         end
 
+        function testLoadPackage_AlreadyLoaded_MovesToMostRecent(testCase)
+            % Re-loading an already-loaded package must move it to the end
+            % of MIP_LOADED_PACKAGES (most recently loaded), not be a no-op.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgB');
+
+            % Re-load pkgA: it should now be the most recent.
+            mip.load('mip-org/core/pkgA');
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgA');
+            % No duplicate entry was introduced.
+            testCase.verifyEqual(sum(strcmp(loaded, 'gh/mip-org/core/pkgA')), 1);
+        end
+
         function testLoadPackage_WithStickyFlag(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg', '--sticky');
