@@ -81,6 +81,18 @@ function bundle(varargin)
             mipConfig = mip.build.prepare_package(sourceDir, stagingDir, architecture);
         end
 
+        % Bundle runtime-library dependencies of any MEX files in the
+        % staged package, so the resulting .mhl depends only on system
+        % libraries and libraries MATLAB resolves itself. No-op on
+        % Windows (bundle_runtime_libs doesn't handle .mexw64 deps yet).
+        pkgSubdir = fullfile(stagingDir, mipConfig.name);
+        mexFiles = dir(fullfile(pkgSubdir, '**', '*.mex*'));
+        mexFiles = mexFiles(~[mexFiles.isdir]);
+        for i = 1:numel(mexFiles)
+            mip.build.bundle_runtime_libs( ...
+                fullfile(mexFiles(i).folder, mexFiles(i).name));
+        end
+
         % Read mip.json to get the effective architecture and version
         % (mip.json's version may differ from mip.yaml's when a channel
         % build supplied a release-dir version override).
