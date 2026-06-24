@@ -9,7 +9,10 @@ function channels = get_channels()
 %              need not be listed.
 %
 % Channels are persisted at <root>/packages/channels.txt, one channel
-% per line, in priority order.
+% per line, in stack-like order: the most recently added channel is at
+% the END of the file (matching the append semantics of
+% MIP_LOADED_PACKAGES). The returned cell array reverses that so the
+% highest-priority channel is at index 1.
 
     channels = {};
 
@@ -37,4 +40,6 @@ function channels = get_channels()
             channels{end+1} = strtrim(line); %#ok<AGROW>
         end
     end
+
+    channels = fliplr(channels);
 end

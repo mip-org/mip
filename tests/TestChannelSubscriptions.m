@@ -183,6 +183,19 @@ classdef TestChannelSubscriptions < matlab.unittest.TestCase
             testCase.verifyTrue(exist(channelsFile, 'file') > 0);
         end
 
+        function testChannelsFile_StoresMostRecentLast(testCase)
+            % channels.txt is stack-ordered: most recently added (highest
+            % priority) channel sits at the END of the file, matching the
+            % append semantics of MIP_LOADED_PACKAGES.
+            mip.state.add_channel('a/one');
+            mip.state.add_channel('b/two');
+            mip.state.add_channel('c/three');
+
+            channelsFile = fullfile(testCase.TestRoot, 'packages', 'channels.txt');
+            lines = splitlines(strtrim(fileread(channelsFile)));
+            testCase.verifyEqual(lines, {'a/one'; 'b/two'; 'c/three'});
+        end
+
         %% --- Command dispatch (mip channel add/remove/list) ---
 
         function testCmd_AddRemoveListViaTopLevel(testCase)
