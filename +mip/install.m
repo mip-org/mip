@@ -7,6 +7,7 @@ function install(varargin)
 %   mip install --channel <owner>/<channel> <package>
 %   mip install --channel <owner> <package>                        - Shorthand for --channel <owner>/<owner>
 %   mip install <owner>/<channel>/<package>
+%   mip install <owner>/<package>                                  - Shorthand for <owner>/<owner>/<package>
 %   mip install /path/to/package.mhl                               - Install under mhl/<name>
 %   mip install https://example.com/package.mhl                    - Install under mhl/<name>
 %   mip install --channel <owner>/<channel> /path/to/package.mhl   - Install under gh/<owner>/<channel>/<name>

@@ -232,16 +232,40 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             testCase.verifyEqual(remaining, {'pkg1'});
         end
 
-        function testParseChannelShorthandDoesNotApplyToFqn(testCase)
-            % The bare-name shorthand is exclusive to --channel. A 2-part
-            % positional arg like 'foo/pkg1' must NOT be expanded to
-            % 'foo/foo/pkg1' — it parses as a non-gh FQN with type='foo'.
+        function testParseChannelShorthandAppliesToFqn(testCase)
+            % A 2-part positional arg '<owner>/<pkg>' (where <owner> is not
+            % a reserved source-type prefix) is shorthand for the personal
+            % channel form 'gh/<owner>/<owner>/<pkg>'.
             r = mip.parse.parse_package_arg('foo/pkg1');
             testCase.verifyTrue(r.is_fqn);
-            testCase.verifyEqual(r.type, 'foo');
+            testCase.verifyEqual(r.type, 'gh');
             testCase.verifyEqual(r.name, 'pkg1');
-            testCase.verifyEqual(r.owner, '');
-            testCase.verifyEqual(r.channel, '');
+            testCase.verifyEqual(r.owner, 'foo');
+            testCase.verifyEqual(r.channel, 'foo');
+            testCase.verifyEqual(r.fqn, 'gh/foo/foo/pkg1');
+        end
+
+        function testParsePersonalChannelShorthandWithVersion(testCase)
+            r = mip.parse.parse_package_arg('magland/chunkie@1.2.0');
+            testCase.verifyTrue(r.is_fqn);
+            testCase.verifyEqual(r.type, 'gh');
+            testCase.verifyEqual(r.owner, 'magland');
+            testCase.verifyEqual(r.channel, 'magland');
+            testCase.verifyEqual(r.name, 'chunkie');
+            testCase.verifyEqual(r.fqn, 'gh/magland/magland/chunkie');
+            testCase.verifyEqual(r.version, '1.2.0');
+        end
+
+        function testParsePersonalShorthandReservedTypesUnchanged(testCase)
+            % Reserved source-type prefixes still parse as non-gh FQNs.
+            for prefix = {'local', 'fex', 'web', 'mhl'}
+                r = mip.parse.parse_package_arg([prefix{1} '/pkg1']);
+                testCase.verifyEqual(r.type, prefix{1});
+                testCase.verifyEqual(r.name, 'pkg1');
+                testCase.verifyEqual(r.owner, '');
+                testCase.verifyEqual(r.channel, '');
+                testCase.verifyEqual(r.fqn, [prefix{1} '/pkg1']);
+            end
         end
 
         function testParseChannelFlagMissingValue(testCase)
@@ -314,6 +338,20 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 'mip-org/core/chebfun');
         end
 
+        function testDisplayFqnCollapsesPersonalChannel(testCase)
+            % Personal channels (owner == channel) collapse to <owner>/<pkg>.
+            testCase.verifyEqual( ...
+                mip.parse.display_fqn('gh/magland/magland/chunkie'), ...
+                'magland/chunkie');
+        end
+
+        function testDisplayFqnDoesNotCollapseDistinctChannel(testCase)
+            % owner != channel: keep the 3-part form.
+            testCase.verifyEqual( ...
+                mip.parse.display_fqn('gh/mip-org/dev/chebfun'), ...
+                'mip-org/dev/chebfun');
+        end
+
         function testDisplayFqnLocalUnchanged(testCase)
             testCase.verifyEqual( ...
                 mip.parse.display_fqn('local/mypkg'), 'local/mypkg');
@@ -327,6 +365,21 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
         function testDisplayFqnWebUnchanged(testCase)
             testCase.verifyEqual( ...
                 mip.parse.display_fqn('web/bar'), 'web/bar');
+        end
+
+        function testDisplayFqnDoesNotCollapseReservedOwner(testCase)
+            % If the owner matches a reserved source-type prefix, the
+            % personal-channel collapse is skipped: the collapsed form
+            % '<reserved>/<pkg>' would be re-parsed as a non-gh FQN
+            % (e.g. 'local/foo' is a local install), breaking the
+            % display→parse round-trip.
+            for owner = {'local', 'fex', 'web', 'mhl', 'gh'}
+                fqn = ['gh/' owner{1} '/' owner{1} '/foo'];
+                expected = [owner{1} '/' owner{1} '/foo'];
+                testCase.verifyEqual( ...
+                    mip.parse.display_fqn(fqn), expected, ...
+                    sprintf('owner=%s should not collapse', owner{1}));
+            end
         end
 
     end

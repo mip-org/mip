@@ -8,8 +8,9 @@ function [channel, remainingArgs] = parse_channel_flag(args)
 %   channel       - Channel string in '<owner>/<channel>' form, or '' if not
 %                   specified. A bare single name '<owner>' is expanded to
 %                   '<owner>/<owner>' as shorthand for a user's personal channel
-%                   repo (github.com/<owner>/mip-<owner>). This shorthand
-%                   applies only to --channel, not to FQNs.
+%                   repo (github.com/<owner>/mip-<owner>). The same personal-
+%                   channel shorthand is also accepted for positional FQN
+%                   arguments — see mip.parse.parse_package_arg.
 %   remainingArgs - Cell array with --channel and its value removed
 
 channel = '';
