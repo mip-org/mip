@@ -51,6 +51,10 @@ function install(varargin)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
 
+    % Reclaim any package dirs left in the trash by an earlier removal that
+    % could only move them aside (a binary was still loaded at the time).
+    mip.paths.purge_trash();
+
     % Check for --editable / -e, --no-compile, and --url flags
     editable = false;
     noCompile = false;
@@ -574,9 +578,7 @@ function restoreReplacementBackups(replacementBackups)
     for i = 1:length(replacementBackups)
         b = replacementBackups(i);
         try
-            if exist(b.pkgDir, 'dir')
-                rmdir(b.pkgDir, 's');
-            end
+            mip.paths.remove_dir(b.pkgDir);
             if exist(b.backupDir, 'dir')
                 movefile(b.backupDir, b.pkgDir);
             end
@@ -592,12 +594,12 @@ function restoreReplacementBackups(replacementBackups)
 end
 
 function cleanupReplacementBackups(replacementBackups)
-% Remove backup dirs after a successful replace install.
+% Remove backup dirs (the replaced old packages) after a successful replace
+% install. These may carry binaries that were loaded before the replace, so
+% route them through the robust trash-based removal.
     for i = 1:length(replacementBackups)
         b = replacementBackups(i);
-        if exist(b.backupDir, 'dir')
-            rmdir(b.backupDir, 's');
-        end
+        mip.paths.remove_dir(b.backupDir);
     end
 end
 

@@ -16,9 +16,9 @@ function uninstall(varargin)
               'At least one package name is required for uninstall command.');
     end
 
-    % Opportunistically remove package dirs that an earlier Windows
-    % uninstall could only move aside (binary loaded in that session).
-    purgeTrash();
+    % Opportunistically reclaim package dirs that an earlier removal could
+    % only move aside (a binary was still loaded in that session).
+    mip.paths.purge_trash();
 
     packageArgs = varargin;
 
@@ -116,70 +116,16 @@ function uninstall(varargin)
 end
 
 function removePackageDir(pkgDir, displayFqn)
-% Remove an installed package directory.
-%
-% On Windows a loaded native binary (notably an OpenMP MEX, whose thread
-% pool pins the DLL) keeps its file open for the life of the MATLAB
-% process, so rmdir fails with a misleading "read-only" error and the
-% binary cannot be unloaded in-session. Windows does, however, allow
-% renaming such a file, so move the package directory into the mip trash
-% area: the uninstall completes immediately and the trashed dir is deleted
-% by purgeTrash() on a later mip run once nothing has the binary loaded.
+% Remove an installed package directory robustly (see mip.paths.remove_dir).
+% A loaded native binary on Windows can keep the directory from being
+% deleted in-session; remove_dir moves it into the mip trash so the
+% uninstall completes immediately and the leftover is purged on a later run.
     try
-        rmdir(pkgDir, 's');
-        return
+        mip.paths.remove_dir(pkgDir);
     catch rmErr
-        if ~ispc
-            error('mip:uninstallFailed', ...
-                  'Failed to uninstall package "%s": %s', displayFqn, rmErr.message);
-        end
-    end
-
-    trashDir = trashRoot();
-    if ~exist(trashDir, 'dir')
-        mkdir(trashDir);
-    end
-    [moved, msg] = movefile(pkgDir, tempname(trashDir), 'f');
-    if ~moved
         error('mip:uninstallFailed', ...
-              'Failed to uninstall package "%s": %s', displayFqn, msg);
+              'Failed to uninstall package "%s": %s', displayFqn, rmErr.message);
     end
-    fprintf(['  Note: a package binary was in use by this MATLAB session; ' ...
-             'moved it aside for deletion on a later mip run.\n']);
-end
-
-function purgeTrash()
-% Best-effort deletion of package dirs left by a previous Windows uninstall
-% that could only move them aside. Entries whose binary is still loaded in
-% this session stay locked and are left for a future run.
-    trashDir = trashRoot();
-    if ~exist(trashDir, 'dir')
-        return
-    end
-    entries = dir(trashDir);
-    for i = 1:numel(entries)
-        nm = entries(i).name;
-        if strcmp(nm, '.') || strcmp(nm, '..')
-            continue
-        end
-        target = fullfile(trashDir, nm);
-        try
-            if entries(i).isdir
-                rmdir(target, 's');
-            else
-                delete(target);
-            end
-        catch
-            % Still locked; leave it for a later run.
-        end
-    end
-end
-
-function d = trashRoot()
-% Trash area for package dirs that could not be removed in-session. Lives
-% beside packages/ under MIP_ROOT, so it is outside the scanned package
-% tree.
-    d = fullfile(mip.paths.root(), '.trash');
 end
 
 function cleanupPackageParents(fqn)
@@ -230,6 +176,13 @@ function didUninstall = uninstallSelf()
 
     % Reset all loaded packages and key-value stores
     mip.reset();
+
+    % Unload every compiled MEX across all installed packages so the whole
+    % mip root can be deleted below -- a loaded DLL/MEX cannot be removed on
+    % Windows. Done now, while mip is still on the MATLAB path (the helpers
+    % become unreachable once mip is rmpath'd further down). Scans the entire
+    % root so MEX under any previously-trashed dirs are released too.
+    mip.build.clear_mex(mipRoot);
 
     fprintf('Removing mip from saved MATLAB path...\n');
 
