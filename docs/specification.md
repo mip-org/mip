@@ -593,6 +593,12 @@ Each swept entry is reported (`swept residual path entry for "<fqn>": <path>`). 
 
 After unloading (and pruning), the system checks all still-loaded packages. If any loaded package has a dependency that is no longer loaded, a warning (`mip:brokenDependencies`) is printed.
 
+### 5.10 MEX Unloading on Unload
+
+After removing a package's path entries (and the defensive sweep, [§5.8](#58-path-removal-from-mipjson)), `mip unload` unloads every compiled MEX binary the package shipped. It walks the package's source dir (the same `srcDir` resolved by [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the installed copy for copy installs, `source_path` for editable installs) for files matching `*.mex*` (any architecture's extension) and runs `clear <full-path>` on each via `mip.build.clear_mex`.
+
+A loaded native binary keeps its file open for the life of the MATLAB process. On Windows the OS then refuses to delete the DLL/MEX, so the package directory cannot be removed. Clearing the MEX on unload means a subsequent `mip uninstall` or `mip update` (both of which unload a loaded package first) can delete the directory cleanly. Clearing is best-effort: an entry that cannot be cleared never aborts the unload. This runs on every unload path — targeted unload, `mip unload --all`, and dependency pruning. The robust removal in [§11.7](#117-robust-directory-removal-and-the-trash-area) is the backstop for any binary that is still locked (e.g. a package whose MEX was loaded but which was never unloaded).
+
 ---
 
 ## 6. Uninstallation
@@ -604,8 +610,8 @@ After unloading (and pruning), the system checks all still-loaded packages. If a
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
 2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
 3. Walk the resolved packages in argument order, running each package's full lifecycle before moving on to the next. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next:
-   - Unload it if it is currently loaded.
-   - Remove its directory (`rmdir`).
+   - Unload it if it is currently loaded (which also clears its MEX, [§5.10](#510-mex-unloading-on-unload)).
+   - Remove its directory via the robust trash-based removal ([§11.7](#117-robust-directory-removal-and-the-trash-area)). A removal that cannot even move the directory aside raises `mip:uninstallFailed`.
    - Remove it from `directly_installed.txt`.
    - Clear its pin entry, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
    - Clean up empty parent directories (channel dir, then owner dir).
@@ -636,7 +642,7 @@ When `mip-org/core/mip` is among the resolved uninstall targets, the command del
 1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
 2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
 3. If the user declines, the self-uninstall is aborted. `mip uninstall` then drops `mip-org/core/mip` from its argument list and proceeds normally with any remaining packages.
-4. If the user confirms, mip runs `mip.reset()`, removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.paths.root(), 's')`).
+4. If the user confirms, mip runs `mip.reset()`, then clears **all** compiled MEX across the entire mip root (`mip.build.clear_mex(mip.paths.root())`) so no loaded binary can block the final delete — done while mip is still on the path, since the `mip.*` helpers become unreachable once mip is removed from it. It then removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.paths.root(), 's')`). The root itself is deleted directly rather than via [§11.7](#117-robust-directory-removal-and-the-trash-area) (the trash lives inside the root and cannot hold it).
 5. A reinstall hint is printed.
 
 If the packages directory is missing when self-uninstall is invoked, the flow raises `mip:uninstall:corrupted` and aborts without touching anything.
@@ -1063,6 +1069,21 @@ Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<ch
 - **Cache write failure**: if the cache write itself fails (read-only filesystem, etc.), the fetched index is still returned -- caching is best-effort.
 - The cache directory is created on first write and is not pruned automatically.
 
+### 11.7 Robust Directory Removal and the Trash Area
+
+Every removal of an **installed package directory** — and of the backup copies created while replacing one — goes through `mip.paths.remove_dir`, which removes a directory in two steps:
+
+1. **Move it aside.** The directory is moved (renamed) into the mip **trash area**, `<root>/.trash/<random>` (`mip.paths.trash_dir`). A rename succeeds even when a file inside is held open by the process, so the directory disappears from its original location immediately and the operation that triggered the removal can complete.
+2. **Delete it from the trash.** `remove_dir` then attempts `rmdir(..., 's')` on the moved copy. If that fails — e.g. a Windows DLL/MEX is still loaded in this session and the OS refuses to delete it — the failure is **non-fatal**: a note is printed and the copy is left in the trash for a later sweep. Only a failure to even *move* the directory raises (`mip:removeDirFailed`).
+
+This replaces the earlier Windows-only "move aside on `rmdir` failure" logic and applies on all platforms.
+
+**Trash cleanup.** `mip.paths.purge_trash` retries deletion of every entry left in `<root>/.trash` and silently skips any that are still locked. It runs at the start of every `mip install` and `mip uninstall`, so leftover directories are reclaimed on the next mip run once the binaries that pinned them are no longer loaded. It is always best-effort and never errors.
+
+**Which removals use it.** `mip uninstall`, dependency pruning ([§6.2](#62-dependency-pruning-after-uninstall)), and the old-package backups discarded after a successful `mip update`/`mip install` replacement all go through `remove_dir`. Throwaway temporary directories (freshly downloaded/extracted staging, failed-download cleanup) and the self-update of mip itself use a plain `rmdir` — they never hold a binary that was loaded in this session. The self-uninstall root deletion is also a direct `rmdir` (the trash cannot hold its own root), preceded by clearing all MEX ([§6.4](#64-self-uninstall-mip-uninstall-mip)).
+
+The `.trash` directory lives beside `packages/` under the mip root, so it is never mistaken for a package and is not scanned by package discovery.
+
 ---
 
 ## 12. Architecture Detection
@@ -1173,6 +1194,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<ch
 | `mip:compileScriptNotFound` | The configured `compile_script` file is missing on disk |
 | `mip:compileFailed` | Compile script threw an error |
 | `mip:uninstallFailed` | Uninstall failed while removing package files |
+| `mip:removeDirFailed` | `mip.paths.remove_dir` could not move a directory into the trash area (see [§11.7](#117-robust-directory-removal-and-the-trash-area)) |
 | `mip:bundle:noDirectory` | `mip bundle` called with no directory argument |
 | `mip:bundle:noMipYaml` | `mip bundle` target directory has no `mip.yaml` |
 | `mip:bundle:missingOutput` | `mip bundle --output` given without a value |

@@ -168,6 +168,26 @@ function executeUnload(packageDir, fqn)
     % under this package's source directory. This catches paths added via
     % `mip load --addpath` that the mip.json "paths" list did not cover.
     sweepPathEntries(packageDir, fqn, pkgInfo);
+
+    % Unload any compiled MEX this package shipped, so a later uninstall or
+    % update can delete the package directory -- a loaded DLL/MEX cannot be
+    % removed on Windows while it is held by the process.
+    clearPackageMex(packageDir, pkgInfo);
+end
+
+function clearPackageMex(packageDir, pkgInfo)
+% Clear the MEX binaries under a package's source directory.
+    if isempty(packageDir)
+        return
+    end
+    if ~isempty(pkgInfo)
+        srcDir = mip.paths.get_source_dir(packageDir, pkgInfo);
+    else
+        % mip.json unreadable: fall back to scanning the package dir, which
+        % for a non-editable install contains the source subdir.
+        srcDir = packageDir;
+    end
+    mip.build.clear_mex(srcDir);
 end
 
 function sweepPathEntries(packageDir, fqn, pkgInfo)

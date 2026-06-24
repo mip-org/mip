@@ -258,9 +258,9 @@ function updateLocalPackage(p, noCompile)
         mip.state.add_directly_installed(p.fqn);
         rethrow(ME);
     end
-    if exist(backupDir, 'dir')
-        rmdir(backupDir, 's');
-    end
+    % The backup is the replaced old package; remove it robustly in case a
+    % binary it shipped was loaded before the update.
+    mip.paths.remove_dir(backupDir);
 end
 
 function p = resolvePackage(packageArg)
@@ -415,7 +415,9 @@ function downloadAndReplace(p)
             movefile(backupDir, p.pkgDir);
             rethrow(ME);
         end
-        rmdir(backupDir, 's');
+        % The backup is the replaced old package; remove it robustly in case
+        % a binary it shipped was loaded before the update.
+        mip.paths.remove_dir(backupDir);
         fprintf('Successfully updated "%s" to %s\n', displayFqn, p.latestInfo.version);
     catch ME
         if exist(tempDir, 'dir')
