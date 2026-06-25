@@ -60,7 +60,7 @@ for i = 1:numel(m)
     resolved(m{i}{1}) = m{i}{2};
 end
 
-skip = linux_skip_set();
+skip = mip.build.runtime_skip_libs();
 bundled = false;
 for i = 1:numel(needed)
     so = needed{i};
@@ -89,7 +89,7 @@ function bundle_macos(mexFile, outDir)
 
 [~, out] = system(sprintf('otool -L "%s"', mexFile));
 lines = splitlines(out);
-skipPats = macos_skip_patterns();
+[~, skipPats] = mip.build.runtime_skip_libs();
 bundled = false;
 % Line 1 is "<mexFile>:" — skip.
 for i = 2:numel(lines)
@@ -120,32 +120,4 @@ if bundled
     end
 end
 
-end
-
-% -------------------------------------------------------------------------
-function s = linux_skip_set()
-% SONAMEs we never bundle: OS-guaranteed system libs, and libs MATLAB
-% resolves at runtime via its own LD_LIBRARY_PATH (sys/os/glnxa64).
-%
-% libgfortran.so.5 is skipped: Linux MATLAB ships it, it is on MATLAB's
-% LD_LIBRARY_PATH (searched before the MEX's $ORIGIN RPATH), and the build
-% toolchain is pinned so our symbol requirements stay within MATLAB's copy.
-% libgomp is deliberately NOT here: Linux MATLAB does NOT ship it, so its
-% bundled copy is load-bearing.
-s = { ...
-    'linux-vdso.so.1', 'ld-linux-x86-64.so.2', ...
-    'libc.so.6', 'libm.so.6', 'libpthread.so.0', 'libdl.so.2', 'librt.so.1', ...
-    'libstdc++.so.6', 'libgcc_s.so.1', 'libgfortran.so.5', ...
-    'libmx.so', 'libmex.so', 'libmat.so', ...
-    'libMatlabDataArray.so', 'libMatlabEngine.so'};
-end
-
-function s = macos_skip_patterns()
-% Path prefixes we never bundle: OS framework / system libs, and any dylib
-% MATLAB resolves via @rpath in its own rpath chain.
-s = { ...
-    '/usr/lib/', ...
-    '/System/Library/', ...
-    '@rpath/libmx.', '@rpath/libmex.', '@rpath/libmat.', ...
-    '@rpath/libMatlabDataArray.', '@rpath/libMatlabEngine.'};
 end
