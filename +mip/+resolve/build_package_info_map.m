@@ -18,6 +18,9 @@ if nargin < 4
 end
 
 currentArch = mip.build.arch();
+% Ordered list of architectures this host can install, most preferred first
+% (includes the CPU's supported x86-64 SIMD levels ahead of the base arch).
+archPrefs = mip.build.compatible_archs(currentArch);
 packages = index.packages;
 
 % Group packages by name, then by version. Names that differ only in case
@@ -87,7 +90,7 @@ for i = 1:length(packageNames)
 
     % Select best variant for the chosen version
     variants = versionMap(chosenVersion);
-    bestVariant = mip.resolve.select_best_variant(variants, currentArch);
+    bestVariant = mip.resolve.select_best_variant(variants, archPrefs);
 
     fqn = mip.parse.make_fqn(channelOwner, channelName, pkgName);
 
