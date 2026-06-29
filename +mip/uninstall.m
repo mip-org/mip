@@ -189,14 +189,17 @@ function didUninstall = uninstallSelf()
     % Cache the user's current path
     current_path = path;
 
+    savedOK = false;
     try
         % Change the path to match what it would be if MATLAB had just started up
         path(pathdef);
 
         % Remove <MIP_ROOT>/packages/gh/mip-org/core/mip/mip from the path and save it
-        % for future MATLAB sessions
+        % for future MATLAB sessions. savepath() returns a nonzero status (rather
+        % than erroring) when it cannot write pathdef.m -- common on managed or
+        % shared installs where it is read-only.
         rmpath_safe(mipSourceDir);
-        savepath();
+        savedOK = savepath() == 0;
     catch ME
         % Restore the user's path if anything goes wrong
         path(current_path);
@@ -212,6 +215,12 @@ function didUninstall = uninstallSelf()
     % Delete the mip root directory
     fprintf('Deleting %s...\n', shorten_home(mipRoot));
     rmdir(mipRoot, 's');
+    if ~savedOK
+        warning('mip:uninstall:savePathFailed', ...
+                ['Your saved MATLAB path could not be updated. ' ...
+                 'If you added an "addpath" for mip to your startup.m file, ' ...
+                 'please remove it.']);
+    end
     fprintf('mip has been uninstalled!\n');
     fprintf('To reinstall mip, run:\n\n');
     fprintf('   eval(webread(''https://mip.sh/install.txt''))\n\n');
