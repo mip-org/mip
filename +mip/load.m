@@ -198,16 +198,22 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
         % be a no-op for ordering.
         mip.state.key_value_remove('MIP_LOADED_PACKAGES', fqn);
         mip.state.key_value_append('MIP_LOADED_PACKAGES', fqn);
-        % If this is a direct load and the package was previously
-        % loaded as a dependency, mark it as direct now
-        if isDirect && ~mip.state.is_directly_loaded(fqn)
+        % A direct re-load refreshes recency in MIP_DIRECTLY_LOADED_PACKAGES
+        % the same way (move to end), and promotes the package if it was
+        % previously loaded only as a transitive dependency. A transitive
+        % re-load (isDirect false) leaves the directly-loaded list untouched.
+        if isDirect
+            wasDirect = mip.state.is_directly_loaded(fqn);
+            mip.state.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
             mip.state.key_value_append('MIP_DIRECTLY_LOADED_PACKAGES', fqn);
-            fprintf('Package "%s" is already loaded (now marked as direct)\n', displayFqn);
+            mip.state.add_directly_installed(fqn);
+            if ~wasDirect
+                fprintf('Package "%s" is already loaded (now marked as direct)\n', displayFqn);
+            else
+                fprintf('Package "%s" is already loaded\n', displayFqn);
+            end
         else
             fprintf('Package "%s" is already loaded\n', displayFqn);
-        end
-        if isDirect
-            mip.state.add_directly_installed(fqn);
         end
         % If --sticky was specified, add to sticky packages
         if stickyPackage
