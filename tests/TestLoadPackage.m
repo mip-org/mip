@@ -68,6 +68,52 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyEqual(sum(strcmp(loaded, 'gh/mip-org/core/pkgA')), 1);
         end
 
+        function testLoadPackage_AlreadyLoaded_MovesDirectlyLoadedToMostRecent(testCase)
+            % A direct re-load must also move the package to the end of
+            % MIP_DIRECTLY_LOADED_PACKAGES so that list's recency tracks
+            % MIP_LOADED_PACKAGES (issue #267).
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
+
+            % Re-load pkgA directly: it should now be the most recent.
+            mip.load('mip-org/core/pkgA');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgA');
+            % No duplicate entry was introduced.
+            testCase.verifyEqual(sum(strcmp(direct, 'gh/mip-org/core/pkgA')), 1);
+        end
+
+        function testLoadPackage_TransitiveReloadDoesNotReorderDirectlyLoaded(testCase)
+            % A transitive re-load (isDirect false) must move the package to
+            % the end of MIP_LOADED_PACKAGES but must NOT reorder
+            % MIP_DIRECTLY_LOADED_PACKAGES. The --transitive flag forces
+            % re-entry into loadSingle for an already-loaded package; the
+            % normal deps loop short-circuits on is_loaded and would never
+            % exercise this branch otherwise.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            mip.load('mip-org/core/pkgA');
+            mip.load('mip-org/core/pkgB');
+            testCase.verifyEqual( ...
+                mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES'), ...
+                {'gh/mip-org/core/pkgA', 'gh/mip-org/core/pkgB'});
+
+            % Force a transitive re-load of pkgA (already directly loaded).
+            mip.load('mip-org/core/pkgA', '--transitive');
+
+            loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
+            direct = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+            % MIP_LOADED_PACKAGES: pkgA moved to the end.
+            testCase.verifyEqual(loaded{end}, 'gh/mip-org/core/pkgA');
+            % MIP_DIRECTLY_LOADED_PACKAGES: order unchanged -- pkgB still last.
+            testCase.verifyEqual(direct{end}, 'gh/mip-org/core/pkgB');
+            testCase.verifyTrue(ismember('gh/mip-org/core/pkgA', direct));
+        end
+
         function testLoadPackage_WithStickyFlag(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg', '--sticky');
