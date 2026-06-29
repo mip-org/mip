@@ -12,14 +12,19 @@ function result = parse_package_arg(arg)
 %   mhl/<name>                    - .mhl install with no --channel given
 %
 % On input, the 'gh/' prefix may be omitted: a 3-part '<owner>/<channel>/<name>'
-% input is treated as 'gh/<owner>/<channel>/<name>'. Non-gh source types must be
-% written explicitly ('local/<name>', 'fex/<name>', 'mhl/<name>', etc.).
+% input is treated as 'gh/<owner>/<channel>/<name>'. As a further shorthand
+% for personal channels (where channel == owner), a 2-part '<owner>/<name>'
+% input is treated as 'gh/<owner>/<owner>/<name>' when '<owner>' is not a
+% reserved source-type prefix. Non-gh source types must be written
+% explicitly ('local/<name>', 'fex/<name>', 'mhl/<name>', etc.).
 %
 % Args:
 %   arg - Package string. One of:
 %           '<name>'                         (bare name)
 %           '<name>@<version>'               (bare name with version)
 %           '<category>/<name>'              (2-part non-gh FQN, e.g. 'local/foo')
+%           '<owner>/<name>'                 (2-part personal-channel shorthand
+%                                             for 'gh/<owner>/<owner>/<name>')
 %           '<owner>/<channel>/<name>'       (3-part, implicit gh/)
 %           'gh/<owner>/<channel>/<name>'    (4-part, explicit gh/)
 %         Any of the FQN forms may include an @version suffix on the last
@@ -47,12 +52,19 @@ function result = parse_package_arg(arg)
 %   parse_package_arg('gh/mip-org/core/chebfun')
 %     -> same as above (explicit form)
 %
+%   parse_package_arg('magland/chunkie')
+%     -> name='chunkie', type='gh', owner='magland', channel='magland',
+%        fqn='gh/magland/magland/chunkie', is_fqn=true
+%        (2-part personal-channel shorthand)
+%
 %   parse_package_arg('local/mypkg')
 %     -> name='mypkg', type='local', owner='', channel='',
 %        fqn='local/mypkg', is_fqn=true
 %
 %   parse_package_arg('fex/some_pkg@1.0')
 %     -> name='some_pkg', type='fex', fqn='fex/some_pkg', version='1.0'
+
+reservedTypes = mip.parse.reserved_types();
 
 % Extract @version suffix if present
 atIdx = strfind(arg, '@');
@@ -80,13 +92,26 @@ switch length(parts)
         if strcmp(parts{1}, 'gh')
             error('mip:invalidPackageSpec', ...
                   ['Invalid package spec "%s". A gh FQN must have the form ' ...
-                   '"gh/<owner>/<channel>/<name>" (or the 3-part shorthand ' ...
-                   '"<owner>/<channel>/<name>").'], arg);
+                   '"gh/<owner>/<channel>/<name>" (or the shorthand forms ' ...
+                   '"<owner>/<channel>/<name>" or "<owner>/<name>" for the ' ...
+                   'personal channel <owner>/<owner>).'], arg);
         end
-        result.type = parts{1};
-        result.name = parts{2};
-        result.fqn = [result.type '/' result.name];
-        result.is_fqn = true;
+        if ismember(parts{1}, reservedTypes)
+            % Non-gh source-type FQN (local, fex, web, mhl).
+            result.type = parts{1};
+            result.name = parts{2};
+            result.fqn = [result.type '/' result.name];
+            result.is_fqn = true;
+        else
+            % Personal-channel shorthand: '<owner>/<name>' expands to
+            % 'gh/<owner>/<owner>/<name>'.
+            result.type = 'gh';
+            result.owner = parts{1};
+            result.channel = parts{1};
+            result.name = parts{2};
+            result.fqn = ['gh/' result.owner '/' result.channel '/' result.name];
+            result.is_fqn = true;
+        end
     case 3
         result.type = 'gh';
         result.owner = parts{1};

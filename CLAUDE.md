@@ -24,8 +24,8 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
   - Local directory / editable installs: `local/<package>`
   - File Exchange installs: `fex/<package>`
   - Generic remote .zip installs: `web/<package>`
-- **Display form**: strips the `gh/` prefix only (`mip-org/core/chebfun`, `local/foo`, `fex/bar`, `web/baz`). See `mip.parse.display_fqn`.
-- **User input**: `gh/` is optional. The parser accepts bare names, `<category>/<name>` (non-gh), `<owner>/<channel>/<name>` (implicit gh), and `gh/<owner>/<channel>/<name>` (explicit).
+- **Display form**: strips the `gh/` prefix (`mip-org/core/chebfun`, `local/foo`, `fex/bar`, `web/baz`). For personal channels (channel name == owner), the duplicated owner segment is collapsed: `gh/magland/magland/chunkie` → `magland/chunkie`. See `mip.parse.display_fqn`.
+- **User input**: `gh/` is optional. The parser accepts bare names, `<category>/<name>` (non-gh), `<owner>/<name>` (2-part personal-channel shorthand for `gh/<owner>/<owner>/<name>` when `<owner>` is not a reserved source-type prefix), `<owner>/<channel>/<name>` (implicit gh), and `gh/<owner>/<channel>/<name>` (explicit).
 - **Bare name**: Just `package` — resolved via priority: `gh/mip-org/core` first, then alphabetical
 - **Channels**: Package repositories hosted on GitHub Pages (e.g., `mip-org/mip-core`). Channel identifiers remain 2-part `<owner>/<channel>` — `gh/` is a source-type prefix in FQNs, not part of the channel.
 - **Packages installed at**:
