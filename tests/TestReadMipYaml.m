@@ -162,6 +162,26 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.dependencies, {});
         end
 
+        function testReadYamlUtf8NonAsciiDescription(testCase)
+            % Regression: a non-ASCII description (em-dash, U+2014) must
+            % round-trip as UTF-8 on every platform. On Windows, fopen
+            % without an explicit UTF-8 encoding decoded the bytes as
+            % windows-1252, expanding the em-dash into three characters
+            % ('â€"') and breaking the scheduled-build metadata comparison.
+            emDash = char(8212);  % U+2014 EM DASH
+            content = ['name: mypkg' newline ...
+                       'version: "1.0.0"' newline ...
+                       'description: "A ' emDash ' B"' newline];
+            % Write deterministic UTF-8 bytes, independent of the platform's
+            % default file-write encoding.
+            fid = fopen(fullfile(testCase.TestDir, 'mip.yaml'), 'w');
+            fwrite(fid, unicode2native(content, 'UTF-8'), 'uint8');
+            fclose(fid);
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.description, ['A ' emDash ' B']);
+        end
+
     end
 end
 
