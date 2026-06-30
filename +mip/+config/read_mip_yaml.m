@@ -17,7 +17,13 @@ if ~exist(mipYamlPath, 'file')
 end
 
 try
-    fid = fopen(mipYamlPath, 'r');
+    % Open as UTF-8 explicitly. mip.yaml is UTF-8, but MATLAB's default
+    % file encoding is platform-dependent (UTF-8 on Linux/macOS, the locale
+    % code page — typically windows-1252 — on Windows). Without this, a
+    % non-ASCII byte such as an em-dash (U+2014) in e.g. `description:` is
+    % decoded as cp1252 on Windows and mangled into mojibake, which then
+    % differs from the channel's mip.yaml and retriggers the build forever.
+    fid = fopen(mipYamlPath, 'r', 'n', 'UTF-8');
     if fid == -1
         error('mip:fileError', 'Could not open file: %s', mipYamlPath);
     end
