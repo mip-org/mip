@@ -17,18 +17,21 @@ if ~exist(mipYamlPath, 'file')
 end
 
 try
-    % Open as UTF-8 explicitly. mip.yaml is UTF-8, but MATLAB's default
-    % file encoding is platform-dependent (UTF-8 on Linux/macOS, the locale
-    % code page — typically windows-1252 — on Windows). Without this, a
-    % non-ASCII byte such as an em-dash (U+2014) in e.g. `description:` is
-    % decoded as cp1252 on Windows and mangled into mojibake, which then
-    % differs from the channel's mip.yaml and retriggers the build forever.
-    fid = fopen(mipYamlPath, 'r', 'n', 'UTF-8');
+    % Read raw bytes and decode as UTF-8 explicitly. mip.yaml is UTF-8, but
+    % fread('*char') decodes using MATLAB's platform-default encoding and
+    % IGNORES the encoding passed to fopen on some releases (e.g. R2023a on
+    % Windows, where the default is windows-1252). That mangles non-ASCII
+    % metadata such as an em-dash (U+2014) in `description:` into mojibake
+    % ('â€"'), so the bundled .mip.json stops matching the channel mip.yaml
+    % and the scheduled build rebuilds the package forever. native2unicode
+    % does the decode in-process, independent of the platform default.
+    fid = fopen(mipYamlPath, 'r');
     if fid == -1
         error('mip:fileError', 'Could not open file: %s', mipYamlPath);
     end
-    yamlText = fread(fid, '*char')';
+    rawBytes = fread(fid, Inf, '*uint8')';
     fclose(fid);
+    yamlText = native2unicode(rawBytes, 'UTF-8');
     mipConfig = mip.parse.parse_yaml(yamlText);
 catch ME
     error('mip:yamlParseFailed', ...

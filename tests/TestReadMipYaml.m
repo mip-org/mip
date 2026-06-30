@@ -164,19 +164,30 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
 
         function testReadYamlUtf8NonAsciiDescription(testCase)
             % Regression: a non-ASCII description (em-dash, U+2014) must
-            % round-trip as UTF-8 on every platform. On Windows, fopen
-            % without an explicit UTF-8 encoding decoded the bytes as
-            % windows-1252, expanding the em-dash into three characters
-            % ('â€"') and breaking the scheduled-build metadata comparison.
+            % round-trip as UTF-8 on every platform and MATLAB release.
+            % read_mip_yaml must decode the bytes itself rather than rely on
+            % the platform default, because fread('*char') ignores fopen's
+            % encoding on some releases (R2023a on Windows defaults to
+            % windows-1252), mangling the em-dash into mojibake ('â€"') and
+            % breaking the scheduled-build metadata comparison.
             emDash = char(8212);  % U+2014 EM DASH
             content = ['name: mypkg' newline ...
                        'version: "1.0.0"' newline ...
                        'description: "A ' emDash ' B"' newline];
             % Write deterministic UTF-8 bytes, independent of the platform's
             % default file-write encoding.
+            utf8Bytes = unicode2native(content, 'UTF-8');
             fid = fopen(fullfile(testCase.TestDir, 'mip.yaml'), 'w');
-            fwrite(fid, unicode2native(content, 'UTF-8'), 'uint8');
+            fwrite(fid, utf8Bytes, 'uint8');
             fclose(fid);
+
+            % Sanity-check that this content actually exercises the bug:
+            % decoding the same bytes as windows-1252 (what the broken
+            % Windows read did) must corrupt the single em-dash into the
+            % three-character mojibake, so a correct decode is a real signal.
+            mojibake = native2unicode(utf8Bytes, 'windows-1252');
+            testCase.verifyTrue(contains(mojibake, ['A ' char([226 8364 8221]) ' B']), ...
+                'test fixture should reproduce the windows-1252 mojibake');
 
             cfg = mip.config.read_mip_yaml(testCase.TestDir);
             testCase.verifyEqual(cfg.description, ['A ' emDash ' B']);
