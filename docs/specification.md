@@ -312,7 +312,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 1. For each package in topological order:
    - If already installed (directory exists), skip it.
    - Download the `.mhl` file from the URL in the index.
-   - If the channel index entry includes `mhl_sha256`, verify the downloaded file against it. Mismatch raises `mip:digestMismatch` and deletes the corrupted file. Missing digest (legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips verification. See [§3.6](#36-mhl-archive-integrity).
+   - SHA-256 digest verification is **currently suspended** (see [§3.6](#36-mhl-archive-integrity) and [#201](https://github.com/mip-org/mip/issues/201)): the channel index entry may still carry an `mhl_sha256` digest, but the downloaded file is not checked against it, so `mip:digestMismatch` is not raised. When verification is re-enabled, a mismatch will delete the corrupted file and raise `mip:digestMismatch`.
    - Validate the `.mhl` archive against path-traversal attacks before extraction (see [§3.6](#36-mhl-archive-integrity)).
    - Extract to `<root>/packages/gh/<owner>/<channel>/<name>/`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
@@ -390,7 +390,7 @@ If the package is already installed at `local/<name>`, prints a message and retu
 
 `mip install /path/to/file.mhl` or `mip install https://example.com/package.mhl`:
 
-1. Download or copy the `.mhl` file to a temp directory. Direct `.mhl` installs from a path or URL have no digest source, so SHA-256 verification is not performed (see [§3.6](#36-mhl-archive-integrity)).
+1. Download or copy the `.mhl` file to a temp directory. A remote `.mhl` source must use `https://`; a plain `http://` URL is refused with `mip:downloadMhl:requireHttps` (the archive is loaded as code, so an unencrypted fetch would let a network attacker swap the payload). Direct `.mhl` installs from a path or URL have no digest source, so SHA-256 verification is not performed (see [§3.6](#36-mhl-archive-integrity)).
 2. Validate the archive for path-traversal safety (see [§3.6](#36-mhl-archive-integrity)), then extract and read `mip.json` to get the package name.
 3. If already installed, skip.
 4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
@@ -411,6 +411,7 @@ If the package is already installed at `local/<name>`, prints a message and retu
 
 Constraints:
 
+- The `--url` value must use `https://`; a plain `http://` URL is refused with `mip:install:requireHttps` (the archive is unzipped onto the path and loaded, so an unencrypted fetch would let a network attacker inject code).
 - The URL must point to a `.zip` archive: the URL's path component (before `?` or `#`) ends in `.zip`, case-insensitive. Otherwise raises `mip:install:urlMustBeZip`.
 - Exactly one positional argument is required when `--url` is given, and it must be a bare name (not an FQN, URL, or path). Otherwise raises `mip:install:urlRequiresName` / `mip:install:urlTakesSingleName`.
 - `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
@@ -428,9 +429,9 @@ After installation, a hint is printed showing how to load the package:
 
 ### 3.6 `.mhl` Archive Integrity
 
-Every `.mhl` downloaded from a channel is checked in two ways before extraction:
+Every `.mhl` downloaded from a channel is subject to two integrity mechanisms before extraction. SHA-256 digest verification is **currently suspended** (see below); path-traversal validation is active.
 
-**SHA-256 digest verification.** Channel index entries may include an `mhl_sha256` hex digest. When present, the downloaded (or locally copied) file's SHA-256 is compared against the index value (case-insensitive). On mismatch, the file is deleted and `mip:digestMismatch` is raised. If the index entry has no digest (e.g. legacy releases) or the MATLAB JVM is unavailable (e.g. `numbl_wasm`), verification is silently skipped -- the absence of a digest is not itself an error. Digest verification is performed by both `mip install` and `mip update` when they download `.mhl` files from a channel. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so no verification is performed in those cases.
+**SHA-256 digest verification (currently suspended).** Channel index entries may include an `mhl_sha256` hex digest, and the index is expected to keep carrying it so that verification can be re-enabled later. **Verification is not currently performed**, so `mip:digestMismatch` is never raised. It was suspended because channel publishing is not atomic: the `.mhl` asset is uploaded before `index.json` is redeployed, so a client fetching mid-publish can pair an old digest with a new archive and would wrongly trip `mip:digestMismatch` (see [#201](https://github.com/mip-org/mip/issues/201)). When re-enabled, the downloaded (or locally copied) file's SHA-256 will be compared against the index value (case-insensitive); on mismatch the file is deleted and `mip:digestMismatch` is raised, while a missing digest (e.g. legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips the check. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so they would not be verified even once verification is restored.
 
 **Path-traversal validation.** Before `unzip` is ever called, the `.mhl` archive is parsed in pure MATLAB (central directory + each local file header) and every entry name is validated. Any of the following rejects the archive with `mip:pathTraversal`:
 
@@ -1134,6 +1135,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:install:urlRequiresName` | `--url` given without a positional package name |
 | `mip:install:urlTakesSingleName` | `--url` given with 0 or 2+ positional args, or a non-bare-name positional |
 | `mip:install:urlMustBeZip` | `--url` value does not point to a `.zip` archive |
+| `mip:install:requireHttps` | `--url` value is a plain `http://` URL; `https://` is required (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:multipleUrls` | `--url` passed more than once |
 | `mip:install:missingUrlValue` | `--url` flag provided without a value |
 | `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
@@ -1141,7 +1143,8 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
-| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest |
+| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest. **Not currently raised** — digest verification is suspended pending atomic channel publishing ([#201](https://github.com/mip-org/mip/issues/201)); see [§3.6](#36-mhl-archive-integrity) |
+| `mip:downloadMhl:requireHttps` | `.mhl` download source is a plain `http://` URL; `https://` is required (see [§3.3](#33-installation-from-mhl-file)) |
 | `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
 | `mip:update:notInstalled` | Package not installed |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
