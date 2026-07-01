@@ -11,6 +11,7 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
   - `+channel/` — Network operations (downloading .mhl archives, fetching channel indexes)
   - `+config/` — Config file reading (mip.yaml, mip.json, build fields, local install setup)
   - `+dependency/` — Dependency graph resolution and topological sorting
+  - `+ops/` — Shared mid-level operations behind the commands: the channel-install engine (`install_from_channels`), transactional package replacement (`backup_package`/`restore_backups`/`discard_backups`, `fetch_to_staging`/`install_from_staging`), and loaded-state snapshot/reload (`snapshot_loaded`/`reload_missing`)
   - `+parse/` — Input parsing (package args, channel specs, YAML, FQN construction)
   - `+paths/` — Directory and path management (package dirs, source dirs, cleanup)
   - `+resolve/` — Package discovery and resolution (name resolution, version selection, dependency traversal)

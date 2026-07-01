@@ -383,36 +383,16 @@ function applyPathAdjustments(packageDir, addPathRels, rmPathRels)
 end
 
 function fqn = resolveToFqn(packageArg)
-% Resolve a package argument to a fully qualified name.
-% If already FQN, canonicalize the name component to its on-disk form.
-% If bare name, look up installed packages.
+% Resolve a package argument to an installed package's canonical FQN
+% (on-disk name form, matching what's already in the loaded/sticky
+% state lists).
 
-    result = mip.parse.parse_package_arg(packageArg);
-
-    if result.is_fqn
-        % Canonicalize: find the actual on-disk name (case- and
-        % dash/underscore-insensitive) so the rest of load uses the
-        % canonical form, matching what's already in the loaded/sticky
-        % state lists.
-        onDisk = mip.resolve.installed_dir(result.fqn);
-        if isempty(onDisk)
-            error('mip:packageNotFound', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  packageArg, packageArg);
-        end
-        if strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
-        else
-            fqn = [result.type '/' onDisk];
-        end
-    else
-        % Resolve bare name to installed FQN
-        fqn = mip.resolve.resolve_bare_name(result.name);
-        if isempty(fqn)
-            error('mip:packageNotFound', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  result.name, result.name);
-        end
+    r = mip.resolve.resolve_to_installed(packageArg);
+    if isempty(r)
+        error('mip:packageNotFound', ...
+              'Package "%s" is not installed. Run "mip install %s" first.', ...
+              packageArg, packageArg);
     end
+    fqn = r.fqn;
 end
 

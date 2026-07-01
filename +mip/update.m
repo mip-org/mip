@@ -138,11 +138,10 @@ function update(varargin)
 
     % Snapshot currently-loaded state so we can restore it after the
     % update cycle.
-    loadedBefore = mip.state.key_value_get('MIP_LOADED_PACKAGES');
-    directlyLoadedBefore = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
+    loadedSnapshot = mip.ops.snapshot_loaded();
 
-    % Wrap the per-package loop in try-catch so that reloadPreviouslyLoaded
-    % always runs. Without this, a failure mid-batch would leave
+    % Wrap the per-package loop in try-catch so that the reload always
+    % runs. Without this, a failure mid-batch would leave
     % already-updated packages unloaded for the rest of the session.
     updatedRemoteFqns = {};
     updateError = [];
@@ -192,7 +191,7 @@ function update(varargin)
     % Reload anything that was loaded before update but isn't now.
     % This runs even after a partial failure so that successfully-updated
     % packages are not left unloaded.
-    reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore);
+    mip.ops.reload_missing(loadedSnapshot);
 
     if ~isempty(updateError)
         rethrow(updateError);
@@ -231,11 +230,10 @@ function item = classifyArg(packageArg)
 end
 
 function updateLocalPackage(p, noCompile)
-% Update a local package: backup, remove from directly_installed, then
-% install_local from the original source path. Restore the backup if
-% install_local fails. Local packages do NOT go through mip.uninstall
-% because that would prune orphaned deps, which install_local cannot
-% re-fetch from a channel.
+% Update a local package: back it up, then install_local from the original
+% source path; restore the backup if install_local fails. Local packages
+% do NOT go through mip.uninstall because that would prune orphaned deps,
+% which install_local cannot re-fetch from a channel.
 
     displayFqn = mip.parse.display_fqn(p.fqn);
     fprintf('Updating local package "%s"...\n', displayFqn);
@@ -245,9 +243,7 @@ function updateLocalPackage(p, noCompile)
         mip.unload(p.fqn);
     end
 
-    backupDir = [tempname '_mip_backup'];
-    movefile(p.pkgDir, backupDir);
-    mip.state.remove_directly_installed(p.fqn);
+    backup = mip.ops.backup_package(p.fqn);
     packagesDir = mip.paths.get_packages_dir();
     mip.paths.cleanup_empty_dirs(fullfile(packagesDir, p.type));
 
@@ -255,17 +251,10 @@ function updateLocalPackage(p, noCompile)
     try
         mip.build.install_local(p.sourcePath, p.editable, noCompile, p.type);
     catch ME
-        parentDir = fileparts(p.pkgDir);
-        if ~exist(parentDir, 'dir')
-            mkdir(parentDir);
-        end
-        movefile(backupDir, p.pkgDir);
-        mip.state.add_directly_installed(p.fqn);
+        mip.ops.restore_backups(backup);
         rethrow(ME);
     end
-    % The backup is the replaced old package; remove it robustly in case a
-    % binary it shipped was loaded before the update.
-    mip.paths.remove_dir(backupDir);
+    mip.ops.discard_backups(backup);
 end
 
 function p = resolvePackage(packageArg)
@@ -395,43 +384,37 @@ end
 
 function downloadAndReplace(p)
 % Download the new version to a staging directory, then swap it in.
-% The old package is moved to a backup and restored if the swap fails,
-% so a failure at any point does not destroy the installed copy.
+% The old package is backed up and restored if the swap fails, so a
+% failure at any point does not destroy the installed copy.
 
     displayFqn = mip.parse.display_fqn(p.fqn);
 
     tempDir = tempname;
     mkdir(tempDir);
-    try
-        expectedSha = '';
-        if isfield(p.latestInfo, 'mhl_sha256')
-            expectedSha = p.latestInfo.mhl_sha256;
-        end
-        mhlPath = mip.channel.download_mhl(p.latestInfo.mhl_url, tempDir, expectedSha);
-        stagingDir = fullfile(tempDir, 'staging');
-        mip.channel.extract_mhl(mhlPath, stagingDir);
+    cleanupTemp = onCleanup(@() rmTempDir(tempDir)); %#ok<NASGU>
 
-        % Download succeeded — swap old package out and new one in
-        backupDir = [tempname '_mip_backup'];
-        movefile(p.pkgDir, backupDir);
-        try
-            movefile(stagingDir, p.pkgDir);
-        catch ME
-            movefile(backupDir, p.pkgDir);
-            rethrow(ME);
-        end
-        % The backup is the replaced old package; remove it robustly in case
-        % a binary it shipped was loaded before the update.
-        mip.paths.remove_dir(backupDir);
-        fprintf('Successfully updated "%s" to %s\n', displayFqn, p.latestInfo.version);
+    stagingDir = mip.ops.fetch_to_staging(p.latestInfo, tempDir);
+
+    % Download succeeded — swap old package out and new one in
+    backup = mip.ops.backup_package(p.fqn);
+    try
+        mip.ops.install_from_staging(stagingDir, p.pkgDir);
     catch ME
-        if exist(tempDir, 'dir')
-            rmdir(tempDir, 's');
-        end
+        mip.ops.restore_backups(backup);
         rethrow(ME);
     end
-    if exist(tempDir, 'dir')
-        rmdir(tempDir, 's');
+    % The package keeps its identity across the update, so its
+    % directly-installed status carries over to the new version.
+    if backup.wasDirectlyInstalled
+        mip.state.add_directly_installed(p.fqn);
+    end
+    mip.ops.discard_backups(backup);
+    fprintf('Successfully updated "%s" to %s\n', displayFqn, p.latestInfo.version);
+end
+
+function rmTempDir(d)
+    if exist(d, 'dir')
+        rmdir(d, 's');
     end
 end
 
@@ -470,106 +453,27 @@ function installMissingDeps(remoteFqns)
 
     fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDeps, ', '));
 
-    % Record which packages are directly installed before calling mip.install
-    % so we can undo any additions (missing deps should not be directly
-    % installed).
-    directBefore = mip.state.get_directly_installed();
-
-    mip.install(missingDeps{:});
-
-    directAfter = mip.state.get_directly_installed();
-    newlyDirect = setdiff(directAfter, directBefore);
-    for i = 1:length(newlyDirect)
-        mip.state.remove_directly_installed(newlyDirect{i});
-    end
-end
-
-function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
-% Reload any packages that were loaded before the update but are no
-% longer loaded. Uses --transitive for packages that were not directly
-% loaded, preserving the direct-vs-transitive distinction without
-% needing a post-fixup pass.
-
-    if isempty(loadedBefore)
-        return
-    end
-
-    for i = 1:length(loadedBefore)
-        pkg = loadedBefore{i};
-        if mip.state.is_loaded(pkg)
-            continue
-        end
-        r = mip.parse.parse_package_arg(pkg);
-        if ~r.is_fqn
-            continue
-        end
-        pkgDir = mip.paths.get_package_dir(pkg);
-        displayPkg = mip.parse.display_fqn(pkg);
-        if ~exist(pkgDir, 'dir')
-            fprintf('Warning: "%s" was loaded before update but is no longer installed; skipping reload.\n', displayPkg);
-            continue
-        end
-        fprintf('Reloading "%s"...\n', displayPkg);
-        if ismember(pkg, directlyLoadedBefore)
-            mip.load(pkg);
-        else
-            mip.load(pkg, '--transitive');
-        end
-    end
+    % Missing deps are transitive installs: install them without marking
+    % them directly installed, so they can be pruned when their parent is
+    % uninstalled.
+    mip.ops.install_from_channels(missingDeps, '', false);
 end
 
 function updateSelf(p, force)
 % Self-update for gh/mip-org/core/mip. mip cannot be uninstalled through
-% the normal flow, so we download and swap in place.
+% the normal flow, so after the shared needs-update check we download and
+% swap in place instead of going through unload/replace.
 
-    fqn = p.fqn;
-    pkgDir = p.pkgDir;
-    pkgInfo = p.pkgInfo;
-
-    installedVersion = pkgInfo.version;
-    channelStr = 'mip-org/core';
-
-    fprintf('Checking for updates to "mip-org/core/mip"...\n');
-
-    index = mip.channel.fetch_index(channelStr);
-    requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
-    if ~isempty(installedVersion) && ~mip.resolve.is_numeric_version(installedVersion)
-        requestedVersions(p.name) = installedVersion;
-    end
-    try
-        [packageInfoMap, ~] = mip.resolve.build_package_info_map( ...
-            index, 'mip-org', 'core', requestedVersions);
-    catch err
-        if strcmp(err.identifier, 'mip:versionNotFound')
-            error('mip:update:versionNotInChannel', ...
-                  ['Installed mip version "%s" no longer exists in mip-org/core. ' ...
-                   'To switch to a different branch or version, run: mip install mip@<version>'], ...
-                  installedVersion);
-        end
-        rethrow(err);
-    end
-
-    if ~packageInfoMap.isKey(fqn)
-        error('mip:update:notInIndex', 'mip not found in the mip-org/core channel index.');
-    end
-
-    latestInfo = packageInfoMap(fqn);
-
-    if ~force && ~mip.state.check_needs_update(pkgInfo, latestInfo)
-        fprintf('Package "mip-org/core/mip" is already up to date (%s)\n', installedVersion);
+    [needs, latestInfo] = checkRemoteNeedsUpdate(p, force);
+    if ~needs
         return
-    end
-
-    if force
-        fprintf('Force updating "mip-org/core/mip" (%s)\n', installedVersion);
-    else
-        fprintf('Updating "mip-org/core/mip": %s -> %s\n', installedVersion, latestInfo.version);
     end
 
     % mip is the running code, so it can't be unloaded and reinstalled the
     % normal way — hand off to the shared in-place hot-swap.
-    mip.self.hot_swap(pkgDir, pkgInfo, latestInfo);
-    fprintf('Successfully updated "mip-org/core/mip" to %s\n', latestInfo.version);
+    mip.self.hot_swap(p.pkgDir, p.pkgInfo, latestInfo);
+    fprintf('Successfully updated "%s" to %s\n', ...
+            mip.parse.display_fqn(p.fqn), latestInfo.version);
 end
 
 function expanded = expandWithDeps(args)

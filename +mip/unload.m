@@ -82,16 +82,9 @@ function fqn = resolveLoadedFqn(packageArg)
 
     if result.is_fqn
         % Canonicalize to the on-disk name so we match the form stored in
-        % MIP_LOADED_PACKAGES. If not installed at all, fall back to the
-        % canonical typed form (caller will report "not loaded").
-        onDisk = mip.resolve.installed_dir(result.fqn);
-        if isempty(onDisk)
-            fqn = result.fqn;
-        elseif strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
-        else
-            fqn = [result.type '/' onDisk];
-        end
+        % MIP_LOADED_PACKAGES. If not installed at all, this falls back to
+        % the canonical typed form (caller will report "not loaded").
+        fqn = mip.resolve.canonical_installed_fqn(packageArg);
         return
     end
 
