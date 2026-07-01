@@ -522,7 +522,7 @@ Constraints:
 - Only valid with a single positional package argument. With multiple packages, raises `mip:load:addpathSinglePackage`.
 - Applied **only** to the directly-named package, not to transitively-loaded dependencies.
 - Applied even when the package is already loaded (lets the user adjust path entries on an existing load without unload+reload).
-- `--addpath` still calls `addpath` if the target directory does not exist; MATLAB emits its native `MATLAB:addpath:DirNotFound` warning.
+- `--addpath` still calls `addpath` if the target directory does not exist; MATLAB emits its native missing-directory warning. The exact identifier varies by MATLAB version -- `tests/TestLoadAddpathRmpath.m` expects `MATLAB:mpath:nameNonexistentOrNotADirectory`.
 - `--rmpath` does not error if the target is not currently on the path (matches MATLAB's `rmpath` behavior, which emits `MATLAB:rmpath:DirNotFound`).
 - `--addpath` / `--rmpath` are **transient**: they are applied at this load and not persisted. A subsequent `mip load` (or reload after `mip update`) without the flags will not re-apply them.
 - The relative path is **not sandboxed**: `fullfile(srcDir, relpath)` is passed to `addpath` / `rmpath` as-is, so `..` segments escape `srcDir`. Entries outside `srcDir` will also not be caught by the unload sweep (§5.8), so the user is responsible for cleaning them up.
@@ -705,7 +705,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
    - **Remote packages** are updated via staging: fetch the channel index and run the up-to-date check ([§7.1.1](#711-target-version-selection-for-update)); if the package is up to date, continue. Otherwise unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition).
    - After the per-package walk, install any missing dependencies that the updated remote packages now require, and prune any orphaned packages. These two operations are batched at the end of the walk because they depend on the post-update on-disk state of every updated package.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
-   - Restore `MIP_DIRECTLY_LOADED_PACKAGES` to the pre-update snapshot (filtered to entries that are actually loaded now) so that packages which were only transitively loaded before the update remain only transitively loaded after.
+   - The reload preserves the direct-vs-transitive distinction inline rather than wholesale-restoring `MIP_DIRECTLY_LOADED_PACKAGES`: each reloaded package is loaded as a direct load if it was directly loaded before the update, or with `--transitive` otherwise, so a package that was only transitively loaded before the update remains only transitively loaded after.
 
 Because the up-to-date check now runs inside the per-package walk, a `mip:update:notInIndex`, `mip:update:unavailable`, or `mip:update:versionNotInChannel` failure raised for a later package no longer short-circuits the whole batch — earlier packages may already have been replaced on disk. The `try/catch` + reload safety net (see [§7.8](#78-load-state-preservation)) still guarantees that successfully-updated packages are reloaded before the original error is re-raised.
 
@@ -751,7 +751,7 @@ Special flow for `mip-org/core/mip`:
 3. Replace the installed package in-place.
 4. Reload: `addpath` each entry from the new `mip.json` `paths` field (resolved against the new package dir).
 
-Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update runs before the batch so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
+Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update is processed as its own step within the per-package walk, in argument order, so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
 
 ### 7.8 Load State Preservation
 
@@ -845,7 +845,7 @@ This guarantees an exact architecture match is always preferred over `any`, rega
 
 ### 9.1 `mip list`
 
-Lists all installed packages. Default sort is by reverse load order (most recently loaded first). `--sort-by-name` sorts alphabetically. Status markers shown per package: `[sticky]` ([§4.2](#42-the---sticky-flag)), `[pinned]` ([§7.11](#711-pinned-packages)), and `[editable: <source>]` ([§3.2.2](#322-editable-install--e----editable)). An asterisk (`*`) marks directly loaded packages.
+Lists all installed packages, split into two sections printed in this order: `=== Loaded Packages ===` then `=== Other Installed Packages ===`. Within the loaded section, the default sort is by reverse load order (most recently loaded first); `--sort-by-name` sorts that section alphabetically instead. The other-installed section is **always** sorted alphabetically by name, regardless of `--sort-by-name`. When no packages are loaded, the loaded section is replaced by a hint to run `mip load <package>`. Status markers shown per package: `[sticky]` ([§4.2](#42-the---sticky-flag)), `[pinned]` ([§7.11](#711-pinned-packages)), and `[editable: <source>]` ([§3.2.2](#322-editable-install--e----editable)). An asterisk (`*`) marks directly loaded packages.
 
 ### 9.2 `mip info [<package>]`
 
@@ -878,7 +878,7 @@ Prints the mip version string. Reads `mip.json` (the authoritative version writt
 
 Resets mip to a clean state:
 1. Runs `mip unload --all --force` (unloads everything except `mip-org/core/mip`).
-2. Removes all in-memory key-value stores (`MIP_LOADED_PACKAGES`, `MIP_DIRECTLY_LOADED_PACKAGES`, `MIP_STICKY_PACKAGES`).
+2. Removes **all** in-memory key-value stores (`MIP_LOADED_PACKAGES`, `MIP_DIRECTLY_LOADED_PACKAGES`, `MIP_STICKY_PACKAGES`, and `MIP_TEST_CONTEXT`).
 
 ### 9.6 `mip bundle <path>`
 
@@ -944,6 +944,14 @@ mip channel list                - List channels in priority order
 
 Error identifiers: `mip:noSubcommand`, `mip:noChannel`, `mip:tooManyArgs`, `mip:unknownSubcommand`.
 
+### 9.10 `mip help [command]`
+
+```
+mip help [command]
+```
+
+With no argument, prints mip's top-level usage (equivalent to `help mip`). With a command name, prints that command's help text: `mip help <command>` maps to the `+mip/<command>.m` function (with `-` replaced by `_`) and displays its `help`. If no such command file exists, raises `mip:unknownCommand`. `mip` invoked with no command at all also dispatches to `help`.
+
 ---
 
 ## 10. State Management
@@ -957,6 +965,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 | `MIP_LOADED_PACKAGES` | Cell array of FQNs | All currently loaded packages (direct + dependencies) |
 | `MIP_DIRECTLY_LOADED_PACKAGES` | Cell array of FQNs | Only packages explicitly loaded by the user |
 | `MIP_STICKY_PACKAGES` | Cell array of FQNs | Packages that survive `mip unload --all` |
+| `MIP_TEST_CONTEXT` | FQN of the package currently under `mip test` | Set for the duration of a `mip test` run so the running test script can self-identify via [`mip.test.get_fqn`](#97-mip-test-package) (and from there query `mip.build.effective_arch` / `mip.build.has_mex`); cleared when the run ends. See [`+mip/test.m`](../+mip/test.m). |
 
 ### 10.2 File-Based State (Persistent)
 
@@ -1207,8 +1216,10 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
 | `mip:install:zipExtractFailed` | Extraction of a downloaded `.zip` failed |
 | `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
+| `mip:install:fexRequiresName` | A File Exchange `--url` was passed as a positional without a name; use `mip install <name> --url <url>` (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
+| `mip:install:equivalentAlreadyInstalled` | Install requested for a package whose name is equivalent (case / `-` / `_`) to one already installed (see [§1.8](#18-name-equivalence)) |
 | `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest. **Not currently raised** — digest verification is suspended pending atomic channel publishing ([#201](https://github.com/mip-org/mip/issues/201)); see [§3.6](#36-mhl-archive-integrity) |
 | `mip:downloadMhl:requireHttps` | `.mhl` download source is a plain `http://` URL; `https://` is required (see [§3.3](#33-installation-from-mhl-file)) |
 | `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
@@ -1237,6 +1248,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:unknownCommand` | `mip <cmd>` where `<cmd>` is not a recognized subcommand |
 | `mip:notAFileOrDirectory` | A path argument resolves to neither a file nor a directory |
 | `mip:invalidPackageFormat` | Package argument has a structurally invalid format (distinct from §2.1 spec violations) |
+| `mip:invalidFqn` | A bare (non-FQN) name was passed where a fully qualified name is required (e.g. to `mip.paths.get_package_dir` or `mip.build.effective_arch`) |
 | `mip:rootNotFound` | `MIP_ROOT` unset and both path-based detection and the `<userpath>/mip` fallback lack a `packages/` subdir (see [§11.5](#115-mip_root-environment-variable)) |
 | `mip:indexFetchFailed` | Channel index could not be fetched (network failure or non-2xx) |
 | `mip:availFailed` | `mip avail` failed to fetch the channel index |
@@ -1246,6 +1258,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:copyFailed` | `copyfile` operation failed |
 | `mip:noBuild` | `mip.yaml` has no `builds` entries |
 | `mip:noMatchingBuild` | No `builds` entry matches the current architecture (and no `any` fallback) |
+| `mip:build:noArchitecture` | A package's `mip.json` has no `architecture` field, so its effective architecture cannot be determined (`mip.build.effective_arch`) |
 | `mip:mhlNotFound` | `.mhl` archive is missing where expected |
 | `mip:extractFailed` | `.mhl` or `.zip` extraction failed |
 | `mip:invalidPackage` | Extracted archive is not a well-formed mip package |
@@ -1256,6 +1269,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:name:invalidInput` | Input passed to `mip.name.normalize` / `mip.name.match` is not a valid string |
 | `mip:version:noMetadata` | `mip version` cannot locate either `mip.json` or `mip.yaml` in the package root |
 | `mip:install:invalidPackageSpec` | Install argument has 2 or 4+ slash-separated parts (see [§3.0](#30-argument-categorization)) |
+| `mip:install:invalidName` | The `<name>` positional for a `--url` install is not a valid canonical package name (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:notADirectory` | Local install target exists but is not a directory |
 | `mip:update:noPackage` | `mip update` called with no arguments and no `--all` |
 | `mip:update:allWithPackages` | `mip update --all foo` — `--all` cannot be combined with explicit package names |
