@@ -4,8 +4,7 @@
 
 scriptDir = fileparts(mfilename('fullpath'));
 
-addpath(scriptDir);
-cleanupObj = onCleanup(@() rmpath(scriptDir));
+addpath(scriptDir);  % run_tests removes it again in its own cleanup
 
 results = run_tests();
 
