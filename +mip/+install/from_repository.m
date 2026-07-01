@@ -284,14 +284,39 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
 
     installedFqns = {};
 
-    % If a user-requested @version differs from what's installed, replace it.
-    % Old versions are staged to backup dirs; restored on failure below.
-    [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap);
+    % If a user-requested @version differs from what's installed, replace
+    % it via the shared download-first machinery. Each replacement is
+    % atomic per package: a failed download leaves that package untouched,
+    % and earlier replacements stand.
+    reloadAfterInstall = {};
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        if isempty(s.requested_version)
+            continue
+        end
+        pkgDir = mip.paths.get_package_dir(s.fqn);
+        if ~exist(pkgDir, 'dir')
+            continue
+        end
+        installedInfo = mip.config.read_package_json(pkgDir);
+        if strcmp(installedInfo.version, s.requested_version)
+            continue
+        end
+        if ~packageInfoMap.isKey(s.fqn) || ...
+                ~strcmp(packageInfoMap(s.fqn).version, s.requested_version)
+            continue
+        end
+        fprintf('Replacing "%s" %s with requested version %s...\n', ...
+                mip.parse.display_fqn(s.fqn), installedInfo.version, s.requested_version);
+        if mip.install.replace_installed(s.fqn, pkgDir, packageInfoMap(s.fqn))
+            reloadAfterInstall{end+1} = s.fqn; %#ok<AGROW>
+        end
+        fprintf('Successfully installed "%s"\n', mip.parse.display_fqn(s.fqn));
+        installedFqns{end+1} = s.fqn; %#ok<AGROW>
+    end
 
-    % From here on, any error must restore @version backups. If a download
-    % was actually attempted, also prune orphan deps installed during this
-    % call (they aren't in directly_installed.txt yet). Restore happens
-    % before prune so prune doesn't drop deps of the restored packages.
+    % If a download was attempted and failed, prune orphan deps installed
+    % during this call (they aren't in directly_installed.txt yet).
     installAttempted = false;
     try
         % Determine which packages need installing vs already installed.
@@ -302,6 +327,10 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
         toInstallFqns = {};
         for i = 1:length(allPackagesToInstall)
             fqn = allPackagesToInstall{i};
+            if ismember(fqn, installedFqns)
+                % Just replaced above - neither fresh nor "already installed".
+                continue
+            end
             result = mip.parse.parse_package_arg(fqn);
             existingName = mip.resolve.installed_dir(fqn);
             if ~isempty(existingName) && ~strcmp(existingName, result.name)
@@ -342,7 +371,6 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
         end
     catch ME
         fprintf('\nInstall failed; rolling back...\n');
-        restoreReplacementBackups(replacementBackups);
         if installAttempted
             try
                 mip.state.prune_unused_packages();
@@ -353,8 +381,6 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
         end
         rethrow(ME);
     end
-    cleanupReplacementBackups(replacementBackups);
-
     if ~isempty(toInstallFqns)
         for i = 1:length(resolvedPackages)
             s = resolvedPackages{i};
@@ -391,77 +417,6 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
                 fprintf('  - %s\n', mip.parse.display_fqn(allInstalled{k}));
             end
         end
-    end
-end
-
-function [reloadAfterInstall, replacementBackups] = replaceExistingVersions(resolvedPackages, packageInfoMap)
-% Replace installed packages when the user requested a different @version.
-% Old packages are moved to backup dirs (returned in replacementBackups) so the
-% caller can restore them if a subsequent download/install fails.
-% Returns FQNs that were loaded before replacement (caller should reload them).
-    reloadAfterInstall = {};
-    replacementBackups = struct('fqn', {}, 'pkgDir', {}, 'backupDir', {}, ...
-                                'wasDirectlyInstalled', {});
-    for i = 1:length(resolvedPackages)
-        s = resolvedPackages{i};
-        if isempty(s.requested_version)
-            continue;
-        end
-        pkgDir = mip.paths.get_package_dir(s.fqn);
-        if ~exist(pkgDir, 'dir')
-            continue;
-        end
-        installedInfo = mip.config.read_package_json(pkgDir);
-        if strcmp(installedInfo.version, s.requested_version)
-            continue;
-        end
-        if ~packageInfoMap.isKey(s.fqn) || ...
-                ~strcmp(packageInfoMap(s.fqn).version, s.requested_version)
-            continue;
-        end
-        fprintf('Replacing "%s" %s with requested version %s...\n', ...
-                mip.parse.display_fqn(s.fqn), installedInfo.version, s.requested_version);
-        if mip.state.is_loaded(s.fqn)
-            mip.unload(s.fqn);
-            reloadAfterInstall{end+1} = s.fqn; %#ok<AGROW>
-        end
-        wasDirectlyInstalled = mip.state.is_directly_installed(s.fqn);
-        backupDir = mip.paths.backup_dir(pkgDir);
-        if wasDirectlyInstalled
-            mip.state.remove_directly_installed(s.fqn);
-        end
-        replacementBackups(end+1) = struct(...
-            'fqn', s.fqn, ...
-            'pkgDir', pkgDir, ...
-            'backupDir', backupDir, ...
-            'wasDirectlyInstalled', wasDirectlyInstalled); %#ok<AGROW>
-    end
-end
-
-function restoreReplacementBackups(replacementBackups)
-% Restore packages from backup dirs after a failed replace install.
-    for i = 1:length(replacementBackups)
-        b = replacementBackups(i);
-        try
-            mip.paths.restore_dir(b.backupDir, b.pkgDir);
-            if b.wasDirectlyInstalled
-                mip.state.add_directly_installed(b.fqn);
-            end
-        catch restoreErr
-            warning('mip:rollbackFailed', ...
-                    'Could not restore "%s" from backup: %s', ...
-                    mip.parse.display_fqn(b.fqn), restoreErr.message);
-        end
-    end
-end
-
-function cleanupReplacementBackups(replacementBackups)
-% Remove backup dirs (the replaced old packages) after a successful replace
-% install. These may carry binaries that were loaded before the replace, so
-% route them through the robust trash-based removal.
-    for i = 1:length(replacementBackups)
-        b = replacementBackups(i);
-        mip.paths.remove_dir(b.backupDir);
     end
 end
 
