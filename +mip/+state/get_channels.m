@@ -13,33 +13,11 @@ function channels = get_channels()
 % the END of the file (matching the append semantics of
 % MIP_LOADED_PACKAGES). The returned cell array reverses that so the
 % highest-priority channel is at index 1.
+%
+% An existing-but-unreadable channels file raises an error rather than
+% returning {}: silently dropping the list would let a subsequent
+% set_channels overwrite the file and lose the user's prior subscriptions.
 
-    channels = {};
-
-    packagesDir = mip.paths.get_packages_dir();
-    channelsFile = fullfile(packagesDir, 'channels.txt');
-
-    if ~exist(channelsFile, 'file')
-        return
-    end
-
-    fid = fopen(channelsFile, 'r');
-    if fid == -1
-        % File exists (checked above) but cannot be opened. Failing here
-        % rather than returning {} avoids set_channels later silently
-        % overwriting the file with a one-entry list, dropping the user's
-        % prior subscriptions.
-        error('mip:fileError', ...
-              'Could not read channels file: %s', channelsFile);
-    end
-
-    closer = onCleanup(@() fclose(fid));
-    while ~feof(fid)
-        line = fgetl(fid);
-        if ischar(line) && ~isempty(strtrim(line))
-            channels{end+1} = strtrim(line); %#ok<AGROW>
-        end
-    end
-
-    channels = fliplr(channels);
+    channelsFile = fullfile(mip.paths.get_packages_dir(), 'channels.txt');
+    channels = flip(mip.state.read_line_list(channelsFile, 'error'));
 end

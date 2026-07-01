@@ -6,43 +6,12 @@ function set_channels(channels)
 %              priority first). Each entry must be in '<owner>/<channel>'
 %              form; callers are responsible for normalizing shorthand
 %              inputs.
+%
+% Persisted in stack-like order: the highest-priority (most recently
+% added) channel is written last, matching MIP_LOADED_PACKAGES semantics.
+% Callers pass priority order (highest first), so the list is reversed
+% before writing. get_channels reverses it back on read.
 
-    packagesDir = mip.paths.get_packages_dir();
-
-    if ~exist(packagesDir, 'dir')
-        mkdir(packagesDir);
-    end
-
-    channelsFile = fullfile(packagesDir, 'channels.txt');
-    tmpFile = [channelsFile '.tmp'];
-
-    fid = fopen(tmpFile, 'w');
-    if fid == -1
-        error('mip:fileError', 'Could not write to channels.txt.tmp');
-    end
-
-    try
-        % Persist in stack-like order: highest-priority (most recently
-        % added) channel last, matching MIP_LOADED_PACKAGES semantics.
-        % Callers pass `channels` in priority order (highest first), so
-        % iterate in reverse when writing to disk.
-        for i = length(channels):-1:1
-            fprintf(fid, '%s\n', channels{i});
-        end
-        fclose(fid);
-    catch ME
-        fclose(fid);
-        if exist(tmpFile, 'file')
-            delete(tmpFile);
-        end
-        rethrow(ME);
-    end
-
-    [ok, msg] = movefile(tmpFile, channelsFile, 'f');
-    if ~ok
-        if exist(tmpFile, 'file')
-            delete(tmpFile);
-        end
-        error('mip:fileError', 'Could not rename tmp file into place: %s', msg);
-    end
+    channelsFile = fullfile(mip.paths.get_packages_dir(), 'channels.txt');
+    mip.state.write_line_list(channelsFile, flip(channels));
 end
