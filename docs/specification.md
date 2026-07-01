@@ -226,7 +226,7 @@ Used by: all contexts that resolve dependencies listed in `mip.json` of an **ins
 
 This lets a package in a non-core channel depend, by bare name, on sibling packages published in the **same** channel (e.g. `gh/magland/core/chunkie` depending on `fmm2d` resolves to `gh/magland/core/fmm2d` when that is installed), while bare dependencies of `mip-org/core` packages — and bare dependencies not present in the parent's own channel — keep resolving to `mip-org/core`. To depend on a package from an unrelated channel, use the fully qualified name in `mip.yaml`.
 
-#### 2.4.5 Resolving a Dependency During Remote Install (`build_dependency_graph`)
+#### 2.4.5 Resolving a Dependency During Remote Install (`build_graph`)
 
 Used by: the install process when building the dependency graph from channel indexes
 
@@ -314,8 +314,8 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 
 #### 3.1.5 Dependency Resolution
 
-1. Build a dependency graph recursively using `build_dependency_graph`.
-2. Bare-name dependencies resolve to the depending package's own channel when the parent is a `gh` package on a channel other than `mip-org/core` whose fetched index provides the dependency, and otherwise to `gh/mip-org/core/<name>` (see [§2.4.5](#245-resolving-a-dependency-during-remote-install-build_dependency_graph)).
+1. Build a dependency graph recursively using `build_graph`.
+2. Bare-name dependencies resolve to the depending package's own channel when the parent is a `gh` package on a channel other than `mip-org/core` whose fetched index provides the dependency, and otherwise to `gh/mip-org/core/<name>` (see [§2.4.5](#245-resolving-a-dependency-during-remote-install-build_graph)).
 3. FQN dependencies are used as-is.
 4. Circular dependencies are detected and raise `mip:circularDependency`.
 5. If a dependency's channel hasn't been fetched yet, it is fetched lazily.

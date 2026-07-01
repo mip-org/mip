@@ -1,5 +1,5 @@
 classdef TestFindAllDependencies < matlab.unittest.TestCase
-%TESTFINDALLDEPENDENCIES   Tests for mip.dependency.find_all_dependencies.
+%TESTFINDALLDEPENDENCIES   Tests for mip.dependency.find_all.
 
     properties
         OrigMipRoot
@@ -31,7 +31,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
 
         function testNoDependencies(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'leaf');
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/leaf');
+            deps = mip.dependency.find_all('gh/mip-org/core/leaf');
             testCase.verifyEmpty(deps);
         end
 
@@ -42,7 +42,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
                 'dependencies', {'c'});
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'c');
 
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/a');
+            deps = mip.dependency.find_all('gh/mip-org/core/a');
             testCase.verifyEqual(sort(deps), ...
                 {'gh/mip-org/core/b', 'gh/mip-org/core/c'});
         end
@@ -55,7 +55,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'b', ...
                 'dependencies', {'a'});
 
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/a');
+            deps = mip.dependency.find_all('gh/mip-org/core/a');
             testCase.verifyEqual(sort(deps), {'gh/mip-org/core/b'});
         end
 
@@ -64,7 +64,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'a', ...
                 'dependencies', {'a'});
 
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/a');
+            deps = mip.dependency.find_all('gh/mip-org/core/a');
             testCase.verifyEmpty(deps);
         end
 
@@ -77,7 +77,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'c', ...
                 'dependencies', {'a'});
 
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/a');
+            deps = mip.dependency.find_all('gh/mip-org/core/a');
             testCase.verifyEqual(sort(deps), ...
                 {'gh/mip-org/core/b', 'gh/mip-org/core/c'});
         end
@@ -92,7 +92,7 @@ classdef TestFindAllDependencies < matlab.unittest.TestCase
                 'dependencies', {'d'});
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'd');
 
-            deps = mip.dependency.find_all_dependencies('gh/mip-org/core/a');
+            deps = mip.dependency.find_all('gh/mip-org/core/a');
             testCase.verifyEqual(sort(deps), ...
                 {'gh/mip-org/core/b', 'gh/mip-org/core/c', 'gh/mip-org/core/d'});
         end
