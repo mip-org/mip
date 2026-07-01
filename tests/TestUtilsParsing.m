@@ -198,38 +198,60 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 'mip:invalidChannel');
         end
 
-        %% parse_channel_flag tests
+        %% flags tests
 
-        function testParseChannelFlagNone(testCase)
-            [ch, remaining] = mip.parse.parse_channel_flag({'pkg1', 'pkg2'});
-            testCase.verifyEqual(ch, '');
-            testCase.verifyEqual(remaining, {'pkg1', 'pkg2'});
+        function testFlagsNone(testCase)
+            [opts, positionals] = mip.parse.flags({'pkg1', 'pkg2'}, struct('channel', ''));
+            testCase.verifyEqual(opts.channel, '');
+            testCase.verifyEqual(positionals, {'pkg1', 'pkg2'});
         end
 
-        function testParseChannelFlagPresent(testCase)
-            [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'dev', 'pkg1'});
-            testCase.verifyEqual(ch, 'dev/dev');
-            testCase.verifyEqual(remaining, {'pkg1'});
+        function testFlagsValueFlag(testCase)
+            [opts, positionals] = mip.parse.flags({'--channel', 'dev', 'pkg1'}, struct('channel', ''));
+            testCase.verifyEqual(opts.channel, 'dev');
+            testCase.verifyEqual(positionals, {'pkg1'});
         end
 
-        function testParseChannelFlagAtEnd(testCase)
-            [ch, remaining] = mip.parse.parse_channel_flag({'pkg1', '--channel', 'dev'});
-            testCase.verifyEqual(ch, 'dev/dev');
-            testCase.verifyEqual(remaining, {'pkg1'});
+        function testFlagsValueFlagAtEnd(testCase)
+            [opts, positionals] = mip.parse.flags({'pkg1', '--channel', 'dev'}, struct('channel', ''));
+            testCase.verifyEqual(opts.channel, 'dev');
+            testCase.verifyEqual(positionals, {'pkg1'});
         end
 
-        function testParseChannelFlagOwnerChannel(testCase)
-            [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'mylab/custom', 'pkg1'});
-            testCase.verifyEqual(ch, 'mylab/custom');
-            testCase.verifyEqual(remaining, {'pkg1'});
+        function testFlagsBooleanFlag(testCase)
+            [opts, positionals] = mip.parse.flags({'--force', 'pkg1'}, ...
+                struct('force', false, 'all', false));
+            testCase.verifyTrue(opts.force);
+            testCase.verifyFalse(opts.all);
+            testCase.verifyEqual(positionals, {'pkg1'});
         end
 
-        function testParseChannelFlagBareNameExpands(testCase)
-            % --channel <owner> is shorthand for <owner>/<owner>, the user's
-            % personal channel repo at github.com/<owner>/mip-<owner>.
-            [ch, remaining] = mip.parse.parse_channel_flag({'--channel', 'foo', 'pkg1'});
-            testCase.verifyEqual(ch, 'foo/foo');
-            testCase.verifyEqual(remaining, {'pkg1'});
+        function testFlagsUnderscoreMapsToHyphen(testCase)
+            [opts, ~] = mip.parse.flags({'--no-compile'}, struct('no_compile', false));
+            testCase.verifyTrue(opts.no_compile);
+        end
+
+        function testFlagsRepeatableAccumulates(testCase)
+            [opts, ~] = mip.parse.flags({'--with', 'examples', '--with', 'tests'}, ...
+                struct('with', {{}}));
+            testCase.verifyEqual(opts.with, {'examples', 'tests'});
+        end
+
+        function testFlagsRepeatedSingleValueErrors(testCase)
+            testCase.verifyError(@() mip.parse.flags( ...
+                {'--channel', 'a/b', '--channel', 'c/d'}, struct('channel', '')), ...
+                'mip:repeatedFlag');
+        end
+
+        function testFlagsUnknownFlagErrors(testCase)
+            testCase.verifyError(@() mip.parse.flags({'--bogus'}, struct('force', false)), ...
+                'mip:unknownFlag');
+        end
+
+        function testFlagsAlias(testCase)
+            [opts, ~] = mip.parse.flags({'-e'}, struct('editable', false), ...
+                struct('e', 'editable'));
+            testCase.verifyTrue(opts.editable);
         end
 
         function testParseChannelShorthandAppliesToFqn(testCase)
@@ -268,15 +290,15 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             end
         end
 
-        function testParseChannelFlagMissingValue(testCase)
-            testCase.verifyError(@() mip.parse.parse_channel_flag({'--channel'}), ...
-                'mip:missingChannelValue');
+        function testFlagsMissingValue(testCase)
+            testCase.verifyError(@() mip.parse.flags({'--channel'}, struct('channel', '')), ...
+                'mip:missingFlagValue');
         end
 
-        function testParseChannelFlagEmptyArgs(testCase)
-            [ch, remaining] = mip.parse.parse_channel_flag({});
-            testCase.verifyEqual(ch, '');
-            testCase.verifyEqual(remaining, {});
+        function testFlagsEmptyArgs(testCase)
+            [opts, positionals] = mip.parse.flags({}, struct('channel', ''));
+            testCase.verifyEqual(opts.channel, '');
+            testCase.verifyEqual(positionals, {});
         end
 
         %% make_fqn tests

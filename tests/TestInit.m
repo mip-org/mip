@@ -234,7 +234,7 @@ classdef TestInit < matlab.unittest.TestCase
 
             testCase.verifyError( ...
                 @() mip.init(pkgDir, '--repository'), ...
-                'mip:init:missingRepositoryValue');
+                'mip:missingFlagValue');
         end
 
         function testInit_BuildIsAny(testCase)

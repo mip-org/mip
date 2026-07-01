@@ -16,12 +16,7 @@ if ~exist(packagesDir, 'dir')
 end
 
 % Parse flags
-sortAlpha = false;
-for i = 1:length(varargin)
-    if strcmp(varargin{i}, '--sort-by-name')
-        sortAlpha = true;
-    end
-end
+[opts, ~] = mip.parse.flags(varargin, struct('sort_by_name', false));
 
 % Get all installed packages as FQNs
 allPackages = mip.state.list_installed_packages();
@@ -80,7 +75,7 @@ loadedIdx = find(loaded);
 notLoadedIdx = find(~loaded);
 
 % Sort loaded packages
-if sortAlpha
+if opts.sort_by_name
     [~, si] = sort(lower(names(loadedIdx)));
     loadedIdx = loadedIdx(si);
 else

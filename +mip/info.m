@@ -24,7 +24,11 @@ function info(varargin)
 % If the package is installed from a channel other than the one being
 % queried, that channel's remote index is also fetched and displayed.
 
-[channel, args] = mip.parse.parse_channel_flag(varargin);
+[opts, args] = mip.parse.flags(varargin, struct('channel', ''));
+channel = opts.channel;
+if ~isempty(channel)
+    channel = mip.parse.normalize_channel_spec(channel);
+end
 
 if isempty(args)
     showMipSelfInfo();

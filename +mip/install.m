@@ -56,47 +56,22 @@ function install(varargin)
     % could only move them aside (a binary was still loaded at the time).
     mip.paths.purge_trash();
 
-    % Check for --editable / -e, --no-compile, and --url flags
-    editable = false;
-    noCompile = false;
-    zipUrl = '';
-    urlSeen = false;
-    filteredArgs = {};
-    i = 1;
-    while i <= length(varargin)
-        arg = varargin{i};
-        if ischar(arg) && (strcmp(arg, '--editable') || strcmp(arg, '-e'))
-            editable = true;
-            i = i + 1;
-        elseif ischar(arg) && strcmp(arg, '--no-compile')
-            noCompile = true;
-            i = i + 1;
-        elseif ischar(arg) && strcmp(arg, '--url')
-            if urlSeen
-                error('mip:install:multipleUrls', ...
-                      '--url may be specified at most once per install call.');
-            end
-            if i + 1 > length(varargin)
-                error('mip:install:missingUrlValue', '--url requires a value.');
-            end
-            zipUrl = varargin{i + 1};
-            urlSeen = true;
-            i = i + 2;
-        else
-            filteredArgs{end+1} = arg; %#ok<AGROW>
-            i = i + 1;
-        end
+    % Check for --editable / -e, --no-compile, --url, and --channel flags
+    [opts, args] = mip.parse.flags(varargin, ...
+        struct('editable', false, 'no_compile', false, 'url', '', 'channel', ''), ...
+        struct('e', 'editable'));
+    channel = opts.channel;
+    if ~isempty(channel)
+        channel = mip.parse.normalize_channel_spec(channel);
     end
 
-    if noCompile && ~editable
+    if opts.no_compile && ~opts.editable
         error('mip:install:noCompileRequiresEditable', ...
               '--no-compile can only be used with --editable local installs.');
     end
 
-    [channel, args] = mip.parse.parse_channel_flag(filteredArgs);
-
-    if urlSeen
-        installFromUrlFlag(args, zipUrl, editable, noCompile);
+    if ~isempty(opts.url)
+        installFromUrlFlag(args, opts.url, opts.editable, opts.no_compile);
         return;
     end
 
@@ -143,7 +118,7 @@ function install(varargin)
         end
     end
 
-    if editable && isempty(localPaths)
+    if opts.editable && isempty(localPaths)
         error('mip:install:editableRequiresLocal', ...
               '--editable can only be used with local directory packages.');
     end
@@ -166,7 +141,7 @@ function install(varargin)
                        'Install aborted.'], localPath);
             end
         end
-        mip.build.install_local(localPath, editable, noCompile, 'local');
+        mip.build.install_local(localPath, opts.editable, opts.no_compile, 'local');
     end
 
     % If only local installs were requested, we're done

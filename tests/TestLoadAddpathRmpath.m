@@ -41,13 +41,13 @@ classdef TestLoadAddpathRmpath < matlab.unittest.TestCase
         function testAddpath_MissingValue_Errors(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'foo');
             testCase.verifyError(@() mip.load('foo', '--addpath'), ...
-                'mip:load:missingAddpathValue');
+                'mip:missingFlagValue');
         end
 
         function testRmpath_MissingValue_Errors(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'foo');
             testCase.verifyError(@() mip.load('foo', '--rmpath'), ...
-                'mip:load:missingRmpathValue');
+                'mip:missingFlagValue');
         end
 
         function testAddpath_MultiplePackages_Errors(testCase)

@@ -13,21 +13,12 @@ function unload(varargin)
 % Use --all --force to unload all packages including sticky ones.
 
     % Check for --all and --force flags
-    hasAll = any(strcmp(varargin, '--all'));
-    hasForce = any(strcmp(varargin, '--force'));
+    [opts, packageArgs] = mip.parse.flags(varargin, struct('all', false, 'force', false));
 
     % Handle --all flag
-    if hasAll
-        unloadAll(hasForce);
+    if opts.all
+        unloadAll(opts.force);
         return
-    end
-
-    % Collect all non-flag arguments as package names
-    packageArgs = {};
-    for i = 1:length(varargin)
-        if ~startsWith(varargin{i}, '--')
-            packageArgs{end+1} = varargin{i}; %#ok<AGROW>
-        end
     end
 
     if isempty(packageArgs)

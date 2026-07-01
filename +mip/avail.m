@@ -16,10 +16,13 @@ function avail(varargin)
 % Displays an alphabetical list of all available packages in the online
 % repository for the current architecture, shown with fully qualified names.
 
-[channel, ~] = mip.parse.parse_channel_flag(varargin);
+[opts, ~] = mip.parse.flags(varargin, struct('channel', ''));
+channel = opts.channel;
 
 if isempty(channel)
     channel = 'mip-org/core';
+else
+    channel = mip.parse.normalize_channel_spec(channel);
 end
 
 [channelOwner, channelName] = mip.parse.parse_channel_spec(channel);

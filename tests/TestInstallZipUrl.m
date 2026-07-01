@@ -69,14 +69,14 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
         function testUrl_MissingValue_Errors(testCase)
             testCase.verifyError( ...
                 @() mip.install('mypkg', '--url'), ...
-                'mip:install:missingUrlValue');
+                'mip:missingFlagValue');
         end
 
         function testUrl_RepeatedFlag_Errors(testCase)
             testCase.verifyError( ...
                 @() mip.install('mypkg', '--url', 'https://a.com/x.zip', ...
                                 '--url', 'https://b.com/y.zip'), ...
-                'mip:install:multipleUrls');
+                'mip:repeatedFlag');
         end
 
         function testUrl_EditableRejected(testCase)
