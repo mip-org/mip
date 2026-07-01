@@ -261,8 +261,8 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 
 #### 3.1.1 Channel Resolution
 
-1. If `--channel` is provided, use it as the primary channel for any bare-name arguments. Otherwise default to `mip-org/core`.
-2. FQN arguments use the `<owner>/<channel>` encoded in the name; `--channel` does not apply to them.
+1. If `--channel` is provided, it is the primary channel for every bare-name argument and the subscription list is **not** consulted. Otherwise (no `--channel`), each bare-name argument is resolved against the **priority list** — `mip-org/core` first, then each subscribed channel in priority order (most recently added first; see [§9.9](#99-mip-channel)) — and takes the first channel whose index publishes that name. Resolution is per-argument, so different bare names in one call may resolve to different channels. A bare name published by none of the consulted channels raises `mip:packageNotFound`, whose message lists every channel consulted.
+2. FQN arguments use the `<owner>/<channel>` encoded in the name; neither `--channel` nor the subscription list applies to them.
 3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch).
 
 #### 3.1.2 Index Fetching
@@ -521,6 +521,17 @@ Each entry in the `mip.json` `paths` field is resolved relative to `srcDir` (see
 - **Editable installs**: `srcDir = source_path`, so paths resolve under the user's original source directory.
 
 If `mip.json` has no `paths` field, raises `mip:loadNotFound` and the package is **not** added to `MIP_LOADED_PACKAGES` or `MIP_DIRECTLY_LOADED_PACKAGES`.
+
+### 4.9 The `--with` Flag
+
+`mip load <pkg> --with <group>` adds to the MATLAB path — **in addition** to the package's normal `paths` — the directories declared under `extra_paths.<group>` in the package's `mip.yaml` (stored in `mip.json`; see [§11.1](#111-mipjson-schema)). `extra_paths` groups an author's optional, non-default directories (e.g. `examples`, `tests`) under named groups so they load only when the user opts in with `--with`. Each entry is resolved against `srcDir` exactly like a `paths` entry ([§4.8](#48-path-addition-from-mipjson)): the installed source subdir for copy installs, or `source_path` for editable installs.
+
+- **`--with` may be repeated** to request multiple groups in one call (e.g. `mip load foo --with examples --with tests`); each group's entries are accumulated and added.
+- Applied **only** to directly-named packages, not to transitively-loaded dependencies (matching `--addpath`, [§4.7](#47-the---addpath-and---rmpath-flags)). A dependency that happens to declare the group is **not** affected.
+- Applied even when the package is **already loaded**, so the user can add a group's paths to an existing load without unload+reload.
+- Like `--addpath`, the additions are **transient** (not persisted) and are removed by the unload sweep ([§5.8](#58-path-removal-from-mipjson)), which catches them because they live under `srcDir`.
+
+**Group matching across a load.** When loading multiple packages, each package applies its own `extra_paths.<group>`; a package that does not declare the requested group is silently skipped. If, across the whole load, **no** loaded package declared a requested group, mip issues the `mip:load:unknownGroup` warning for that group (catching both typos and genuinely-absent groups). `--with` with no following value raises `mip:load:missingWithValue`.
 
 ---
 
@@ -892,6 +903,32 @@ Behavior:
 
 Error identifiers: `mip:init:notADirectory`, `mip:init:invalidName`, `mip:init:missingNameValue`, `mip:init:missingRepositoryValue`, `mip:init:unexpectedArg`, `mip:init:writeFailed`.
 
+### 9.9 `mip channel`
+
+Manages **channel subscriptions**, which extend bare-name `mip install` resolution beyond `mip-org/core`.
+
+```
+mip channel add <channel>       - Subscribe at highest priority
+mip channel append <channel>    - Subscribe at lowest priority
+mip channel remove <channel>    - Unsubscribe (alias: rm)
+mip channel list                - List channels in priority order
+```
+
+`<channel>` is in `<owner>/<channel>` form, or a bare `<owner>` which is shorthand for `<owner>/<owner>` (the user's personal channel repo — see [§1.5](#15-channels)). An invalid format raises `mip:invalidChannel`.
+
+- **`add`** subscribes the channel at the **highest** priority (consulted first among subscriptions). Re-`add`ing an already-subscribed channel **moves it to the top** of the priority list.
+- **`append`** subscribes the channel at the **lowest** priority (consulted last). Re-`append`ing an already-subscribed channel **moves it to the bottom**.
+- **`remove`** (alias **`rm`**) unsubscribes. Removing a channel that is not subscribed prints an informational message and is otherwise a no-op.
+- **`list`** prints all channels in priority order.
+
+**`mip-org/core` is always first.** It is the implicit default channel: it is never stored in `channels.txt`, cannot be subscribed (an `add`/`append` of `mip-org/core`, matched case-insensitively, is a no-op) nor removed, and is always consulted before any subscribed channel. `mip channel list` prints it at the top even when nothing is subscribed.
+
+**Priority order.** Among subscribed channels, the most recently `add`-ed is highest priority. Subscriptions are persisted at `<root>/packages/channels.txt`, one channel per line (see [§10.2](#102-file-based-state-persistent)); the comparison is case-sensitive, so `MyLab/Dev` and `mylab/dev` are distinct subscriptions.
+
+**Effect on resolution.** A bare-name `mip install` **without** `--channel` consults `mip-org/core` first, then each subscribed channel in priority order; the first channel that publishes the package wins (see [§3.1.1](#311-channel-resolution)). An explicit `--channel`, and any FQN argument, bypass the subscription list entirely.
+
+Error identifiers: `mip:noSubcommand`, `mip:noChannel`, `mip:tooManyArgs`, `mip:unknownSubcommand`.
+
 ---
 
 ## 10. State Management
@@ -912,6 +949,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 |---|---|---|
 | `<root>/packages/directly_installed.txt` | One FQN per line | Tracks which packages were directly installed (vs. installed as dependencies). Used for pruning. |
 | `<root>/packages/pinned.txt` | One FQN per line | Tracks which packages are pinned against `mip update`. See [§7.11](#711-pinned-packages). |
+| `<root>/packages/channels.txt` | One channel per line | Tracks subscribed channels for bare-name install resolution. Stack-ordered (most recently added last). See [§9.9](#99-mip-channel). |
 
 ### 10.3 Key-Value Storage Operations
 
@@ -949,6 +987,7 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
 <mip-root>/                                # See §11.5 for resolution rules
   packages/
     directly_installed.txt                 # Persistent tracking of directly installed packages
+    channels.txt                           # Subscribed channels for bare-name resolution (§9.9)
     mip-org/
       core/
         mip/                               # The package manager itself
@@ -983,6 +1022,7 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
   "architecture": "linux_x86_64",
   "dependencies": ["dep1", "owner/channel/dep2"],   // bare or FQN names only; no @version or constraints
   "paths": ["src", "lib"],                         // addpath entries, relative to srcDir (see §4.8)
+  "extra_paths": {"examples": ["examples"]},       // optional; opt-in path groups for `mip load --with` (see §4.9)
   "editable": false,
   "source_path": "/path/to/source",
   "compile_script": "do_compile.m",
@@ -997,6 +1037,8 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
 Required: `name`. All other fields have defaults or are optional.
 
 The `paths` field is the authoritative list of directories that `mip load` adds to the MATLAB path. Each entry is interpreted relative to `srcDir` (see [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m)): the installed package's source subdir for copy installs, or `source_path` for editable installs. Entries are `rmpath`'d in matching fashion by `mip unload` (see [§5.8](#58-path-removal-from-mipjson)).
+
+The optional `extra_paths` field maps a group name to a list of source-relative directories that `mip load --with <group>` adds on top of `paths` (see [§4.9](#49-the---with-flag)). Each group's entries are resolved against `srcDir` exactly like `paths`. The field is written at install/build time from the `extra_paths` mapping in `mip.yaml` ([§11.2](#112-mipyaml-schema)); when absent, `--with` simply matches nothing for this package.
 
 ### 11.2 `mip.yaml` Schema
 
@@ -1124,6 +1166,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:load:missingChannel` | `--channel` flag without a value in `mip load` |
 | `mip:load:missingAddpathValue` | `--addpath` flag without a value |
 | `mip:load:missingRmpathValue` | `--rmpath` flag without a value |
+| `mip:load:missingWithValue` | `mip load --with` flag without a group name |
 | `mip:load:addpathSinglePackage` | `--addpath` / `--rmpath` used with multiple positional packages |
 | `mip:mipYamlNotFound` | `mip.yaml` missing in source directory |
 | `mip:invalidMipYaml` | `mip.yaml` missing required `name` field |
@@ -1159,6 +1202,10 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:init:missingRepositoryValue` | `mip init --repository` given without a value |
 | `mip:init:unexpectedArg` | `mip init` received an unrecognized argument |
 | `mip:init:writeFailed` | `mip init` could not write the generated `mip.yaml` or test script |
+| `mip:noSubcommand` | `mip channel` invoked with no subcommand (see [§9.9](#99-mip-channel)) |
+| `mip:noChannel` | `mip channel add`/`append`/`remove` invoked without a `<channel>` argument |
+| `mip:tooManyArgs` | `mip channel` subcommand given more arguments than it accepts |
+| `mip:unknownSubcommand` | `mip channel <sub>` where `<sub>` is not `add`/`append`/`remove`/`rm`/`list` |
 | `mip:noPackage` | Generic "no package specified" from CLI dispatch (command-specific variants are preferred) |
 | `mip:noDirectory` | No directory specified where one was required |
 | `mip:unknownCommand` | `mip <cmd>` where `<cmd>` is not a recognized subcommand |
@@ -1212,6 +1259,7 @@ The following **warning** identifiers are also issued:
 |---|---|
 | `mip:unloadNotFound` | `mip unload <pkg>` on a package whose `mip.json` has no `paths` field (see [§5.8](#58-path-removal-from-mipjson)) |
 | `mip:brokenDependencies` | After an unload/uninstall, at least one still-loaded or still-installed package has a dependency that is no longer loaded/installed |
+| `mip:load:unknownGroup` | `mip load --with <group>` where no loaded package declares that `extra_paths` group (see [§4.9](#49-the---with-flag)) |
 
 ---
 
