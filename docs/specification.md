@@ -1148,7 +1148,7 @@ Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<ch
 
 Every removal of an **installed package directory** — and of the backup copies created while replacing one — goes through `mip.paths.remove_dir`, which removes a directory in two steps:
 
-1. **Move it aside.** The directory is moved (renamed) into the mip **trash area**, `<root>/.trash/<random>` (`mip.paths.trash_dir`). A rename succeeds even when a file inside is held open by the process, so the directory disappears from its original location immediately and the operation that triggered the removal can complete.
+1. **Move it aside.** The directory is moved (renamed) into the mip **trash area**, `<root>/.trash/<random>` (`mip.paths.get_trash_dir`). A rename succeeds even when a file inside is held open by the process, so the directory disappears from its original location immediately and the operation that triggered the removal can complete.
 2. **Delete it from the trash.** `remove_dir` then attempts `rmdir(..., 's')` on the moved copy. If that fails — e.g. a Windows DLL/MEX is still loaded in this session and the OS refuses to delete it — the failure is **non-fatal**: a note is printed and the copy is left in the trash for a later sweep. Only a failure to even *move* the directory raises (`mip:removeDirFailed`).
 
 This replaces the earlier Windows-only "move aside on `rmdir` failure" logic and applies on all platforms.

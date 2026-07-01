@@ -2,7 +2,7 @@ function remove_dir(dirPath)
 %REMOVE_DIR   Robustly remove a directory.
 %
 % Removes dirPath by first moving it into the mip trash area
-% (mip.paths.trash_dir) under a random name, then attempting to delete it
+% (mip.paths.get_trash_dir) under a random name, then attempting to delete it
 % from there. The move-first strategy makes removal robust against files
 % that cannot be deleted in the current MATLAB session -- notably on
 % Windows, where the OS refuses to delete a DLL/MEX that is still loaded
@@ -22,7 +22,7 @@ function remove_dir(dirPath)
         return
     end
 
-    trashDir = mip.paths.trash_dir();
+    trashDir = mip.paths.get_trash_dir();
     if ~exist(trashDir, 'dir')
         mkdir(trashDir);
     end
