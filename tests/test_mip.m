@@ -1,12 +1,11 @@
 % Test script for the mip package.
-% Invoked by `mip test mip`. Runs the unit tests in tests/run_tests.m,
+% Invoked by `mip test mip`. Runs the unit tests in run_tests.m,
 % errors if any test failed, and prints SUCCESS otherwise.
 
 scriptDir = fileparts(mfilename('fullpath'));
-testsDir = fullfile(scriptDir, 'tests');
 
-addpath(testsDir);
-cleanupObj = onCleanup(@() rmpath(testsDir));
+addpath(scriptDir);
+cleanupObj = onCleanup(@() rmpath(scriptDir));
 
 results = run_tests();
 
