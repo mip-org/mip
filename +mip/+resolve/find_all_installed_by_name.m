@@ -6,53 +6,21 @@ function matches = find_all_installed_by_name(packageName)
 % directory name for each match and include the 'gh/' prefix for
 % GitHub channel packages.
 %
+% A view over mip.state.list_installed_packages (the single source of
+% truth for the installed tree), filtered by name and sorted.
+%
 % Returns:
-%   matches - Cell array of canonical FQN strings for each source-type /
-%             owner / channel combination where this name is installed.
+%   matches - Sorted cell array of canonical FQN strings for each
+%             source-type / owner / channel combination where this name
+%             is installed.
 
 matches = {};
-packagesDir = mip.paths.get_packages_dir();
-if ~exist(packagesDir, 'dir')
-    return
-end
-
-topEntries = dir(packagesDir);
-for i = 1:length(topEntries)
-    if ~topEntries(i).isdir || startsWith(topEntries(i).name, '.')
-        continue
-    end
-    topName = topEntries(i).name;
-    topPath = fullfile(packagesDir, topName);
-
-    if strcmp(topName, 'gh')
-        ownerDirs = dir(topPath);
-        for j = 1:length(ownerDirs)
-            if ~ownerDirs(j).isdir || startsWith(ownerDirs(j).name, '.')
-                continue
-            end
-            owner = ownerDirs(j).name;
-            ownerPath = fullfile(topPath, owner);
-            chanDirs = dir(ownerPath);
-            for k = 1:length(chanDirs)
-                if ~chanDirs(k).isdir || startsWith(chanDirs(k).name, '.')
-                    continue
-                end
-                ch = chanDirs(k).name;
-                candidateFqn = mip.parse.make_fqn(owner, ch, packageName);
-                onDisk = mip.resolve.installed_dir(candidateFqn);
-                if ~isempty(onDisk)
-                    matches{end+1} = mip.parse.make_fqn(owner, ch, onDisk); %#ok<AGROW>
-                end
-            end
-        end
-    else
-        candidateFqn = [topName '/' packageName];
-        onDisk = mip.resolve.installed_dir(candidateFqn);
-        if ~isempty(onDisk)
-            matches{end+1} = [topName '/' onDisk]; %#ok<AGROW>
-        end
+for fqn = mip.state.list_installed_packages()
+    r = mip.parse.parse_package_arg(fqn{1});
+    if mip.name.match(r.name, packageName)
+        matches{end+1} = fqn{1}; %#ok<AGROW>
     end
 end
-
 matches = sort(matches);
+
 end
