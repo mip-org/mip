@@ -446,18 +446,9 @@ function installMissingDeps(remoteFqns)
 
     fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDeps, ', '));
 
-    % Record which packages are directly installed before calling mip.install
-    % so we can undo any additions (missing deps should not be directly
-    % installed).
-    directBefore = mip.state.get_directly_installed();
-
-    mip.install(missingDeps{:});
-
-    directAfter = mip.state.get_directly_installed();
-    newlyDirect = setdiff(directAfter, directBefore);
-    for i = 1:length(newlyDirect)
-        mip.state.remove_directly_installed(newlyDirect{i});
-    end
+    % Install as transitive dependencies (not directly installed), so
+    % they can be pruned when their dependents no longer need them.
+    mip.install.from_repository(missingDeps, '', false);
 end
 
 function reloadPreviouslyLoaded(loadedBefore, directlyLoadedBefore)
