@@ -158,19 +158,11 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
 
     fprintf('Installing "%s" in editable mode...\n', fqn);
 
-    % Match build and resolve config to determine paths
-    [buildEntry, effectiveArch] = mip.build.match_build(mipConfig);
-    resolvedConfig = mip.build.resolve_build_config(mipConfig, buildEntry);
-
-    % Compute paths relative to the source directory. These are stored
-    % in mip.json verbatim; mip.load resolves them against source_path at
-    % load time (source_path = sourceDir for editable installs).
-    pathsList = mip.build.compute_addpaths(sourceDir, resolvedConfig.paths);
-    extraPaths = struct();
-    for key = fieldnames(resolvedConfig.extra_paths)'
-        extraPaths.(key{1}) = mip.build.compute_addpaths( ...
-            sourceDir, resolvedConfig.extra_paths.(key{1}));
-    end
+    % Match the build and derive mip.json metadata. Paths are computed
+    % relative to the source directory and stored in mip.json verbatim;
+    % mip.load resolves them against source_path at load time
+    % (source_path = sourceDir for editable installs).
+    [effectiveArch, jsonOpts] = mip.build.resolve_metadata(sourceDir, mipConfig);
 
     % Create package directory
     parentDir = fileparts(pkgDir);
@@ -179,43 +171,22 @@ function installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile)
     end
     mkdir(pkgDir);
 
-    % Determine compile_script
-    compileScript = '';
-    if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
-        compileScript = resolvedConfig.compile_script;
-    end
-
-    % Determine test_script
-    testScript = '';
-    if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
-        testScript = resolvedConfig.test_script;
-    end
-
-    % Create mip.json (include compile_script and test_script)
-    jsonOpts = struct('editable', true, 'source_path', sourceDir);
-    jsonOpts.paths = pathsList;
-    if ~isempty(fieldnames(extraPaths))
-        jsonOpts.extra_paths = extraPaths;
-    end
-    if ~isempty(compileScript)
-        jsonOpts.compile_script = compileScript;
-    end
-    if ~isempty(testScript)
-        jsonOpts.test_script = testScript;
-    end
+    % Create mip.json (a thin wrapper pointing to the original source)
+    jsonOpts.editable = true;
+    jsonOpts.source_path = sourceDir;
     mip.build.create_mip_json(pkgDir, mipConfig, effectiveArch, jsonOpts);
 
     fprintf('Editable install complete. Changes in %s will be reflected immediately.\n', sourceDir);
 
     % Compile unless --no-compile was specified
-    if ~isempty(compileScript)
+    if isfield(jsonOpts, 'compile_script')
         if noCompile
             fprintf('\nCompilation skipped (--no-compile).\n');
             fprintf('To compile later, run:\n');
             fprintf('  mip compile %s\n', mipConfig.name);
         else
             fprintf('\nCompiling...\n');
-            mip.build.run_compile(sourceDir, compileScript);
+            mip.build.run_compile(sourceDir, jsonOpts.compile_script);
             fprintf('\nIf you edit files that require recompilation, run:\n');
             fprintf('  mip compile %s\n', mipConfig.name);
         end
