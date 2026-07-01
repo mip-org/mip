@@ -62,7 +62,7 @@ classdef TestInstallEquivalentFqn < matlab.unittest.TestCase
             % regress the existing idempotent behavior.
             createTestPackage(testCase.TestRoot, '', '', 'my_pkg', 'type', 'local');
             srcDir = createTestSourcePackage(testCase.SourceDir, 'my_pkg');
-            % Should NOT throw; install_local prints a message and returns.
+            % Should NOT throw; from_local prints a message and returns.
             mip.install('-e', srcDir);
         end
 
