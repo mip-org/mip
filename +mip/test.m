@@ -115,23 +115,12 @@ function r = resolveTestTarget(packageArg)
 
     parsed = mip.parse.parse_package_arg(packageArg);
 
-    if parsed.is_fqn
-        r = mip.resolve.resolve_to_installed(packageArg);
-        return
-    end
-
-    loadedPackages = mip.state.key_value_get('MIP_LOADED_PACKAGES');
-    matchIdx = [];
-    for i = 1:length(loadedPackages)
-        loadedInfo = mip.parse.parse_package_arg(loadedPackages{i});
-        if loadedInfo.is_fqn && mip.name.match(loadedInfo.name, parsed.name)
-            matchIdx(end+1) = i; %#ok<AGROW>
+    if ~parsed.is_fqn
+        loadedFqn = mip.resolve.resolve_to_loaded(parsed.name);
+        if ~isempty(loadedFqn)
+            r = mip.resolve.resolve_to_installed(loadedFqn);
+            return
         end
-    end
-
-    if ~isempty(matchIdx)
-        r = mip.resolve.resolve_to_installed(loadedPackages{matchIdx(end)});
-        return
     end
 
     r = mip.resolve.resolve_to_installed(packageArg);
