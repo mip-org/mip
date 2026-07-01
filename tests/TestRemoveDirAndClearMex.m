@@ -2,7 +2,7 @@ classdef TestRemoveDirAndClearMex < matlab.unittest.TestCase
 %TESTREMOVEDIRANDCLEARMEX   Tests for robust directory removal, the trash
 % area, and MEX unloading.
 %
-% Covers mip.paths.remove_dir, mip.paths.trash_dir, mip.paths.purge_trash,
+% Covers mip.paths.remove_dir, mip.paths.get_trash_dir, mip.paths.purge_trash,
 % and mip.build.clear_mex, plus the uninstall integration that funnels
 % package-directory removal through them.
 
@@ -35,10 +35,10 @@ classdef TestRemoveDirAndClearMex < matlab.unittest.TestCase
 
     methods (Test)
 
-        %% --- mip.paths.trash_dir ---
+        %% --- mip.paths.get_trash_dir ---
 
         function testTrashDirIsUnderRoot(testCase)
-            testCase.verifyEqual(mip.paths.trash_dir(), ...
+            testCase.verifyEqual(mip.paths.get_trash_dir(), ...
                 fullfile(testCase.TestRoot, '.trash'));
         end
 
@@ -66,7 +66,7 @@ classdef TestRemoveDirAndClearMex < matlab.unittest.TestCase
         end
 
         function testRemoveDirCreatesTrashOnDemand(testCase)
-            trashDir = mip.paths.trash_dir();
+            trashDir = mip.paths.get_trash_dir();
             testCase.verifyFalse(exist(trashDir, 'dir') > 0, ...
                 'Trash should not exist before any removal');
 
@@ -81,7 +81,7 @@ classdef TestRemoveDirAndClearMex < matlab.unittest.TestCase
         %% --- mip.paths.purge_trash ---
 
         function testPurgeTrashRemovesLeftoverDirs(testCase)
-            trashDir = mip.paths.trash_dir();
+            trashDir = mip.paths.get_trash_dir();
             mkdir(trashDir);
             leftover1 = fullfile(trashDir, 'leftover1');
             leftover2 = fullfile(trashDir, 'leftover2');
@@ -97,7 +97,7 @@ classdef TestRemoveDirAndClearMex < matlab.unittest.TestCase
 
         function testPurgeTrashNoTrashIsNoOp(testCase)
             % Must not error when the trash directory does not exist.
-            testCase.verifyFalse(exist(mip.paths.trash_dir(), 'dir') > 0);
+            testCase.verifyFalse(exist(mip.paths.get_trash_dir(), 'dir') > 0);
             mip.paths.purge_trash();
         end
 

@@ -9,7 +9,7 @@ function purge_trash()
 % Called at the start of every mip install (and uninstall) so the trash is
 % reclaimed once the binaries that pinned its contents are no longer loaded.
 
-    trashDir = mip.paths.trash_dir();
+    trashDir = mip.paths.get_trash_dir();
     if ~exist(trashDir, 'dir')
         return
     end
