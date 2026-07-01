@@ -67,9 +67,7 @@ end
 end
 
 function tf = isDependencyUninstalled(dep, parentFqn)
-    depFqn = mip.resolve.resolve_dependency(dep, parentFqn);
-    depDir = mip.paths.get_package_dir(depFqn);
-    tf = ~exist(depDir, 'dir');
+    tf = ~isempty(mip.dependency.find_missing({dep}, parentFqn));
 end
 
 function tf = isDependencyUnloaded(dep, parentFqn)

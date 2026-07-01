@@ -430,13 +430,7 @@ function installMissingDeps(remoteFqns)
         if isempty(deps)
             continue
         end
-        for j = 1:length(deps)
-            depFqn = mip.resolve.resolve_dependency(deps{j}, fqn);
-            depDir = mip.paths.get_package_dir(depFqn);
-            if ~exist(depDir, 'dir')
-                missingDeps{end+1} = deps{j}; %#ok<AGROW>
-            end
-        end
+        missingDeps = [missingDeps, mip.dependency.find_missing(deps, fqn)]; %#ok<AGROW>
     end
     missingDeps = unique(missingDeps, 'stable');
 
@@ -444,7 +438,8 @@ function installMissingDeps(remoteFqns)
         return
     end
 
-    fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDeps, ', '));
+    missingDisplay = cellfun(@mip.parse.display_fqn, missingDeps, 'UniformOutput', false);
+    fprintf('\nInstalling missing dependencies: %s\n', strjoin(missingDisplay, ', '));
 
     % Install as transitive dependencies (not directly installed), so
     % they can be pruned when their dependents no longer need them.

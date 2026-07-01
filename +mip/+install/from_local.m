@@ -63,19 +63,11 @@ end
 % Check dependencies are installed
 if ~isempty(mipConfig.dependencies)
     fprintf('Dependencies: %s\n', strjoin(mipConfig.dependencies, ', '));
-    for i = 1:length(mipConfig.dependencies)
-        dep = mipConfig.dependencies{i};
-        depResult = mip.parse.parse_package_arg(dep);
-        if depResult.is_fqn
-            depDir = mip.paths.get_package_dir(depResult.fqn);
-        else
-            % Bare name dependency: resolve to mip-org/core
-            depDir = mip.paths.get_package_dir(mip.parse.make_fqn('mip-org', 'core', depResult.name));
-        end
-        if ~exist(depDir, 'dir')
-            error('mip:dependencyNotFound', ...
-                  'Dependency "%s" is not installed. Install it first.', dep);
-        end
+    missing = mip.dependency.find_missing(mipConfig.dependencies, fqn);
+    if ~isempty(missing)
+        error('mip:dependencyNotFound', ...
+              'Dependency "%s" is not installed. Install it first.', ...
+              mip.parse.display_fqn(missing{1}));
     end
 end
 
