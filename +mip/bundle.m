@@ -23,37 +23,20 @@ function bundle(varargin)
     end
 
     % Parse arguments
-    sourceDir = '';
-    outputDir = pwd;
-    architecture = '';
-
-    i = 1;
-    while i <= length(varargin)
-        arg = varargin{i};
-        if ischar(arg) && strcmp(arg, '--output')
-            if i + 1 > length(varargin)
-                error('mip:bundle:missingOutput', '--output requires a directory argument');
-            end
-            outputDir = varargin{i + 1};
-            i = i + 2;
-        elseif ischar(arg) && strcmp(arg, '--arch')
-            if i + 1 > length(varargin)
-                error('mip:bundle:missingArch', '--arch requires an architecture argument');
-            end
-            architecture = varargin{i + 1};
-            i = i + 2;
-        elseif isempty(sourceDir)
-            sourceDir = arg;
-            i = i + 1;
-        else
-            error('mip:bundle:unexpectedArg', 'Unexpected argument: %s', arg);
-        end
+    [opts, positionals] = mip.parse.flags(varargin, struct('output', '', 'arch', ''));
+    outputDir = opts.output;
+    if isempty(outputDir)
+        outputDir = pwd;
     end
 
-    if isempty(sourceDir)
+    if length(positionals) > 1
+        error('mip:bundle:unexpectedArg', 'Unexpected argument: %s', positionals{2});
+    end
+    if isempty(positionals)
         error('mip:bundle:noDirectory', ...
               'A directory path is required for bundle command.');
     end
+    sourceDir = positionals{1};
 
     % Resolve source directory
     sourceDir = mip.paths.get_absolute_path(sourceDir);
@@ -75,10 +58,10 @@ function bundle(varargin)
 
     try
         % Prepare the package
-        if isempty(architecture)
+        if isempty(opts.arch)
             mipConfig = mip.build.prepare_package(sourceDir, stagingDir);
         else
-            mipConfig = mip.build.prepare_package(sourceDir, stagingDir, architecture);
+            mipConfig = mip.build.prepare_package(sourceDir, stagingDir, opts.arch);
         end
 
         % Bundle runtime-library dependencies of any MEX files in the

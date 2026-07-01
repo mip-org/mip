@@ -43,25 +43,8 @@ function update(varargin)
     end
 
     % Check for --force, --all, --deps, and --no-compile flags
-    force = false;
-    updateAll = false;
-    updateDeps = false;
-    noCompile = false;
-    args = {};
-    for i = 1:length(varargin)
-        arg = varargin{i};
-        if ischar(arg) && strcmp(arg, '--force')
-            force = true;
-        elseif ischar(arg) && strcmp(arg, '--all')
-            updateAll = true;
-        elseif ischar(arg) && strcmp(arg, '--deps')
-            updateDeps = true;
-        elseif ischar(arg) && strcmp(arg, '--no-compile')
-            noCompile = true;
-        else
-            args{end+1} = arg; %#ok<AGROW>
-        end
-    end
+    [opts, args] = mip.parse.flags(varargin, struct( ...
+        'force', false, 'all', false, 'deps', false, 'no_compile', false));
 
     % --all: expand to all installed packages. Pinned packages are
     % filtered up-front for --all (the user did not specify an explicit
@@ -69,7 +52,7 @@ function update(varargin)
     % to). Explicitly named pinned packages are handled inside the main
     % per-package loop below so their skip messages appear in argument
     % order, interleaved with the unpinned packages' update output.
-    if updateAll
+    if opts.all
         if ~isempty(args)
             error('mip:update:allWithPackages', ...
                   'Cannot specify package names with --all.');
@@ -102,7 +85,7 @@ function update(varargin)
 
     % --deps: expand the argument list with each package's dependencies.
     % Pinned dependencies are dropped from the expansion with a message.
-    if updateDeps
+    if opts.deps
         args = expandWithDeps(args);
     end
 
@@ -125,7 +108,7 @@ function update(varargin)
     % the actionable kinds matters: the skip kinds carry no .pkg (pin-skip)
     % or are not going to be built anyway (no-source-skip), so they must not
     % gate --no-compile.
-    if noCompile
+    if opts.no_compile
         for i = 1:length(items)
             it = items{i};
             if any(strcmp(it.kind, {'process', 'self-update'})) && ~(it.pkg.isLocal && it.pkg.editable)
@@ -158,13 +141,13 @@ function update(varargin)
                     fprintf('Skipping "%s": no local source to update from.\n', ...
                             mip.parse.display_fqn(it.pkg.fqn));
                 case 'self-update'
-                    updateSelf(it.pkg, force);
+                    updateSelf(it.pkg, opts.force);
                 case 'process'
                     p = it.pkg;
                     if p.isLocal
-                        updateLocalPackage(p, noCompile);
+                        updateLocalPackage(p, opts.no_compile);
                     else
-                        [needs, latestInfo] = checkRemoteNeedsUpdate(p, force);
+                        [needs, latestInfo] = checkRemoteNeedsUpdate(p, opts.force);
                         if ~needs
                             continue
                         end

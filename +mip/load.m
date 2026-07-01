@@ -37,65 +37,20 @@ function load(varargin)
 %   --transitive     (internal) Load as a transitive dependency, not a direct load
 
     % Parse flags and package names from arguments
-    installIfMissing = false;
-    stickyPackage = false;
-    isDirect = true;
-    channel = '';
-    addPathRels = {};
-    rmPathRels = {};
-    withGroups = {};
-    packageArgs = {};
-    i = 1;
-    while i <= length(varargin)
-        arg = varargin{i};
-        if ischar(arg) && strcmp(arg, '--install')
-            installIfMissing = true;
-        elseif ischar(arg) && strcmp(arg, '--sticky')
-            stickyPackage = true;
-        elseif ischar(arg) && strcmp(arg, '--transitive')
-            isDirect = false;
-        elseif ischar(arg) && strcmp(arg, '--channel')
-            if i < length(varargin)
-                i = i + 1;
-                channel = varargin{i};
-                if ~isempty(channel) && ~contains(channel, '/')
-                    channel = [channel '/' channel];
-                end
-            else
-                error('mip:load:missingChannel', '--channel requires a value');
-            end
-        elseif ischar(arg) && strcmp(arg, '--addpath')
-            if i < length(varargin)
-                i = i + 1;
-                addPathRels{end+1} = varargin{i}; %#ok<*AGROW>
-            else
-                error('mip:load:missingAddpathValue', '--addpath requires a value');
-            end
-        elseif ischar(arg) && strcmp(arg, '--rmpath')
-            if i < length(varargin)
-                i = i + 1;
-                rmPathRels{end+1} = varargin{i};
-            else
-                error('mip:load:missingRmpathValue', '--rmpath requires a value');
-            end
-        elseif ischar(arg) && strcmp(arg, '--with')
-            if i < length(varargin)
-                i = i + 1;
-                withGroups{end+1} = varargin{i};
-            else
-                error('mip:load:missingWithValue', '--with requires a group name');
-            end
-        elseif ischar(arg) && ~startsWith(arg, '--')
-            packageArgs{end+1} = arg;
-        end
-        i = i + 1;
+    [opts, packageArgs] = mip.parse.flags(varargin, struct( ...
+        'install', false, 'sticky', false, 'transitive', false, ...
+        'channel', '', 'addpath', {{}}, 'rmpath', {{}}, 'with', {{}}));
+    isDirect = ~opts.transitive;
+    channel = opts.channel;
+    if ~isempty(channel)
+        channel = mip.parse.normalize_channel_spec(channel);
     end
 
     if isempty(packageArgs)
         error('mip:noPackage', 'No package specified for load command.');
     end
 
-    if (~isempty(addPathRels) || ~isempty(rmPathRels)) && length(packageArgs) > 1
+    if (~isempty(opts.addpath) || ~isempty(opts.rmpath)) && length(packageArgs) > 1
         error('mip:load:addpathSinglePackage', ...
               ['--addpath / --rmpath require exactly one positional package; ' ...
                'got %d. The flags resolve relative to that package''s source ' ...
@@ -110,17 +65,17 @@ function load(varargin)
     matchedGroups = {};
     for i = 1:length(packageArgs)
         if isDirect
-            matched = loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
-                       channel, isDirect, {}, addPathRels, rmPathRels, withGroups);
-            matchedGroups = [matchedGroups, matched];
+            matched = loadSingle(packageArgs{i}, opts.install, opts.sticky, ...
+                       channel, isDirect, {}, opts.addpath, opts.rmpath, opts.with);
+            matchedGroups = [matchedGroups, matched]; %#ok<AGROW>
         else
-            loadSingle(packageArgs{i}, installIfMissing, stickyPackage, ...
+            loadSingle(packageArgs{i}, opts.install, opts.sticky, ...
                        channel, isDirect, {}, {}, {}, {});
         end
     end
 
-    for k = 1:length(withGroups)
-        g = withGroups{k};
+    for k = 1:length(opts.with)
+        g = opts.with{k};
         if ~ismember(g, matchedGroups)
             warning('mip:load:unknownGroup', ...
                     ['No loaded package declares the extra path group "%s". ' ...

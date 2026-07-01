@@ -48,7 +48,7 @@ classdef TestLoadWithExtraPaths < matlab.unittest.TestCase
             % rather than silently consuming the next positional arg.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'foo');
             testCase.verifyError(@() mip.load('foo', '--with'), ...
-                'mip:load:missingWithValue');
+                'mip:missingFlagValue');
         end
 
         %% --- Group declared: addpath applied ---

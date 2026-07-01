@@ -26,40 +26,17 @@ function init(varargin)
 % If the target directory already contains a mip.yaml, init prints a
 % message and exits without modifying anything.
 
-    targetPath = '';
-    overrideName = '';
-    repository = '';
-    nameProvided = false;
-    repositoryProvided = false;
+    [opts, positionals] = mip.parse.flags(varargin, ...
+        struct('name', '', 'repository', ''));
+    repository = opts.repository;
 
-    i = 1;
-    while i <= numel(varargin)
-        arg = varargin{i};
-        if ischar(arg) && strcmp(arg, '--name')
-            if i + 1 > numel(varargin)
-                error('mip:init:missingNameValue', '--name requires a value.');
-            end
-            overrideName = varargin{i + 1};
-            nameProvided = true;
-            i = i + 2;
-        elseif ischar(arg) && strcmp(arg, '--repository')
-            if i + 1 > numel(varargin)
-                error('mip:init:missingRepositoryValue', ...
-                      '--repository requires a value.');
-            end
-            repository = varargin{i + 1};
-            repositoryProvided = true;
-            i = i + 2;
-        elseif isempty(targetPath)
-            targetPath = arg;
-            i = i + 1;
-        else
-            error('mip:init:unexpectedArg', 'Unexpected argument: %s', arg);
-        end
+    if length(positionals) > 1
+        error('mip:init:unexpectedArg', 'Unexpected argument: %s', positionals{2});
     end
-
-    if isempty(targetPath)
+    if isempty(positionals)
         targetPath = '.';
+    else
+        targetPath = positionals{1};
     end
 
     targetDir = mip.paths.get_absolute_path(targetPath);
@@ -76,8 +53,8 @@ function init(varargin)
 
     [gitRepoName, gitRepoUrl] = mip.init.git_info(targetDir);
 
-    if nameProvided
-        pkgName = overrideName;
+    if ~isempty(opts.name)
+        pkgName = opts.name;
     elseif ~isempty(gitRepoName)
         % Lowercase the git repo name to produce a canonical name. Other
         % non-canonical characters (dots, spaces) still cause a failure
@@ -92,7 +69,7 @@ function init(varargin)
         pkgName = lower([baseName, ext]);
     end
 
-    if ~repositoryProvided && ~isempty(gitRepoUrl)
+    if isempty(repository) && ~isempty(gitRepoUrl)
         repository = gitRepoUrl;
     end
 
