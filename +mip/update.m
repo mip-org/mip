@@ -118,12 +118,17 @@ function update(varargin)
         items{i} = classifyArg(args{i});
     end
 
-    % --no-compile only applies to editable local installs. Validate
-    % across all "process" items before any destructive action.
+    % --no-compile only applies to editable local installs. Validate every
+    % actionable item before any destructive action; the mip self-update is
+    % never an editable local install, so it is rejected here rather than
+    % falling through to the destructive updateSelf hot-swap. Restricting to
+    % the actionable kinds matters: the skip kinds carry no .pkg (pin-skip)
+    % or are not going to be built anyway (no-source-skip), so they must not
+    % gate --no-compile.
     if noCompile
         for i = 1:length(items)
             it = items{i};
-            if strcmp(it.kind, 'process') && ~(it.pkg.isLocal && it.pkg.editable)
+            if any(strcmp(it.kind, {'process', 'self-update'})) && ~(it.pkg.isLocal && it.pkg.editable)
                 error('mip:update:noCompileRequiresEditable', ...
                       '--no-compile can only be used when all updated packages are editable local installs (offending package: "%s").', ...
                       mip.parse.display_fqn(it.pkg.fqn));
