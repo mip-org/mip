@@ -14,7 +14,11 @@ Every installed package has a unique **FQN** that begins with a **source-type pr
 |---|---|---|
 | `gh` — GitHub channel package | `gh/<owner>/<channel>/<name>` | `gh/mip-org/core/chebfun` |
 | `local` — local directory / editable install | `local/<name>` | `local/mypkg` |
-| `fex` — File Exchange / `--url` zip install | `fex/<name>` | `fex/some_fex_pkg` |
+| `fex` — File Exchange landing-page URL install | `fex/<name>` | `fex/some_fex_pkg` |
+| `web` — generic remote `.zip` (`--url`) install | `web/<name>` | `web/some_web_pkg` |
+| `mhl` — `.mhl` install with no `--channel` | `mhl/<name>` | `mhl/chebfun` |
+
+There are five source-type prefixes in total; the full reserved list is `gh`, `local`, `fex`, `web`, `mhl`. Only `gh` carries an `<owner>/<channel>`; the other four are addressed by the source-type prefix directly (see [§1.6](#16-non-channel-source-types)).
 
 For GitHub channel packages:
 - **owner** -- the GitHub user or organization that owns the channel repository
@@ -32,6 +36,8 @@ The **display form** of a canonical FQN strips the `gh/` prefix only; non-gh FQN
 | `gh/mip-org/core/chebfun` | `mip-org/core/chebfun` |
 | `local/mypkg` | `local/mypkg` |
 | `fex/some_fex_pkg` | `fex/some_fex_pkg` |
+| `web/some_web_pkg` | `web/some_web_pkg` |
+| `mhl/chebfun` | `mhl/chebfun` |
 
 #### 1.1.2 Accepted User Input
 
@@ -40,7 +46,7 @@ The parser accepts either the canonical form or a shorter form for GitHub packag
 | User input | Interpreted as |
 |---|---|
 | `chebfun` | bare name (resolved via §2.4) |
-| `local/mypkg`, `fex/some_pkg` | 2-part non-gh FQN |
+| `local/mypkg`, `fex/some_pkg`, `web/some_pkg`, `mhl/some_pkg` | 2-part non-gh FQN |
 | `mip-org/core/chebfun` | 3-part, implicit `gh/` prefix (`gh/mip-org/core/chebfun`) |
 | `gh/mip-org/core/chebfun` | 4-part, explicit canonical form |
 
@@ -81,10 +87,12 @@ A bare channel name passed to the channel parser directly (e.g., just `core`) is
 
 ### 1.6 Non-channel Source Types
 
-Packages installed from local directories and from File Exchange / `--url` zips are not hosted on a GitHub channel. They live under top-level source-type prefixes:
+Packages installed from local directories, File Exchange, generic remote `.zip` URLs, and channel-less `.mhl` files are not hosted on a GitHub channel. They live under top-level source-type prefixes:
 
 - `local/<name>` — directory and editable installs
-- `fex/<name>` — File Exchange URLs and `--url` zip installs
+- `fex/<name>` — File Exchange landing-page URLs (see [§3.4](#34-installation-from-a-remote-zip-url))
+- `web/<name>` — generic remote `.zip` archives installed via `--url` (see [§3.4](#34-installation-from-a-remote-zip-url))
+- `mhl/<name>` — `.mhl` installs performed without `--channel` (see [§3.3](#33-installation-from-mhl-file))
 
 These are addressed by the source-type prefix directly; no `<owner>/<channel>` is involved.
 
@@ -312,7 +320,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 1. For each package in topological order:
    - If already installed (directory exists), skip it.
    - Download the `.mhl` file from the URL in the index.
-   - If the channel index entry includes `mhl_sha256`, verify the downloaded file against it. Mismatch raises `mip:digestMismatch` and deletes the corrupted file. Missing digest (legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips verification. See [§3.6](#36-mhl-archive-integrity).
+   - SHA-256 digest verification is **currently suspended** (see [§3.6](#36-mhl-archive-integrity) and [#201](https://github.com/mip-org/mip/issues/201)): the channel index entry may still carry an `mhl_sha256` digest, but the downloaded file is not checked against it, so `mip:digestMismatch` is not raised. When verification is re-enabled, a mismatch will delete the corrupted file and raise `mip:digestMismatch`.
    - Validate the `.mhl` archive against path-traversal attacks before extraction (see [§3.6](#36-mhl-archive-integrity)).
    - Extract to `<root>/packages/gh/<owner>/<channel>/<name>/`.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
@@ -390,12 +398,12 @@ If the package is already installed at `local/<name>`, prints a message and retu
 
 `mip install /path/to/file.mhl` or `mip install https://example.com/package.mhl`:
 
-1. Download or copy the `.mhl` file to a temp directory. Direct `.mhl` installs from a path or URL have no digest source, so SHA-256 verification is not performed (see [§3.6](#36-mhl-archive-integrity)).
+1. Download or copy the `.mhl` file to a temp directory. A remote `.mhl` source must use `https://`; a plain `http://` URL is refused with `mip:downloadMhl:requireHttps` (the archive is loaded as code, so an unencrypted fetch would let a network attacker swap the payload). Direct `.mhl` installs from a path or URL have no digest source, so SHA-256 verification is not performed (see [§3.6](#36-mhl-archive-integrity)).
 2. Validate the archive for path-traversal safety (see [§3.6](#36-mhl-archive-integrity)), then extract and read `mip.json` to get the package name.
 3. If already installed, skip.
 4. Install any dependencies from the remote repository first. These dependencies are **not** marked as directly installed -- only the top-level `.mhl` package is. This lets them be pruned later when their parent is uninstalled.
-5. Move extracted files to `<root>/packages/gh/<owner>/<channel>/<name>/`.
-6. The `<owner>/<channel>` is determined by the `--channel` flag (default `mip-org/core`).
+5. Move extracted files into place. With **no** `--channel`, the package lands under `<root>/packages/mhl/<name>/` (FQN `mhl/<name>`). Placing channel-less `.mhl` installs under their own `mhl/` source type keeps a `.mhl` from an arbitrary path or URL from masquerading as a member of the default core channel.
+6. Passing `--channel <owner>/<channel>` opts in to gh-channel placement instead: the package lands under `<root>/packages/gh/<owner>/<channel>/<name>/` (FQN `gh/<owner>/<channel>/<name>`). There is **no** default-to-`mip-org/core` behavior here — omitting `--channel` selects `mhl/`, not the core channel.
 7. Mark the top-level `.mhl` package as directly installed.
 
 ### 3.4 Installation from a Remote `.zip` URL
@@ -405,18 +413,19 @@ If the package is already installed at `local/<name>`, prints a message and retu
 1. Download the archive to a temporary directory.
 2. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
 3. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No prompt is issued -- the user opted in by specifying `--url`.
-4. Run a non-editable local install (`mip.build.install_local`) on the extracted source.
+4. Run a non-editable local install (`mip.build.install_local`) on the extracted source. A generic `.zip` URL lands under `<root>/packages/web/<name>/` (source type `web`); a File Exchange landing-page URL lands under `<root>/packages/fex/<name>/` (source type `fex`, see below).
 5. Clear `source_path` in the installed `mip.json` to an empty string. `install_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
 6. Clean up the temp directory regardless of success or failure.
 
 Constraints:
 
+- The `--url` value must use `https://`; a plain `http://` URL is refused with `mip:install:requireHttps` (the archive is unzipped onto the path and loaded, so an unencrypted fetch would let a network attacker inject code).
 - The URL must point to a `.zip` archive: the URL's path component (before `?` or `#`) ends in `.zip`, case-insensitive. Otherwise raises `mip:install:urlMustBeZip`.
 - Exactly one positional argument is required when `--url` is given, and it must be a bare name (not an FQN, URL, or path). Otherwise raises `mip:install:urlRequiresName` / `mip:install:urlTakesSingleName`.
 - `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
 - `--editable` / `-e` is rejected (the source dir is temporary; raises `mip:install:editableRequiresLocal`).
 
-**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`.
+**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`. A package installed from a File Exchange landing page is placed under `<root>/packages/fex/<name>/` (source type `fex`) rather than `web/`.
 
 Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. `mip update <name>` (or `mip update --all`) prints a skip message for URL-installed packages and moves on. To pull in an updated archive, re-run `mip install <name> --url <zip-url>` (uninstall first if needed).
 
@@ -428,9 +437,9 @@ After installation, a hint is printed showing how to load the package:
 
 ### 3.6 `.mhl` Archive Integrity
 
-Every `.mhl` downloaded from a channel is checked in two ways before extraction:
+Every `.mhl` downloaded from a channel is subject to two integrity mechanisms before extraction. SHA-256 digest verification is **currently suspended** (see below); path-traversal validation is active.
 
-**SHA-256 digest verification.** Channel index entries may include an `mhl_sha256` hex digest. When present, the downloaded (or locally copied) file's SHA-256 is compared against the index value (case-insensitive). On mismatch, the file is deleted and `mip:digestMismatch` is raised. If the index entry has no digest (e.g. legacy releases) or the MATLAB JVM is unavailable (e.g. `numbl_wasm`), verification is silently skipped -- the absence of a digest is not itself an error. Digest verification is performed by both `mip install` and `mip update` when they download `.mhl` files from a channel. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so no verification is performed in those cases.
+**SHA-256 digest verification (currently suspended).** Channel index entries may include an `mhl_sha256` hex digest, and the index is expected to keep carrying it so that verification can be re-enabled later. **Verification is not currently performed**, so `mip:digestMismatch` is never raised. It was suspended because channel publishing is not atomic: the `.mhl` asset is uploaded before `index.json` is redeployed, so a client fetching mid-publish can pair an old digest with a new archive and would wrongly trip `mip:digestMismatch` (see [#201](https://github.com/mip-org/mip/issues/201)). When re-enabled, the downloaded (or locally copied) file's SHA-256 will be compared against the index value (case-insensitive); on mismatch the file is deleted and `mip:digestMismatch` is raised, while a missing digest (e.g. legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips the check. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so they would not be verified even once verification is restored.
 
 **Path-traversal validation.** Before `unzip` is ever called, the `.mhl` archive is parsed in pure MATLAB (central directory + each local file header) and every entry name is validated. Any of the following rejects the archive with `mip:pathTraversal`:
 
@@ -653,7 +662,7 @@ When `mip-org/core/mip` is among the resolved uninstall targets, the command del
 1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
 2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
 3. If the user declines, the self-uninstall is aborted. `mip uninstall` then drops `mip-org/core/mip` from its argument list and proceeds normally with any remaining packages.
-4. If the user confirms, mip runs `mip.reset()`, then clears **all** compiled MEX across the entire mip root (`mip.build.clear_mex(mip.paths.root())`) so no loaded binary can block the final delete — done while mip is still on the path, since the `mip.*` helpers become unreachable once mip is removed from it. It then removes `<MIP_ROOT>/packages/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.paths.root(), 's')`). The root itself is deleted directly rather than via [§11.7](#117-robust-directory-removal-and-the-trash-area) (the trash lives inside the root and cannot hold it). `savepath` returns a nonzero status (it does not error) when `pathdef.m` is not writable, as on managed/shared installs; in that case the saved-path update is skipped and a `mip:uninstall:savePathFailed` warning advises the user to remove any mip `addpath` line they added to their `startup.m`, but the uninstall still completes.
+4. If the user confirms, mip runs `mip.reset()`, then clears **all** compiled MEX across the entire mip root (`mip.build.clear_mex(mip.paths.root())`) so no loaded binary can block the final delete — done while mip is still on the path, since the `mip.*` helpers become unreachable once mip is removed from it. It then removes `<MIP_ROOT>/packages/gh/mip-org/core/mip/mip` from the saved MATLAB path (via `path(pathdef)` + `rmpath` + `savepath`, with the live path restored and then re-pruned for the current session), and deletes the entire mip root directory (`rmdir(mip.paths.root(), 's')`). The root itself is deleted directly rather than via [§11.7](#117-robust-directory-removal-and-the-trash-area) (the trash lives inside the root and cannot hold it). `savepath` returns a nonzero status (it does not error) when `pathdef.m` is not writable, as on managed/shared installs; in that case the saved-path update is skipped and a `mip:uninstall:savePathFailed` warning advises the user to remove any mip `addpath` line they added to their `startup.m`, but the uninstall still completes.
 5. A reinstall hint is printed.
 
 If the packages directory is missing when self-uninstall is invoked, the flow raises `mip:uninstall:corrupted` and aborts without touching anything.
@@ -987,29 +996,38 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
 <mip-root>/                                # See §11.5 for resolution rules
   packages/
     directly_installed.txt                 # Persistent tracking of directly installed packages
+    pinned.txt                             # Packages pinned against `mip update` (see §7.11 / §10.5)
     channels.txt                           # Subscribed channels for bare-name resolution (§9.9)
-    mip-org/
-      core/
-        mip/                               # The package manager itself
-          mip.json
-          mip/                             # Package source files
-        chebfun/
-          mip.json
+    gh/                                    # GitHub channel packages, keyed by <owner>/<channel>
+      mip-org/
+        core/
+          mip/                             # The package manager itself
+            mip.json
+            mip/                           # Package source files
           chebfun/
-      test-channel1/
-        alpha/
-          ...
-    mylab/
-      custom/
-        mypkg/
-          ...
-    local/
-      local/
-        devpkg/                            # Editable install (thin wrapper)
-          mip.json                         # editable: true, source_path: /path/to/source
-        copypkg/                           # Non-editable local install
-          mip.json                         # source_path: /original/source (for updates)
-          copypkg/                         # Copied source files
+            mip.json
+            chebfun/
+        test-channel1/
+          alpha/
+            ...
+      mylab/
+        custom/
+          mypkg/
+            ...
+    local/                                 # Non-channel source types sit directly under packages/<type>/<name>/
+      devpkg/                              # Editable install (thin wrapper)
+        mip.json                           # editable: true, source_path: /path/to/source
+      copypkg/                             # Non-editable local install
+        mip.json                           # source_path: /original/source (for updates)
+        copypkg/                           # Copied source files
+    web/
+      some_web_pkg/                        # Generic remote .zip installed via --url
+        mip.json
+        some_web_pkg/
+    mhl/
+      chebfun/                             # .mhl installed without --channel
+        mip.json
+        chebfun/
 ```
 
 ### 11.1 `mip.json` Schema
@@ -1095,7 +1113,7 @@ After removing a package, empty channel and user directories are cleaned up:
 
 The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.paths.root()`](../+mip/+paths/root.m) according to these rules:
 
-- **Unset**: `mip.paths.root()` first tries path-based detection (navigating up from the installed `+mip/+paths/root.m` location, assuming `<root>/packages/mip-org/core/mip/mip/+mip/+paths/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
+- **Unset**: `mip.paths.root()` first tries path-based detection (navigating up from the installed `+mip/+paths/root.m` location, assuming `<root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
 - **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.paths.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.paths.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
@@ -1177,6 +1195,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:install:urlRequiresName` | `--url` given without a positional package name |
 | `mip:install:urlTakesSingleName` | `--url` given with 0 or 2+ positional args, or a non-bare-name positional |
 | `mip:install:urlMustBeZip` | `--url` value does not point to a `.zip` archive |
+| `mip:install:requireHttps` | `--url` value is a plain `http://` URL; `https://` is required (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:multipleUrls` | `--url` passed more than once |
 | `mip:install:missingUrlValue` | `--url` flag provided without a value |
 | `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
@@ -1184,7 +1203,8 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
-| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest |
+| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest. **Not currently raised** — digest verification is suspended pending atomic channel publishing ([#201](https://github.com/mip-org/mip/issues/201)); see [§3.6](#36-mhl-archive-integrity) |
+| `mip:downloadMhl:requireHttps` | `.mhl` download source is a plain `http://` URL; `https://` is required (see [§3.3](#33-installation-from-mhl-file)) |
 | `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
 | `mip:update:notInstalled` | Package not installed |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
