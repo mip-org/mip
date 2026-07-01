@@ -34,13 +34,9 @@ function uninstall(varargin)
             % Canonicalize to the on-disk name so the stored FQN we
             % remove from directly_installed.txt matches what was added
             % during install.
-            onDisk = mip.resolve.installed_dir(result.fqn);
-            if isempty(onDisk)
+            fqn = mip.resolve.installed_fqn(result.fqn);
+            if isempty(fqn)
                 fqn = result.fqn;
-            elseif strcmp(result.type, 'gh')
-                fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
-            else
-                fqn = [result.type '/' onDisk];
             end
             pkgDir = mip.paths.get_package_dir(fqn);
         else

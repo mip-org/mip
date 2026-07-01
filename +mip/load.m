@@ -394,25 +394,16 @@ function fqn = resolveToFqn(packageArg)
         % dash/underscore-insensitive) so the rest of load uses the
         % canonical form, matching what's already in the loaded/sticky
         % state lists.
-        onDisk = mip.resolve.installed_dir(result.fqn);
-        if isempty(onDisk)
-            error('mip:packageNotFound', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  packageArg, packageArg);
-        end
-        if strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
-        else
-            fqn = [result.type '/' onDisk];
-        end
+        fqn = mip.resolve.installed_fqn(result.fqn);
     else
         % Resolve bare name to installed FQN
         fqn = mip.resolve.resolve_bare_name(result.name);
-        if isempty(fqn)
-            error('mip:packageNotFound', ...
-                  'Package "%s" is not installed. Run "mip install %s" first.', ...
-                  result.name, result.name);
-        end
+    end
+
+    if isempty(fqn)
+        error('mip:packageNotFound', ...
+              'Package "%s" is not installed. Run "mip install %s" first.', ...
+              packageArg, packageArg);
     end
 end
 

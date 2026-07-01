@@ -84,50 +84,19 @@ function fqn = resolveLoadedFqn(packageArg)
         % Canonicalize to the on-disk name so we match the form stored in
         % MIP_LOADED_PACKAGES. If not installed at all, fall back to the
         % canonical typed form (caller will report "not loaded").
-        onDisk = mip.resolve.installed_dir(result.fqn);
-        if isempty(onDisk)
+        fqn = mip.resolve.installed_fqn(result.fqn);
+        if isempty(fqn)
             fqn = result.fqn;
-        elseif strcmp(result.type, 'gh')
-            fqn = mip.parse.make_fqn(result.owner, result.channel, onDisk);
-        else
-            fqn = [result.type '/' onDisk];
         end
         return
     end
 
-    % Search loaded packages for a bare name match. Stored entries are in
-    % canonical (on-disk) form; the user's bare name may differ in case
-    % or `-`/`_`, so match by name equivalence.
-    loadedPackages = mip.state.key_value_get('MIP_LOADED_PACKAGES');
-    matches = {};
-    for i = 1:length(loadedPackages)
-        loaded = loadedPackages{i};
-        r = mip.parse.parse_package_arg(loaded);
-        if r.is_fqn && mip.name.match(r.name, result.name)
-            matches{end+1} = loaded; %#ok<AGROW>
-        end
-    end
-
-    if isempty(matches)
+    % Search loaded packages for a bare name match; the most recently
+    % loaded match wins.
+    fqn = mip.resolve.resolve_to_loaded(result.name);
+    if isempty(fqn)
         fqn = result.name;  % Return bare name; caller will handle "not loaded"
-        return
     end
-
-    if length(matches) == 1
-        fqn = matches{1};
-        return
-    end
-
-    % Multiple matches: pick the most recently loaded (last in load order)
-    lastIdx = 0;
-    for i = 1:length(matches)
-        for j = 1:length(loadedPackages)
-            if strcmp(loadedPackages{j}, matches{i}) && j > lastIdx
-                lastIdx = j;
-            end
-        end
-    end
-    fqn = loadedPackages{lastIdx};
 end
 
 function executeUnload(packageDir, fqn)

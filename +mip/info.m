@@ -49,13 +49,9 @@ packageName = result.name;
 if result.is_fqn
     % FQN: only check that specific installation. Canonicalize the name
     % to the on-disk form so we report and operate on the canonical FQN.
-    onDisk = mip.resolve.installed_dir(result.fqn);
-    if ~isempty(onDisk)
-        if strcmp(result.type, 'gh')
-            installedFqns = {mip.parse.make_fqn(result.owner, result.channel, onDisk)};
-        else
-            installedFqns = {[result.type '/' onDisk]};
-        end
+    fqn = mip.resolve.installed_fqn(result.fqn);
+    if ~isempty(fqn)
+        installedFqns = {fqn};
     else
         installedFqns = {};
     end
