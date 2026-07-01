@@ -296,27 +296,7 @@ function showRemoteChannelInfo(channelStr, packageName, index)
     % Show dependencies from latest compatible variant
     latestVersion = allVersions{end};
     latestVariants = versionMap(latestVersion);
-    currentArch = mip.build.arch();
-    compatibleVariant = [];
-
-    canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
-    for i = 1:length(latestVariants)
-        v = latestVariants{i};
-        arch = v.architecture;
-        if strcmp(arch, currentArch) || strcmp(arch, 'any')
-            compatibleVariant = v;
-            break;
-        end
-    end
-    if isempty(compatibleVariant) && canFallbackToWasm
-        for i = 1:length(latestVariants)
-            v = latestVariants{i};
-            if strcmp(v.architecture, 'numbl_wasm')
-                compatibleVariant = v;
-                break;
-            end
-        end
-    end
+    compatibleVariant = mip.resolve.select_best_variant(latestVariants, mip.build.arch());
 
     if ~isempty(compatibleVariant) && isfield(compatibleVariant, 'dependencies') && ~isempty(compatibleVariant.dependencies)
         deps = compatibleVariant.dependencies;
