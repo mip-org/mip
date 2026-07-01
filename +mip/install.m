@@ -597,8 +597,7 @@ function [reloadAfterInstall, replacementBackups] = replaceExistingVersions(reso
             reloadAfterInstall{end+1} = s.fqn; %#ok<AGROW>
         end
         wasDirectlyInstalled = mip.state.is_directly_installed(s.fqn);
-        backupDir = [tempname '_mip_backup'];
-        movefile(pkgDir, backupDir);
+        backupDir = mip.paths.backup_dir(pkgDir);
         if wasDirectlyInstalled
             mip.state.remove_directly_installed(s.fqn);
         end
@@ -615,10 +614,7 @@ function restoreReplacementBackups(replacementBackups)
     for i = 1:length(replacementBackups)
         b = replacementBackups(i);
         try
-            mip.paths.remove_dir(b.pkgDir);
-            if exist(b.backupDir, 'dir')
-                movefile(b.backupDir, b.pkgDir);
-            end
+            mip.paths.restore_dir(b.backupDir, b.pkgDir);
             if b.wasDirectlyInstalled
                 mip.state.add_directly_installed(b.fqn);
             end

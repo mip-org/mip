@@ -245,8 +245,7 @@ function updateLocalPackage(p, noCompile)
         mip.unload(p.fqn);
     end
 
-    backupDir = [tempname '_mip_backup'];
-    movefile(p.pkgDir, backupDir);
+    backupDir = mip.paths.backup_dir(p.pkgDir);
     mip.state.remove_directly_installed(p.fqn);
     mip.paths.cleanup_package_parents(p.fqn);
 
@@ -254,11 +253,7 @@ function updateLocalPackage(p, noCompile)
     try
         mip.build.install_local(p.sourcePath, p.editable, noCompile, p.type);
     catch ME
-        parentDir = fileparts(p.pkgDir);
-        if ~exist(parentDir, 'dir')
-            mkdir(parentDir);
-        end
-        movefile(backupDir, p.pkgDir);
+        mip.paths.restore_dir(backupDir, p.pkgDir);
         mip.state.add_directly_installed(p.fqn);
         rethrow(ME);
     end
@@ -411,12 +406,11 @@ function downloadAndReplace(p)
         mip.channel.extract_mhl(mhlPath, stagingDir);
 
         % Download succeeded — swap old package out and new one in
-        backupDir = [tempname '_mip_backup'];
-        movefile(p.pkgDir, backupDir);
+        backupDir = mip.paths.backup_dir(p.pkgDir);
         try
             movefile(stagingDir, p.pkgDir);
         catch ME
-            movefile(backupDir, p.pkgDir);
+            mip.paths.restore_dir(backupDir, p.pkgDir);
             rethrow(ME);
         end
         % The backup is the replaced old package; remove it robustly in case
