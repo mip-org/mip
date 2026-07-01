@@ -455,7 +455,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
         %% --- Rollback on failure (issue #145) ---
 
         function testUpdateLocalPackage_PreservesPackageOnFailure(testCase)
-            % If install_local fails during update, the old package should
+            % If from_local fails during update, the old package should
             % be restored from backup (not lost).
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'version', '1.0.0');
@@ -464,7 +464,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
             infoBefore = mip.config.read_package_json(pkgDir);
 
-            % Break the source so install_local will fail (remove mip.yaml)
+            % Break the source so from_local will fail (remove mip.yaml)
             delete(fullfile(srcDir, 'mip.yaml'));
 
             testCase.verifyError(@() mip.update('local/mypkg'), ...
@@ -490,7 +490,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
             infoBefore = mip.config.read_package_json(pkgDir);
             testCase.verifyTrue(infoBefore.editable);
 
-            % Break the source so install_local will fail
+            % Break the source so from_local will fail
             delete(fullfile(srcDir, 'mip.yaml'));
 
             testCase.verifyError(@() mip.update('local/mypkg'), ...

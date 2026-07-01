@@ -141,7 +141,7 @@ function install(varargin)
                        'Install aborted.'], localPath);
             end
         end
-        mip.build.install_local(localPath, opts.editable, opts.no_compile, 'local');
+        mip.install.from_local(localPath, opts.editable, opts.no_compile, 'local');
     end
 
     % If only local installs were requested, we're done

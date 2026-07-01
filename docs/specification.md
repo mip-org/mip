@@ -419,8 +419,8 @@ If the package is already installed at `local/<name>`, prints a message and retu
 1. Download the archive to a temporary directory.
 2. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
 3. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No prompt is issued -- the user opted in by specifying `--url`.
-4. Run a non-editable local install (`mip.build.install_local`) on the extracted source. A generic `.zip` URL lands under `<root>/packages/web/<name>/` (source type `web`); a File Exchange landing-page URL lands under `<root>/packages/fex/<name>/` (source type `fex`, see below).
-5. Clear `source_path` in the installed `mip.json` to an empty string. `install_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
+4. Run a non-editable local install (`mip.install.from_local`) on the extracted source. A generic `.zip` URL lands under `<root>/packages/web/<name>/` (source type `web`); a File Exchange landing-page URL lands under `<root>/packages/fex/<name>/` (source type `fex`, see below).
+5. Clear `source_path` in the installed `mip.json` to an empty string. `from_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
 6. Clean up the temp directory regardless of success or failure.
 
 Constraints:
@@ -701,7 +701,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 7. Snapshot `MIP_LOADED_PACKAGES` and `MIP_DIRECTLY_LOADED_PACKAGES`, then walk the batch in argument order, running each package's full lifecycle (skip messages, "Checking for updates" output, download/replace, etc.) before moving on to the next package. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next.
    - **Pinned packages** (named explicitly): print "Skipping pinned package …" and continue.
    - **No-source local packages** (`source_path` absent or empty): print "Skipping … no local source to update from." and continue.
-   - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.build.install_local(sourcePath, editable, noCompile)`. If `install_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `install_local` cannot re-fetch from a channel.
+   - **Local packages** are updated via backup-and-restore: unload if loaded, move the old directory to a temporary backup, `remove_directly_installed`, then `mip.install.from_local(sourcePath, editable, noCompile)`. If `from_local` fails, the backup is moved back and `directly_installed` is restored. They do **not** go through `mip.uninstall` because the prune step would remove their deps, which `from_local` cannot re-fetch from a channel.
    - **Remote packages** are updated via staging: fetch the channel index and run the up-to-date check ([§7.1.1](#711-target-version-selection-for-update)); if the package is up to date, continue. Otherwise unload if loaded, download and extract the new version to a temporary staging directory, then move the old directory to a backup and move the staged version into place. If the swap fails, the backup is restored. The old package is never destroyed until the new version is fully in place. The `directly_installed.txt` entry is preserved (no removal/re-addition).
    - After the per-package walk, install any missing dependencies that the updated remote packages now require, and prune any orphaned packages. These two operations are batched at the end of the walk because they depend on the post-update on-disk state of every updated package.
    - Reload every package in the pre-update `MIP_LOADED_PACKAGES` snapshot that is not currently loaded and whose directory exists. Packages that were in the snapshot but are no longer installed are skipped with a warning.
@@ -722,7 +722,7 @@ This rule only governs **implicit** `mip update X` calls. `mip install X@<versio
 
 ### 7.2 Local Package Update
 
-Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is moved to a temporary backup and `mip.build.install_local` is called with the original `source_path` and `editable` flag from `mip.json`. If `install_local` fails, the backup is restored and the package remains in its pre-update state. This avoids pruning transitive dependencies that `install_local` cannot re-fetch.
+Local packages do **not** go through `mip.uninstall` + `mip.install`. Instead, the old package directory is moved to a temporary backup and `mip.install.from_local` is called with the original `source_path` and `editable` flag from `mip.json`. If `from_local` fails, the backup is restored and the package remains in its pre-update state. This avoids pruning transitive dependencies that `from_local` cannot re-fetch.
 
 - The up-to-date check is skipped -- local packages are always reinstalled.
 - Timestamps change on every update. For editable installs the `compile_script` runs again on every update by default; the `--no-compile` flag from the original install is **not** preserved. Pass `--no-compile` to `mip update` to skip compilation for the current update ([§7.6](#76-skip-compilation-no-compile)).
@@ -776,7 +776,7 @@ To update a dependency, name it explicitly (`mip update dep`) or use `--deps` to
 Each updated package remains directly installed after the update. The mechanism differs by install type:
 
 - **Remote packages** preserve the `directly_installed.txt` entry in place — the entry is never removed.
-- **Local packages** go through `remove_directly_installed` + `install_local` (see [§7.1](#71-update-flow-mip-update-x-y-z) step 7); `install_local` re-adds the entry, so the net effect is the same but there is a brief window during the update where the entry is absent.
+- **Local packages** go through `remove_directly_installed` + `from_local` (see [§7.1](#71-update-flow-mip-update-x-y-z) step 7); `from_local` re-adds the entry, so the net effect is the same but there is a brief window during the update where the entry is absent.
 
 Missing dependencies installed during the update are **not** added to `directly_installed.txt` — they remain transitive dependencies.
 

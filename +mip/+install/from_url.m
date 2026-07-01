@@ -112,9 +112,9 @@ function from_url(args, zipUrl, editable, noCompile)
     else
         sourceType = 'web';
     end
-    mip.build.install_local(sourceDir, false, noCompile, sourceType);
+    mip.install.from_local(sourceDir, false, noCompile, sourceType);
 
-    % Clear source_path in the installed mip.json. `install_local` records
+    % Clear source_path in the installed mip.json. `from_local` records
     % the extracted source dir, but that temp dir is deleted when this
     % function returns, so the stored path would be stale. An empty
     % source_path signals "no source available to reinstall from";

@@ -50,7 +50,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_CompilesByDefault(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true);
+            mip.install.from_local(srcDir, true);
 
             % The compile script creates a .compiled marker file
             testCase.verifyTrue(isfile(fullfile(srcDir, '.compiled')), ...
@@ -60,7 +60,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_NoCompileSkipsCompilation(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true, true);
+            mip.install.from_local(srcDir, true, true);
 
             testCase.verifyFalse(isfile(fullfile(srcDir, '.compiled')), ...
                 'Editable install with --no-compile should skip compilation');
@@ -69,7 +69,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_NoCompileScriptSkipsQuietly(testCase)
             % Package without a compile_script should install fine
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.build.install_local(srcDir, true);
+            mip.install.from_local(srcDir, true);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
@@ -78,7 +78,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_StoresCompileScript(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true);
+            mip.install.from_local(srcDir, true);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
             info = mip.config.read_package_json(pkgDir);
@@ -90,7 +90,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_NoCompileStillStoresScript(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true, true);
+            mip.install.from_local(srcDir, true, true);
 
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
             info = mip.config.read_package_json(pkgDir);
@@ -101,7 +101,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_PrintsCompileHint(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            output = evalc('mip.build.install_local(srcDir, true)');
+            output = evalc('mip.install.from_local(srcDir, true)');
 
             testCase.verifyTrue(contains(output, 'mip compile'), ...
                 'Should print mip compile hint after editable install with compile script');
@@ -110,7 +110,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testEditableInstall_NoCompilePrintsHint(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            output = evalc('mip.build.install_local(srcDir, true, true)');
+            output = evalc('mip.install.from_local(srcDir, true, true)');
 
             testCase.verifyTrue(contains(output, 'mip compile'), ...
                 'Should print mip compile hint when --no-compile skips compilation');
@@ -121,7 +121,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testCompile_RunsCompileScript(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true, true);  % --no-compile
+            mip.install.from_local(srcDir, true, true);  % --no-compile
 
             % Verify not yet compiled
             testCase.verifyFalse(isfile(fullfile(srcDir, '.compiled')));
@@ -136,7 +136,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testCompile_FQNWorks(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, true, true);
+            mip.install.from_local(srcDir, true, true);
 
             mip.compile('local/mypkg');
 
@@ -151,7 +151,7 @@ classdef TestCompile < matlab.unittest.TestCase
         function testCompile_NoCompileScriptErrors(testCase)
             % Install a package without a compile script
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
-            mip.build.install_local(srcDir, true);
+            mip.install.from_local(srcDir, true);
 
             testCase.verifyError(@() mip.compile('mypkg'), ...
                 'mip:compile:noCompileScript');
@@ -164,7 +164,7 @@ classdef TestCompile < matlab.unittest.TestCase
             % in the installed package directory, not the source directory.
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'compile_script', 'do_compile.m');
-            mip.build.install_local(srcDir, false);
+            mip.install.from_local(srcDir, false);
 
             % Source lives under pkgDir/mypkg/ for non-editable installs
             pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');

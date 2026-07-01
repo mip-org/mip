@@ -1,7 +1,7 @@
 classdef TestInstallExtraPaths < matlab.unittest.TestCase
 %TESTINSTALLEXTRAPATHS   Install-time tests for the extra_paths field.
 %
-% Covers how prepare_package / install_local resolve extra_paths in
+% Covers how prepare_package / from_local resolve extra_paths in
 % mip.yaml into the concrete list written to mip.json -- in particular
 % the recursive: true and exclude: options, which delegate to
 % mip.build.compute_addpaths under the hood.

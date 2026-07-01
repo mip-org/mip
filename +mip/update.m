@@ -31,7 +31,7 @@ function update(varargin)
 % package) are pruned.
 %
 % Local packages are reinstalled from their source path without going
-% through uninstall (since install_local cannot re-fetch deps from a
+% through uninstall (since from_local cannot re-fetch deps from a
 % channel). The old package is backed up and restored if reinstall fails.
 %
 % Any packages that were loaded before the update are reloaded afterward.
@@ -215,9 +215,9 @@ end
 
 function updateLocalPackage(p, noCompile)
 % Update a local package: backup, remove from directly_installed, then
-% install_local from the original source path. Restore the backup if
-% install_local fails. Local packages do NOT go through mip.uninstall
-% because that would prune orphaned deps, which install_local cannot
+% from_local from the original source path. Restore the backup if
+% from_local fails. Local packages do NOT go through mip.uninstall
+% because that would prune orphaned deps, which from_local cannot
 % re-fetch from a channel.
 
     displayFqn = mip.parse.display_fqn(p.fqn);
@@ -234,7 +234,7 @@ function updateLocalPackage(p, noCompile)
 
     fprintf('Reinstalling "%s" from %s...\n', displayFqn, p.sourcePath);
     try
-        mip.build.install_local(p.sourcePath, p.editable, noCompile, p.type);
+        mip.install.from_local(p.sourcePath, p.editable, noCompile, p.type);
     catch ME
         mip.paths.restore_dir(backupDir, p.pkgDir);
         mip.state.add_directly_installed(p.fqn);
