@@ -271,7 +271,9 @@ function allPackagesToInstall = planInstall(resolvedPackages, packageInfoMap, un
     end
     allRequiredFqns = unique(allRequiredFqns, 'stable');
 
-    % Sort topologically
+    % Sort topologically. build_dependency_graph already returns each
+    % root's list dependencies-first, so allRequiredFqns is already in
+    % topological order; this re-sort is defensive.
     allPackagesToInstall = mip.dependency.topological_sort(allRequiredFqns, packageInfoMap);
 end
 
