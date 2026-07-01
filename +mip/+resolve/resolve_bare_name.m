@@ -18,52 +18,8 @@ function fqn = resolve_bare_name(packageName)
 
 fqn = '';
 
-packagesDir = mip.paths.get_packages_dir();
-if ~exist(packagesDir, 'dir')
-    return
-end
-
-matches = {};
-
-topEntries = dir(packagesDir);
-for i = 1:length(topEntries)
-    if ~topEntries(i).isdir || startsWith(topEntries(i).name, '.')
-        continue
-    end
-    topName = topEntries(i).name;
-    topPath = fullfile(packagesDir, topName);
-
-    if strcmp(topName, 'gh')
-        ownerDirs = dir(topPath);
-        for j = 1:length(ownerDirs)
-            if ~ownerDirs(j).isdir || startsWith(ownerDirs(j).name, '.')
-                continue
-            end
-            owner = ownerDirs(j).name;
-            ownerPath = fullfile(topPath, owner);
-
-            chanDirs = dir(ownerPath);
-            for k = 1:length(chanDirs)
-                if ~chanDirs(k).isdir || startsWith(chanDirs(k).name, '.')
-                    continue
-                end
-                ch = chanDirs(k).name;
-                candidateFqn = mip.parse.make_fqn(owner, ch, packageName);
-                onDisk = mip.resolve.installed_dir(candidateFqn);
-                if ~isempty(onDisk)
-                    matches{end+1} = mip.parse.make_fqn(owner, ch, onDisk); %#ok<AGROW>
-                end
-            end
-        end
-    else
-        candidateFqn = [topName '/' packageName];
-        onDisk = mip.resolve.installed_dir(candidateFqn);
-        if ~isempty(onDisk)
-            matches{end+1} = [topName '/' onDisk]; %#ok<AGROW>
-        end
-    end
-end
-
+% find_all_installed_by_name returns the name matches in sorted order.
+matches = mip.resolve.find_all_installed_by_name(packageName);
 if isempty(matches)
     return
 end
@@ -76,7 +32,7 @@ for i = 1:length(matches)
     end
 end
 
-matches = sort(matches);
+% Otherwise the alphabetically-first FQN.
 fqn = matches{1};
 
 end
