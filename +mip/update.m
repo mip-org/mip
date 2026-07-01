@@ -522,54 +522,16 @@ function updateSelf(p, force)
 % Self-update for gh/mip-org/core/mip. mip cannot be uninstalled through
 % the normal flow, so we download and swap in place.
 
-    fqn = p.fqn;
-    pkgDir = p.pkgDir;
-    pkgInfo = p.pkgInfo;
-
-    installedVersion = pkgInfo.version;
-    channelStr = 'mip-org/core';
-
-    fprintf('Checking for updates to "mip-org/core/mip"...\n');
-
-    index = mip.channel.fetch_index(channelStr);
-    requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
-    if ~isempty(installedVersion) && ~mip.resolve.is_numeric_version(installedVersion)
-        requestedVersions(p.name) = installedVersion;
-    end
-    try
-        [packageInfoMap, ~] = mip.resolve.build_package_info_map( ...
-            index, 'mip-org', 'core', requestedVersions);
-    catch err
-        if strcmp(err.identifier, 'mip:versionNotFound')
-            error('mip:update:versionNotInChannel', ...
-                  ['Installed mip version "%s" no longer exists in mip-org/core. ' ...
-                   'To switch to a different branch or version, run: mip install mip@<version>'], ...
-                  installedVersion);
-        end
-        rethrow(err);
-    end
-
-    if ~packageInfoMap.isKey(fqn)
-        error('mip:update:notInIndex', 'mip not found in the mip-org/core channel index.');
-    end
-
-    latestInfo = packageInfoMap(fqn);
-
-    if ~force && ~mip.state.check_needs_update(pkgInfo, latestInfo)
-        fprintf('Package "mip-org/core/mip" is already up to date (%s)\n', installedVersion);
+    [needs, latestInfo] = checkRemoteNeedsUpdate(p, force);
+    if ~needs
         return
-    end
-
-    if force
-        fprintf('Force updating "mip-org/core/mip" (%s)\n', installedVersion);
-    else
-        fprintf('Updating "mip-org/core/mip": %s -> %s\n', installedVersion, latestInfo.version);
     end
 
     % mip is the running code, so it can't be unloaded and reinstalled the
     % normal way — hand off to the shared in-place hot-swap.
-    mip.self.hot_swap(pkgDir, pkgInfo, latestInfo);
-    fprintf('Successfully updated "mip-org/core/mip" to %s\n', latestInfo.version);
+    mip.self.hot_swap(p.pkgDir, p.pkgInfo, latestInfo);
+    fprintf('Successfully updated "%s" to %s\n', ...
+            mip.parse.display_fqn(p.fqn), latestInfo.version);
 end
 
 function expanded = expandWithDeps(args)
