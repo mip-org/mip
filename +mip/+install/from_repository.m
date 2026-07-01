@@ -236,7 +236,7 @@ function allPackagesToInstall = planInstall(resolvedPackages, packageInfoMap, un
         allRequiredFqns = {};
         allMissing = {};
         for i = 1:length(resolvedPackages)
-            [installOrder, missing] = mip.dependency.build_dependency_graph(resolvedPackages{i}.fqn, packageInfoMap);
+            [installOrder, missing] = mip.dependency.build_graph(resolvedPackages{i}.fqn, packageInfoMap);
             allRequiredFqns = [allRequiredFqns, installOrder]; %#ok<AGROW>
             allMissing = [allMissing, missing]; %#ok<AGROW>
         end
@@ -271,7 +271,7 @@ function allPackagesToInstall = planInstall(resolvedPackages, packageInfoMap, un
     end
     allRequiredFqns = unique(allRequiredFqns, 'stable');
 
-    % Sort topologically. build_dependency_graph already returns each
+    % Sort topologically. build_graph already returns each
     % root's list dependencies-first, so allRequiredFqns is already in
     % topological order; this re-sort is defensive.
     allPackagesToInstall = mip.dependency.topological_sort(allRequiredFqns, packageInfoMap);

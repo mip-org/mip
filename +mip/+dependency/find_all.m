@@ -1,5 +1,5 @@
-function deps = find_all_dependencies(fqn, visited)
-%FIND_ALL_DEPENDENCIES   Recursively collect all transitive dependencies of an installed package.
+function deps = find_all(fqn, visited)
+%FIND_ALL   Recursively collect all transitive dependencies of an installed package.
 %
 % Reads mip.json from the installed package directory and resolves bare
 % dependency names to mip-org/core/<name>. Cycles are tolerated: a package
@@ -52,7 +52,7 @@ try
             continue
         end
         deps{end+1} = depFqn; %#ok<AGROW>
-        transitiveDeps = mip.dependency.find_all_dependencies(depFqn, [visited, deps]);
+        transitiveDeps = mip.dependency.find_all(depFqn, [visited, deps]);
         deps = unique([deps, transitiveDeps]);
     end
 catch ME

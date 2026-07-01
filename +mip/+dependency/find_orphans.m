@@ -21,7 +21,7 @@ function orphans = find_orphans(roots, universe)
 needed = {};
 for i = 1:length(roots)
     if ismember(roots{i}, universe)
-        needed = [needed, mip.dependency.find_all_dependencies(roots{i})]; %#ok<AGROW>
+        needed = [needed, mip.dependency.find_all(roots{i})]; %#ok<AGROW>
     end
 end
 needed = unique([roots, needed]);

@@ -516,7 +516,7 @@ function expanded = expandWithDeps(args)
         if mip.state.is_pinned(r.fqn)
             continue
         end
-        deps = mip.dependency.find_all_dependencies(r.fqn);
+        deps = mip.dependency.find_all(r.fqn);
         for j = 1:length(deps)
             if ~mip.state.is_installed(deps{j}) || any(strcmp(expanded, deps{j}))
                 continue

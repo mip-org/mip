@@ -1,5 +1,5 @@
-function [depList, missingFqns] = build_dependency_graph(packageFqn, packageInfoMap, visited, path)
-%BUILD_DEPENDENCY_GRAPH   Recursively build dependency graph for a package.
+function [depList, missingFqns] = build_graph(packageFqn, packageInfoMap, visited, path)
+%BUILD_GRAPH   Recursively build dependency graph for a package.
 %
 % Args:
 %   packageFqn     - Fully qualified package name (<owner>/<channel>/<name>)
@@ -18,7 +18,7 @@ function [depList, missingFqns] = build_dependency_graph(packageFqn, packageInfo
 % mip-org/core/<name>.
 %
 % Example:
-%   [deps, missing] = mip.dependency.build_dependency_graph('mip-org/core/mypackage', pkgMap);
+%   [deps, missing] = mip.dependency.build_graph('mip-org/core/mypackage', pkgMap);
 
 if nargin < 3
     visited = {};
@@ -67,7 +67,7 @@ for i = 1:length(dependencies)
         depFqn = resolveBareDep(depResult.name, packageFqn, packageInfoMap);
     end
 
-    [subDeps, subMissing] = mip.dependency.build_dependency_graph(depFqn, packageInfoMap, visited, path);
+    [subDeps, subMissing] = mip.dependency.build_graph(depFqn, packageInfoMap, visited, path);
     depList = [depList, subDeps]; %#ok<*AGROW>
     missingFqns = [missingFqns, subMissing];
 end

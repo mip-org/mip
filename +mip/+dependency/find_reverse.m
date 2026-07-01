@@ -1,5 +1,5 @@
-function reverseDeps = find_reverse_dependencies(packageName, visited)
-%FIND_REVERSE_DEPENDENCIES   Find all packages that depend on a given package.
+function reverseDeps = find_reverse(packageName, visited)
+%FIND_REVERSE   Find all packages that depend on a given package.
 %
 % Args:
 %   packageName - Bare name or FQN of the package to find reverse deps for
@@ -45,7 +45,7 @@ for i = 1:length(allPackages)
         % Check if this package depends on our target (by bare name or FQN)
         if ismember(bareName, dependencies) || ismember(packageName, dependencies)
             reverseDeps = [reverseDeps, {fqn}]; %#ok<*AGROW>
-            transitiveDeps = mip.dependency.find_reverse_dependencies(fqn, visited);
+            transitiveDeps = mip.dependency.find_reverse(fqn, visited);
             reverseDeps = [reverseDeps, transitiveDeps];
         end
     catch
