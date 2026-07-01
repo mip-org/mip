@@ -42,13 +42,6 @@ end
 fprintf('Preparing package "%s" (version %s)\n', packageName, ...
         effectiveVersion);
 
-% Match build for current architecture
-[buildEntry, effectiveArch] = mip.build.match_build(mipConfig, architecture);
-fprintf('Matched build for architecture: %s\n', effectiveArch);
-
-% Resolve build config (merge top-level defaults with build overrides)
-resolvedConfig = mip.build.resolve_build_config(mipConfig, buildEntry);
-
 % Create staging directory
 if ~exist(stagingDir, 'dir')
     mkdir(stagingDir);
@@ -71,28 +64,18 @@ if numStripped > 0
     fprintf('Stripping pre-existing compiled binaries...\n');
 end
 
-% Compute resolved path lists relative to the source subdir
-pathsList = mip.build.compute_addpaths(pkgSubdir, resolvedConfig.paths);
-extraPaths = struct();
-for key = fieldnames(resolvedConfig.extra_paths)'
-    extraPaths.(key{1}) = mip.build.compute_addpaths( ...
-        pkgSubdir, resolvedConfig.extra_paths.(key{1}));
-end
+% Match the build and derive mip.json metadata from the staged copy
+[effectiveArch, jsonOpts] = mip.build.resolve_metadata(pkgSubdir, mipConfig, architecture);
+fprintf('Matched build for architecture: %s\n', effectiveArch);
 
 % Run compilation if specified
-if isfield(resolvedConfig, 'compile_script') && ...
-        ~isempty(resolvedConfig.compile_script)
+if isfield(jsonOpts, 'compile_script')
     fprintf('Compiling...\n');
-    mip.build.run_compile(pkgSubdir, resolvedConfig.compile_script);
+    mip.build.run_compile(pkgSubdir, jsonOpts.compile_script);
 end
 
 % Create mip.json
 fprintf('Creating mip.json...\n');
-jsonOpts = struct();
-jsonOpts.paths = pathsList;
-if ~isempty(fieldnames(extraPaths))
-    jsonOpts.extra_paths = extraPaths;
-end
 sourceHashFile = fullfile(pkgSubdir, '.source_hash');
 if exist(sourceHashFile, 'file')
     fid = fopen(sourceHashFile, 'r');
@@ -114,12 +97,6 @@ releaseVersionFile = fullfile(pkgSubdir, '.release_version');
 if exist(releaseVersionFile, 'file')
     jsonOpts.version = effectiveVersion;
     delete(releaseVersionFile);
-end
-if isfield(resolvedConfig, 'test_script') && ~isempty(resolvedConfig.test_script)
-    jsonOpts.test_script = resolvedConfig.test_script;
-end
-if isfield(resolvedConfig, 'compile_script') && ~isempty(resolvedConfig.compile_script)
-    jsonOpts.compile_script = resolvedConfig.compile_script;
 end
 mip.build.create_mip_json(stagingDir, mipConfig, effectiveArch, jsonOpts);
 
