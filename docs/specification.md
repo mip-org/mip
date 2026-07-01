@@ -25,15 +25,17 @@ For GitHub channel packages:
 - **channel** -- the channel name within that owner
 - **name** -- the package name
 
-All components must match the regex `^[-a-zA-Z0-9_.]+$` and must not be `.` or `..`.
+All components must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` — letters, digits, hyphens, and underscores, starting and ending with a letter or digit. Dots are not allowed anywhere, so `.`, `..`, and dotted names like `.github` are all rejected. See [§2.1](#21-parsing-a-package-argument-parse_package_arg) for the full validation rules.
 
 #### 1.1.1 Display Form
 
-The **display form** of a canonical FQN strips the `gh/` prefix only; non-gh FQNs are displayed unchanged. `mip list`, `mip info`, and all install/load/update messages use the display form. `mip.parse.display_fqn` performs the conversion.
+The **display form** of a canonical FQN strips the `gh/` prefix; non-gh FQNs are displayed unchanged. For **personal channels** — where the channel equals the owner (`gh/<owner>/<owner>/<pkg>`) — the duplicated owner segment is additionally collapsed, yielding the 2-part form `<owner>/<pkg>`. The collapse is skipped when the owner matches a reserved source-type prefix (`gh`, `local`, `fex`, `web`, `mhl`), since the collapsed form would otherwise be re-parsed as a non-gh FQN rather than round-tripping to the original. `mip list`, `mip info`, and all install/load/update messages use the display form. `mip.parse.display_fqn` performs the conversion.
 
 | Canonical FQN | Display form |
 |---|---|
 | `gh/mip-org/core/chebfun` | `mip-org/core/chebfun` |
+| `gh/magland/magland/chunkie` | `magland/chunkie` (personal-channel collapse) |
+| `gh/mip-org/dev/chebfun` | `mip-org/dev/chebfun` (owner ≠ channel: no collapse) |
 | `local/mypkg` | `local/mypkg` |
 | `fex/some_fex_pkg` | `fex/some_fex_pkg` |
 | `web/some_web_pkg` | `web/some_web_pkg` |
@@ -46,7 +48,8 @@ The parser accepts either the canonical form or a shorter form for GitHub packag
 | User input | Interpreted as |
 |---|---|
 | `chebfun` | bare name (resolved via §2.4) |
-| `local/mypkg`, `fex/some_pkg`, `web/some_pkg`, `mhl/some_pkg` | 2-part non-gh FQN |
+| `local/mypkg`, `fex/some_pkg`, `web/some_pkg`, `mhl/some_pkg` | 2-part non-gh FQN (first segment a reserved source type) |
+| `magland/chunkie` | 2-part personal-channel shorthand → `gh/magland/magland/chunkie` (first segment not a reserved type) |
 | `mip-org/core/chebfun` | 3-part, implicit `gh/` prefix (`gh/mip-org/core/chebfun`) |
 | `gh/mip-org/core/chebfun` | 4-part, explicit canonical form |
 
@@ -148,17 +151,20 @@ Input is split on `/` after stripping any `@version` suffix:
 | Input format | Result |
 |---|---|
 | `name` | bare name: `is_fqn=false`, `type=''`, `fqn=''` |
-| `type/name` (2 parts, `type != 'gh'`) | non-gh FQN: `type='local'`/`'fex'`/..., `fqn='<type>/<name>'` |
+| `<type>/<name>` (2 parts, `<type>` a reserved non-gh source type: `local`, `fex`, `web`, `mhl`) | non-gh FQN: `type=<type>`, `fqn='<type>/<name>'` |
+| `<owner>/<name>` (2 parts, `<owner>` **not** a reserved type) | personal-channel shorthand: `type='gh'`, `owner`=`channel`=`<owner>`, `fqn='gh/<owner>/<owner>/<name>'` |
 | `<owner>/<channel>/<name>` (3 parts) | gh FQN: `type='gh'`; `owner`, `channel`, `name` populated; `fqn='gh/<owner>/<channel>/<name>'` |
 | `gh/<owner>/<channel>/<name>` (4 parts) | gh FQN (explicit), same result as 3-part form |
 | 2-part input starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 4-part input not starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 5+ parts | **Error** `mip:invalidPackageSpec` |
 
-Validation rules:
-- Each non-empty component must match `^[-a-zA-Z0-9_.]+$`
-- `.` and `..` are rejected as names (but `.github` is valid because it starts with `.` followed by more chars -- the regex allows it, and the explicit `.`/`..` check doesn't match)
-- Spaces and special characters (`!`, `#`, etc.) are rejected
+The reserved source types are `gh`, `local`, `fex`, `web`, `mhl`. For a 2-part input, only these (other than `gh`) form a non-gh FQN; any other first segment is treated as the owner of a personal channel and expands to `gh/<owner>/<owner>/<name>`.
+
+Validation rules (each non-empty component is checked with `mip.name.is_valid`):
+- Each component must match `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` — letters, digits, hyphens, and underscores, starting and ending with a letter or digit. Mixed case is accepted (lookup is case-insensitive); the canonical on-disk form is stricter (lowercase — see [§9.8](#98-mip-init) and `mip.name.is_valid_canonical`).
+- Dots are disallowed anywhere, so `.`, `..`, `.github`, and `my.pkg` are all rejected.
+- Spaces and other special characters (`!`, `#`, etc.) are rejected
 
 ### 2.2 Parsing a Channel Spec (`parse_channel_spec`)
 
@@ -173,7 +179,7 @@ Validation rules:
 
 Scans an argument list for `--channel <value>` and extracts it:
 - Returns the channel string and the remaining arguments with `--channel` and its value removed
-- A bare single name `<owner>` (no `/`) is expanded to `<owner>/<owner>` — shorthand for the user's personal channel repo at `github.com/<owner>/mip-<owner>`. This shorthand is exclusive to the `--channel` flag; it does not apply to FQN package arguments.
+- A bare single name `<owner>` (no `/`) is expanded to `<owner>/<owner>` — shorthand for the user's personal channel repo at `github.com/<owner>/mip-<owner>`. The same personal-channel convention also applies to package arguments, in a different input shape: a 2-part `<owner>/<name>` package argument (where `<owner>` is not a reserved source type) expands to `gh/<owner>/<owner>/<name>` (see [§2.1](#21-parsing-a-package-argument-parse_package_arg)).
 - If `--channel` appears without a following value, raises `mip:missingChannelValue`
 - If `--channel` is absent, returns empty string and the original arguments unchanged
 - Works regardless of position in the argument list (beginning, middle, or end)
@@ -275,7 +281,7 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 
 #### 3.1.2 Index Fetching
 
-1. Always fetch the `mip-org/core` index (bare-name dependencies always resolve there -- see [§3.1.5](#315-dependency-resolution)).
+1. Always fetch the `mip-org/core` index (it is the fallback resolution target for bare-name dependencies -- see [§3.1.5](#315-dependency-resolution)).
 2. If at least one bare-name argument is present, fetch the primary channel index (`--channel` value, or `mip-org/core` by default). When all arguments are FQNs, the primary channel is not fetched.
 3. Also fetch indexes for any channels referenced by FQN arguments.
 4. During dependency resolution, if a cross-channel FQN dependency is missing, fetch its channel lazily (up to 10 retry attempts).
@@ -309,7 +315,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
 #### 3.1.5 Dependency Resolution
 
 1. Build a dependency graph recursively using `build_dependency_graph`.
-2. Bare-name dependencies always resolve to `gh/mip-org/core/<name>` during graph building.
+2. Bare-name dependencies resolve to the depending package's own channel when the parent is a `gh` package on a channel other than `mip-org/core` whose fetched index provides the dependency, and otherwise to `gh/mip-org/core/<name>` (see [§2.4.5](#245-resolving-a-dependency-during-remote-install-build_dependency_graph)).
 3. FQN dependencies are used as-is.
 4. Circular dependencies are detected and raise `mip:circularDependency`.
 5. If a dependency's channel hasn't been fetched yet, it is fetched lazily.
@@ -490,7 +496,7 @@ If `--install` is specified and the package is not installed, it is automaticall
 
 When loading a package with dependencies (listed in `mip.json`):
 
-1. Each dependency is resolved using `resolve_dependency` ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)): bare names always resolve to `gh/mip-org/core/<name>`.
+1. Each dependency is resolved using `resolve_dependency` ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)): a bare name resolves to the depending package's own channel when the parent is a `gh` package on a channel other than `mip-org/core` that has the dependency installed, and otherwise to `gh/mip-org/core/<name>`.
 2. Dependencies are loaded recursively before the package itself.
 3. Dependencies are loaded as **non-direct** (they won't appear in `MIP_DIRECTLY_LOADED_PACKAGES`, and are not added to `directly_installed.txt`).
 4. Dependencies are loaded as **non-sticky** (even if the parent was loaded with `--sticky`).
@@ -897,7 +903,7 @@ mip init [<path>] [--name <packagename>] [--repository <url>]
 ```
 
 - **`<path>`** (optional positional) -- directory to initialize. Defaults to the current directory (`.`) when omitted. Must already exist; otherwise raises `mip:init:notADirectory`.
-- **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the git repo name (if a `.git/config` is detected -- see below) and otherwise to the target directory's basename. The default is lowercased before validation; an explicit `--name` is not. Names must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` (letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override.
+- **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the git repo name (if a `.git/config` is detected -- see below) and otherwise to the target directory's basename. The name must be a valid **canonical** name, matching the regex `^[a-z0-9]([-a-z0-9_]*[a-z0-9])?$` (**lowercase** letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override. The git-repo-name and directory-basename defaults are lowercased before validation, so an uppercase directory name like `MyPkg` yields the canonical name `mypkg`. An explicit `--name` is **not** lowercased and so must already be canonical -- `mip init --name MyPkg` raises `mip:init:invalidName` (pass `--name mypkg` instead).
 - **`--repository <url>`** (optional) -- fills in the generated `mip.yaml`'s `repository` field. When omitted, the field is auto-filled from `.git/config` if a remote URL is detected (see below) and is otherwise left blank.
 
 Behavior:
