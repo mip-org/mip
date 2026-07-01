@@ -248,8 +248,7 @@ function updateLocalPackage(p, noCompile)
     backupDir = [tempname '_mip_backup'];
     movefile(p.pkgDir, backupDir);
     mip.state.remove_directly_installed(p.fqn);
-    packagesDir = mip.paths.get_packages_dir();
-    mip.paths.cleanup_empty_dirs(fullfile(packagesDir, p.type));
+    mip.paths.cleanup_package_parents(p.fqn);
 
     fprintf('Reinstalling "%s" from %s...\n', displayFqn, p.sourcePath);
     try

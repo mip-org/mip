@@ -105,7 +105,7 @@ function uninstall(varargin)
         mip.state.remove_pinned(fqn);
 
         % Clean up empty parent directories (derived from the FQN layout)
-        cleanupPackageParents(fqn);
+        mip.paths.cleanup_package_parents(fqn);
     end
 
     % Prune packages that are no longer needed
@@ -125,21 +125,6 @@ function removePackageDir(pkgDir, displayFqn)
     catch rmErr
         error('mip:uninstallFailed', ...
               'Failed to uninstall package "%s": %s', displayFqn, rmErr.message);
-    end
-end
-
-function cleanupPackageParents(fqn)
-% Remove empty parent directories above the uninstalled package. For a
-% gh FQN this walks up through <channel>, <owner>, and the 'gh' root; for
-% a non-gh FQN it only needs to check the source-type directory.
-    packagesDir = mip.paths.get_packages_dir();
-    r = mip.parse.parse_package_arg(fqn);
-    if strcmp(r.type, 'gh')
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner, r.channel));
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh', r.owner));
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, 'gh'));
-    else
-        mip.paths.cleanup_empty_dirs(fullfile(packagesDir, r.type));
     end
 end
 
