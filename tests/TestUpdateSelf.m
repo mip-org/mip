@@ -82,29 +82,5 @@ classdef TestUpdateSelf < matlab.unittest.TestCase
                 'downloaded mip payload should expose mip.json "paths"');
         end
 
-        function testUpdateSelf_NoCompileMipErrors(testCase)
-            % --no-compile only applies to editable local installs. The
-            % mip identity (gh/mip-org/core/mip) is classified as a
-            % self-update, not a process item, and is never an editable
-            % local install. Per specification §7.6 the guard must reject
-            % it BEFORE any destructive action rather than falling through
-            % to the updateSelf hot-swap, so "mip update --no-compile mip"
-            % must raise mip:update:noCompileRequiresEditable. The guard
-            % runs during pre-pass validation, so this errors without any
-            % network access.
-            createTestPackage(testCase.TestRoot, ...
-                'mip-org', 'core', 'mip', 'version', '0.0.0');
-
-            testCase.verifyError( ...
-                @() mip.update('--no-compile', 'mip'), ...
-                'mip:update:noCompileRequiresEditable');
-
-            % --force must not bypass the guard either: the destructive
-            % hot-swap still has to be blocked up front.
-            testCase.verifyError( ...
-                @() mip.update('--no-compile', '--force', 'mip'), ...
-                'mip:update:noCompileRequiresEditable');
-        end
-
     end
 end

@@ -190,6 +190,44 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'compile_script should NOT run when update uses --no-compile --force');
         end
 
+        function testUpdateLocalPackage_NoCompileMipSelfRejectedUntouched(testCase)
+            % The mip identity (gh/mip-org/core/mip) is classified as a
+            % self-update, not a process item, and is never an editable
+            % local install. Per specification §7.6, `--no-compile` must
+            % reject it during pre-pass validation -- BEFORE any destructive
+            % action -- rather than falling through to the updateSelf
+            % hot-swap (issue #303). The guard fires before any network
+            % access, so a fake mip seeded in the isolated root suffices and
+            % this belongs here with the other offline --no-compile cases,
+            % not in the network-gated TestUpdateSelf.
+            pkgDir = createTestPackage(testCase.TestRoot, ...
+                'mip-org', 'core', 'mip', 'version', '0.0.0');
+
+            testCase.verifyError( ...
+                @() mip.update('--no-compile', 'mip'), ...
+                'mip:update:noCompileRequiresEditable');
+            % Rejecting BEFORE any destructive action means the fake mip is
+            % left exactly as seeded: directory present, version unchanged.
+            % (Merely checking that an error is raised would not catch a
+            % regression that hot-swaps first and errors afterward.)
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'mip install must survive a rejected --no-compile update');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, '0.0.0', ...
+                'mip must not be hot-swapped by a rejected --no-compile update');
+
+            % --force must not bypass the guard either: the destructive
+            % hot-swap still has to be blocked up front, leaving mip intact.
+            testCase.verifyError( ...
+                @() mip.update('--no-compile', '--force', 'mip'), ...
+                'mip:update:noCompileRequiresEditable');
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0, ...
+                'mip install must survive a rejected --no-compile --force update');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, '0.0.0', ...
+                'mip must not be hot-swapped by a rejected --no-compile --force update');
+        end
+
         %% --- Load state preserved across update ---
 
         function testUpdateLocalPackage_PreservesLoadState(testCase)
