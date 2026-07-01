@@ -151,12 +151,9 @@ function update(varargin)
                         if ~needs
                             continue
                         end
-                        p.latestInfo = latestInfo;
-                        if mip.state.is_loaded(p.fqn)
-                            fprintf('Unloading "%s" before update...\n', mip.parse.display_fqn(p.fqn));
-                            mip.unload(p.fqn);
-                        end
-                        downloadAndReplace(p);
+                        mip.install.replace_installed(p.fqn, p.pkgDir, latestInfo);
+                        fprintf('Successfully updated "%s" to %s\n', ...
+                                mip.parse.display_fqn(p.fqn), latestInfo.version);
                         updatedRemoteFqns{end+1} = p.fqn; %#ok<AGROW>
                     end
             end
@@ -368,47 +365,6 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
 
     fprintf('Updating "%s": %s -> %s\n', displayFqn, installedVersion, latestInfo.version);
     tf = true;
-end
-
-function downloadAndReplace(p)
-% Download the new version to a staging directory, then swap it in.
-% The old package is moved to a backup and restored if the swap fails,
-% so a failure at any point does not destroy the installed copy.
-
-    displayFqn = mip.parse.display_fqn(p.fqn);
-
-    tempDir = tempname;
-    mkdir(tempDir);
-    try
-        expectedSha = '';
-        if isfield(p.latestInfo, 'mhl_sha256')
-            expectedSha = p.latestInfo.mhl_sha256;
-        end
-        mhlPath = mip.channel.download_mhl(p.latestInfo.mhl_url, tempDir, expectedSha);
-        stagingDir = fullfile(tempDir, 'staging');
-        mip.channel.extract_mhl(mhlPath, stagingDir);
-
-        % Download succeeded — swap old package out and new one in
-        backupDir = mip.paths.backup_dir(p.pkgDir);
-        try
-            movefile(stagingDir, p.pkgDir);
-        catch ME
-            mip.paths.restore_dir(backupDir, p.pkgDir);
-            rethrow(ME);
-        end
-        % The backup is the replaced old package; remove it robustly in case
-        % a binary it shipped was loaded before the update.
-        mip.paths.remove_dir(backupDir);
-        fprintf('Successfully updated "%s" to %s\n', displayFqn, p.latestInfo.version);
-    catch ME
-        if exist(tempDir, 'dir')
-            rmdir(tempDir, 's');
-        end
-        rethrow(ME);
-    end
-    if exist(tempDir, 'dir')
-        rmdir(tempDir, 's');
-    end
 end
 
 function installMissingDeps(remoteFqns)
