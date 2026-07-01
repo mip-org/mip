@@ -207,9 +207,13 @@ function install(varargin)
         fprintf('\nAll packages already installed.\n');
     elseif ~isempty(installedFqns)
         fprintf('\nSuccessfully installed %d package(s).\n', length(installedFqns));
-        fprintf('\nTo use installed packages, run:\n');
-        for i = 1:length(installedFqns)
-            fprintf('  mip load %s\n', mip.resolve.get_shortest_name(installedFqns{i}));
+        % mip itself is always loaded, so it never gets a "mip load" hint.
+        loadable = installedFqns(~strcmp(installedFqns, 'gh/mip-org/core/mip'));
+        if ~isempty(loadable)
+            fprintf('\nTo use installed packages, run:\n');
+            for i = 1:length(loadable)
+                fprintf('  mip load %s\n', mip.resolve.get_shortest_name(loadable{i}));
+            end
         end
     end
 end
@@ -365,6 +369,38 @@ function installedFqns = installFromRepository(repoPackages, channel, markDirect
                       'Package "%s" not found in repository', mip.parse.display_fqn(s.fqn));
             end
         end
+    end
+
+    % mip cannot switch its own version through the normal unload/replace
+    % path below: it is the code currently executing, so unloading it
+    % (mip.unload rejects the self identity outright) or moving its directory
+    % would break the running session. When a *different* version of mip is
+    % requested, hot-swap it in place instead, then drop it from the list so
+    % the remaining packages install normally. Same-version or versionless
+    % requests fall through untouched — the generic path below correctly
+    % reports "already installed" without attempting to unload mip.
+    keepPackage = true(1, length(resolvedPackages));
+    for i = 1:length(resolvedPackages)
+        s = resolvedPackages{i};
+        if ~strcmp(s.fqn, 'gh/mip-org/core/mip') || isempty(s.requested_version)
+            continue
+        end
+        selfPkgDir = mip.paths.get_package_dir(s.fqn);
+        installedInfo = mip.config.read_package_json(selfPkgDir);
+        latestInfo = packageInfoMap(s.fqn);
+        if strcmp(installedInfo.version, latestInfo.version)
+            continue
+        end
+        fprintf('Replacing "%s" %s with requested version %s...\n', ...
+                mip.parse.display_fqn(s.fqn), installedInfo.version, s.requested_version);
+        mip.self.hot_swap(selfPkgDir, installedInfo, latestInfo);
+        fprintf('Successfully installed "%s"\n', mip.parse.display_fqn(s.fqn));
+        installedFqns{end+1} = s.fqn; %#ok<AGROW>
+        keepPackage(i) = false;
+    end
+    resolvedPackages = resolvedPackages(keepPackage);
+    if isempty(resolvedPackages)
+        return
     end
 
     % Resolve dependencies

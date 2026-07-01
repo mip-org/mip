@@ -561,75 +561,10 @@ function updateSelf(p, force)
         fprintf('Updating "mip-org/core/mip": %s -> %s\n', installedVersion, latestInfo.version);
     end
 
-    tempDir = tempname;
-    mkdir(tempDir);
-
-    try
-        expectedSha = '';
-        if isfield(latestInfo, 'mhl_sha256')
-            expectedSha = latestInfo.mhl_sha256;
-        end
-        mhlPath = mip.channel.download_mhl(latestInfo.mhl_url, tempDir, expectedSha);
-        stagingDir = fullfile(tempDir, 'staging');
-        mip.channel.extract_mhl(mhlPath, stagingDir);
-
-        % Resolve all path lists BEFORE touching the installed mip. Once
-        % we rmpath+rmdir the old mip, the mip.* helpers are no longer
-        % reachable, so everything we need from them must be computed now.
-        oldPathsToRemove = {};
-        if isfield(pkgInfo, 'paths')
-            oldSrcDir = mip.paths.get_source_dir(pkgDir, pkgInfo);
-            oldPathsToRemove = resolvePathList(oldSrcDir, pkgInfo.paths);
-        end
-
-        % New package info is read from staging. After movefile, the
-        % staging layout ends up at pkgDir, so source paths resolve under
-        % pkgDir/<name>/.
-        newPkgInfo = mip.config.read_package_json(stagingDir);
-        newPathsToAdd = {};
-        if isfield(newPkgInfo, 'paths')
-            newSrcDir = fullfile(pkgDir, newPkgInfo.name);
-            newPathsToAdd = resolvePathList(newSrcDir, newPkgInfo.paths);
-        end
-
-        % Unload the currently installed mip by rmpath'ing the entries
-        % declared in the old mip.json "paths" field.
-        oldWarn = warning('off', 'MATLAB:rmpath:DirNotFound');
-        for k = 1:length(oldPathsToRemove)
-            rmpath(oldPathsToRemove{k});
-        end
-        warning(oldWarn);
-        rmdir(pkgDir, 's');
-        movefile(stagingDir, pkgDir);
-
-        % Reload mip by addpath'ing the new entries (these now point into
-        % the just-moved pkgDir).
-        for k = 1:length(newPathsToAdd)
-            addpath(newPathsToAdd{k});
-        end
-        fprintf('Successfully updated "mip-org/core/mip" to %s\n', latestInfo.version);
-    catch ME
-        if exist(tempDir, 'dir')
-            rmdir(tempDir, 's');
-        end
-        rethrow(ME);
-    end
-
-    if exist(tempDir, 'dir')
-        rmdir(tempDir, 's');
-    end
-end
-
-function out = resolvePathList(srcDir, relPaths)
-% Resolve each entry in relPaths (relative to srcDir) to an absolute path.
-    out = cell(1, length(relPaths));
-    for i = 1:length(relPaths)
-        if strcmp(relPaths{i}, '.')
-            out{i} = srcDir;
-        else
-            out{i} = fullfile(srcDir, relPaths{i});
-        end
-    end
+    % mip is the running code, so it can't be unloaded and reinstalled the
+    % normal way — hand off to the shared in-place hot-swap.
+    mip.self.hot_swap(pkgDir, pkgInfo, latestInfo);
+    fprintf('Successfully updated "mip-org/core/mip" to %s\n', latestInfo.version);
 end
 
 function expanded = expandWithDeps(args)
