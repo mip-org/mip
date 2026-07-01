@@ -119,11 +119,15 @@ function update(varargin)
     end
 
     % --no-compile only applies to editable local installs. Validate
-    % across all "process" items before any destructive action.
+    % across all actionable items before any destructive action. The mip
+    % self-update (kind 'self-update') is never an editable local install,
+    % so it must be rejected here too rather than silently hot-swapping mip.
     if noCompile
         for i = 1:length(items)
             it = items{i};
-            if strcmp(it.kind, 'process') && ~(it.pkg.isLocal && it.pkg.editable)
+            isEditableLocal = strcmp(it.kind, 'process') && it.pkg.isLocal && it.pkg.editable;
+            isActionable = ismember(it.kind, {'process', 'self-update'});
+            if isActionable && ~isEditableLocal
                 error('mip:update:noCompileRequiresEditable', ...
                       '--no-compile can only be used when all updated packages are editable local installs (offending package: "%s").', ...
                       mip.parse.display_fqn(it.pkg.fqn));
