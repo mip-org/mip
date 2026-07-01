@@ -26,7 +26,7 @@ function unload(varargin)
     packageArgs = {};
     for i = 1:length(varargin)
         if ~startsWith(varargin{i}, '--')
-            packageArgs{end+1} = varargin{i};
+            packageArgs{end+1} = varargin{i}; %#ok<AGROW>
         end
     end
 
@@ -250,25 +250,8 @@ function pruneUnusedPackages()
         return
     end
 
-    % Build set of all needed packages (directly loaded + their dependencies)
-    neededPackages = {};
-    for i = 1:length(MIP_DIRECTLY_LOADED_PACKAGES)
-        directPkg = MIP_DIRECTLY_LOADED_PACKAGES{i};
-        neededPackages = [neededPackages, mip.dependency.find_all_dependencies(directPkg)]; %#ok<*AGROW>
-    end
-
-    % Add directly loaded packages themselves
-    neededPackages = unique([MIP_DIRECTLY_LOADED_PACKAGES, neededPackages]);
-
-    % Find packages to prune (loaded but not needed)
-    % Never prune gh/mip-org/core/mip - it is the package manager itself
-    packagesToPrune = {};
-    for i = 1:length(MIP_LOADED_PACKAGES)
-        pkg = MIP_LOADED_PACKAGES{i};
-        if ~ismember(pkg, neededPackages) && ~strcmp(pkg, 'gh/mip-org/core/mip')
-            packagesToPrune{end+1} = pkg;
-        end
-    end
+    % Find loaded packages no longer needed by any directly-loaded package
+    packagesToPrune = mip.dependency.find_orphans(MIP_DIRECTLY_LOADED_PACKAGES, MIP_LOADED_PACKAGES);
 
     % Prune each unnecessary package
     if ~isempty(packagesToPrune)
