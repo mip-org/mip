@@ -683,7 +683,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
-1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags.
+1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags. Any named argument carrying an `@version` suffix raises `mip:update:versionNotAllowed` — update always stays on the installed version's branch or release stream (see [§7.1.1](#711-target-version-selection-for-update)); switching to a different branch or version requires an explicit `mip install X@<version>`.
 2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` does **not** override the pin filter (see [§7.11](#711-pinned-packages)). If every installed package is pinned, a message is printed and `mip update --all` returns without error. Otherwise (no `--all`), drop any explicitly named pinned packages from the batch with a "Skipping pinned package" message; the unpinned named packages still update. The user must `mip unpin <pkg>` first to update a pinned package. If every named package is pinned, the call returns without error. If `--deps` is specified, expand each remaining package's installed transitive dependencies into the argument list, dropping any pinned dependencies with a "Skipping pinned dependency" message.
 3. Resolve each argument to a `(fqn, owner, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
