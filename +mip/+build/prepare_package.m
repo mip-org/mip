@@ -31,16 +31,33 @@ packageName = mipConfig.name;
 
 % If the channel build supplied a .release_version override, use it for
 % the status message and mip.json. Falls back to mip.yaml's version.
-effectiveVersion = num2str(mipConfig.version);
+effectiveVersion = mipConfig.version;
 sourceReleaseVersionFile = fullfile(sourceDir, '.release_version');
 if exist(sourceReleaseVersionFile, 'file')
     fid = fopen(sourceReleaseVersionFile, 'r');
     effectiveVersion = strtrim(fread(fid, '*char')');
     fclose(fid);
+    % Channel version rules: a non-numeric release version (e.g. a branch
+    % name like 'main') takes precedence over mip.yaml's version, but a
+    % numeric release version must match mip.yaml's version when set.
+    if mip.resolve.is_numeric_version(effectiveVersion) && ...
+            ~isempty(mipConfig.version) && ...
+            ~strcmp(effectiveVersion, mipConfig.version)
+        error('mip:build:versionMismatch', ...
+              ['Release version "%s" (from .release_version) conflicts ' ...
+               'with mip.yaml version "%s": a numeric release version ' ...
+               'must match mip.yaml''s version.'], ...
+              effectiveVersion, mipConfig.version);
+    end
 end
 
+if isempty(effectiveVersion)
+    displayVersion = 'unspecified';
+else
+    displayVersion = effectiveVersion;
+end
 fprintf('Preparing package "%s" (version %s)\n', packageName, ...
-        effectiveVersion);
+        displayVersion);
 
 % Create staging directory
 if ~exist(stagingDir, 'dir')

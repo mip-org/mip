@@ -59,12 +59,14 @@ A **bare name** is just the package name without `<owner>/<channel>` (e.g., `che
 
 ### 1.3 Version Strings
 
-Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`). Numeric versions use dot-separated components that are each parseable as numbers.
+Versions are either **numeric** (e.g., `1.2.3`) or **non-numeric** (e.g., `main`, `master`). Numeric versions use dot-separated components that each consist solely of digits (checked by [`mip.resolve.is_numeric_version`](../+mip/+resolve/is_numeric_version.m); the channel build applies the same definition).
 
 A version can live in two places:
 
 - **Channel release directory** (`packages/<name>/<version>/`) — the authoritative version for a channel-published package. May be numeric or non-numeric (e.g., a branch name like `main`).
-- **`mip.yaml`'s `version` field** — optional; when present, must be blank or numeric. Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`. See [§11.2.1](#1121-channel-version-rules) for how the two relate.
+- **`mip.yaml`'s `version` field** — optional; when present, must be blank or numeric. [`mip.config.read_mip_yaml`](../+mip/+config/read_mip_yaml.m) rejects non-numeric values with `mip:invalidMipYaml`, so bundling and local/editable installs fail fast. Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`. See [§11.2.1](#1121-channel-version-rules) for how the two relate.
+
+The version recorded in `mip.json` at build/install time is the canonical version of an installed package: `mip` never reads a version from `mip.yaml` for `.mhl`-installed packages. The one exception is **editable** installs, where the version is read live from the source directory's `mip.yaml` (see [§11.1](#111-mipjson-schema)). When neither `mip.yaml` nor a channel release directory supplies a version, `mip.json` records the placeholder `unspecified`.
 
 ### 1.4 The `@version` Suffix
 
@@ -1071,6 +1073,8 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
 
 Required: `name`. All other fields have defaults or are optional.
 
+The `version` field is always a non-empty string: [`mip.build.create_mip_json`](../+mip/+build/create_mip_json.m) records the channel release-directory version when the build supplies one (via the `.release_version` side file, see [§11.2.1](#1121-channel-version-rules)), otherwise `mip.yaml`'s numeric version, otherwise the placeholder `unspecified`. `mip.json` is the canonical place mip reads an installed package's version from — with one exception: for **editable** installs, [`mip.config.read_package_json`](../+mip/+config/read_package_json.m) reads the version live from the source directory's `mip.yaml` (so edits show up in `mip list`/`mip info` without reinstalling), falling back to the `mip.json` snapshot when the source `mip.yaml` is missing or invalid.
+
 The `paths` field is the authoritative list of directories that `mip load` adds to the MATLAB path. Each entry is interpreted relative to `srcDir` (see [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m)): the installed package's source subdir for copy installs, or `source_path` for editable installs. Entries are `rmpath`'d in matching fashion by `mip unload` (see [§5.8](#58-path-removal-from-mipjson)).
 
 The optional `extra_paths` field maps a group name to a list of source-relative directories that `mip load --with <group>` adds on top of `paths` (see [§4.9](#49-the---with-flag)). Each group's entries are resolved against `srcDir` exactly like `paths`. The field is written at install/build time from the `extra_paths` mapping in `mip.yaml` ([§11.2](#112-mipyaml-schema)); when absent, `--with` simply matches nothing for this package.
@@ -1101,15 +1105,17 @@ builds:                         # Optional
 
 #### 11.2.1 Channel Version Rules
 
-A channel's package layout is `packages/<name>/<version>/` where the directory name is the authoritative version. `recipe.yaml` does not carry a `version` field. `mip.yaml`'s `version` is optional; when present it must be either blank or numeric (e.g. `1.2.3`). Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`.
+A channel's package layout is `packages/<name>/<version>/` where the directory name is the authoritative version. `source.yaml` does not carry a `version` field. `mip.yaml`'s `version` is optional; when present it must be either blank or numeric (e.g. `1.2.3`). Non-numeric values like branch names belong in the release directory name, not in `mip.yaml`.
 
-The channel build (`prepare_packages.py`) validates that the release-directory name is one of:
+The release-directory name must be one of:
 
 1. the numeric `version` in `mip.yaml`,
-2. the `source.branch` in `recipe.yaml`, or
+2. any non-numeric string (e.g. a branch name like `main`) — which then takes precedence over `mip.yaml`'s version, or
 3. any string, when `mip.yaml`'s `version` is blank/missing.
 
-The channel build passes the release-directory name to `mip bundle` so the bundled `mip.json` carries it as the authoritative version. The source `mip.yaml` in the bundle is unchanged; its `version` may remain blank or numeric while `mip.json` records the release-directory name.
+Equivalently: a *numeric* release-directory name must match `mip.yaml`'s version when one is set. Both the channel build (`mip-channel prepare` in mip_channel_tools) and [`mip.build.prepare_package`](../+mip/+build/prepare_package.m) enforce this; the latter raises `mip:build:versionMismatch` when the `.release_version` side file conflicts with a numeric `mip.yaml` version.
+
+The channel build passes the release-directory name to `mip bundle` via the `.release_version` side file so the bundled `mip.json` carries it as the authoritative version. The source `mip.yaml` in the bundle is unchanged; its `version` may remain blank or numeric while `mip.json` records the release-directory name.
 
 ### 11.3 `.mhl` File Format
 

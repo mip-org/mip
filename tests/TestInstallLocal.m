@@ -69,6 +69,60 @@ classdef TestInstallLocal < matlab.unittest.TestCase
                 'Editable install should record "paths" in mip.json');
         end
 
+        function testEditableInstall_VersionReadLiveFromMipYaml(testCase)
+            % For editable installs the source's mip.yaml is live-editable,
+            % so read_package_json prefers its version over the mip.json
+            % snapshot taken at install time.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '1.0.0');
+            mip.install('-e', srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, '1.0.0');
+
+            % Bump the version in the source mip.yaml; no reinstall.
+            yamlText = fileread(fullfile(srcDir, 'mip.yaml'));
+            yamlText = strrep(yamlText, 'version: "1.0.0"', 'version: "2.0.0"');
+            fid = fopen(fullfile(srcDir, 'mip.yaml'), 'w');
+            fwrite(fid, yamlText);
+            fclose(fid);
+
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, '2.0.0');
+        end
+
+        function testEditableInstall_BlankLiveVersionShowsUnspecified(testCase)
+            % A blank live mip.yaml version reads as the same placeholder
+            % mip.json records for blank versions.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '');
+            mip.install('-e', srcDir);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, 'unspecified');
+        end
+
+        function testEditableInstall_InvalidLiveVersionFallsBackToSnapshot(testCase)
+            % If the user edits the source mip.yaml into an invalid state
+            % (non-numeric version), reads fall back to the mip.json
+            % snapshot rather than erroring.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '1.0.0');
+            mip.install('-e', srcDir);
+
+            yamlText = fileread(fullfile(srcDir, 'mip.yaml'));
+            yamlText = strrep(yamlText, 'version: "1.0.0"', 'version: "dev"');
+            fid = fopen(fullfile(srcDir, 'mip.yaml'), 'w');
+            fwrite(fid, yamlText);
+            fclose(fid);
+
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            info = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info.version, '1.0.0');
+        end
+
         function testEditableInstall_MarkedAsDirectlyInstalled(testCase)
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg');
             mip.install('-e', srcDir);

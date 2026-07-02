@@ -89,7 +89,7 @@ function bundle(varargin)
         % name with '_' in the filename.
         nameForFilename = strrep(mipConfig.name, '-', '_');
         mhlFilename = sprintf('%s-%s-%s.mhl', ...
-            nameForFilename, num2str(mipJson.version), effectiveArch);
+            nameForFilename, mipJson.version, effectiveArch);
         mhlPath = fullfile(outputDir, mhlFilename);
 
         % Create .mhl (zip) from staging directory contents
