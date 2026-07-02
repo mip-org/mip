@@ -86,4 +86,22 @@ catch ME
     end
 end
 
+% For editable installs the source's mip.yaml is live-editable, so prefer
+% its version over the snapshot recorded in mip.json at install time. Fall
+% back to the snapshot when the source directory or its mip.yaml is
+% missing or invalid.
+if isfield(pkgInfo, 'editable') && pkgInfo.editable && ...
+        isfield(pkgInfo, 'source_path')
+    try
+        yamlConfig = mip.config.read_mip_yaml(pkgInfo.source_path);
+        if isempty(yamlConfig.version)
+            pkgInfo.version = 'unspecified';
+        else
+            pkgInfo.version = yamlConfig.version;
+        end
+    catch
+        % Keep the mip.json snapshot.
+    end
+end
+
 end

@@ -35,8 +35,12 @@ sourceDir = mip.paths.get_absolute_path(sourceDir);
 mipConfig = mip.config.read_mip_yaml(sourceDir);
 packageName = mipConfig.name;
 
-fprintf('Found package "%s" (version %s)\n', packageName, ...
-        num2str(mipConfig.version));
+if isempty(mipConfig.version)
+    displayVersion = 'unspecified';
+else
+    displayVersion = mipConfig.version;
+end
+fprintf('Found package "%s" (version %s)\n', packageName, displayVersion);
 
 fqn = [sourceType '/' packageName];
 

@@ -139,6 +139,43 @@ classdef TestReadMipYaml < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.version, '');
         end
 
+        function testReadYamlEmptyVersionField(testCase)
+            % A "version:" line with no value (YAML null) counts as blank.
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion:\n');
+
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.version, '');
+        end
+
+        function testReadYamlRejectsNonNumericVersion(testCase)
+            % A non-empty version must be numeric; branch names belong in
+            % the channel release directory, not in mip.yaml.
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: main\n');
+
+            testCase.verifyError(@() mip.config.read_mip_yaml(testCase.TestDir), ...
+                'mip:invalidMipYaml');
+        end
+
+        function testReadYamlRejectsQuotedNonNumericVersion(testCase)
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: "v1.2.3"\n');
+
+            testCase.verifyError(@() mip.config.read_mip_yaml(testCase.TestDir), ...
+                'mip:invalidMipYaml');
+        end
+
+        function testReadYamlUnquotedNumericVersionNormalizedToString(testCase)
+            % The YAML parser resolves unquoted numeric scalars to doubles;
+            % read_mip_yaml must hand back a string so mip.json always
+            % records a string version.
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: 1.5\n');
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.version, '1.5');
+
+            writeYaml(testCase.TestDir, 'name: mypkg\nversion: 2\n');
+            cfg = mip.config.read_mip_yaml(testCase.TestDir);
+            testCase.verifyEqual(cfg.version, '2');
+        end
+
         function testReadYamlOptionalFields(testCase)
             writeYaml(testCase.TestDir, ...
                 ['name: mypkg\nversion: "1.0.0"\n' ...

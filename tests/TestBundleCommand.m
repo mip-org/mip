@@ -125,6 +125,83 @@ classdef TestBundleCommand < matlab.unittest.TestCase
             testCase.verifyTrue(exist(fullfile(extractDir, 'mypkg'), 'dir') > 0);
         end
 
+        function testBundle_BlankVersionRecordsUnspecified(testCase)
+            % A blank mip.yaml version with no channel release-version
+            % override is recorded as the placeholder 'unspecified' in
+            % mip.json and the .mhl filename.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', '');
+            mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');
+
+            expected = 'mypkg-unspecified-any.mhl';
+            testCase.verifyTrue(exist(fullfile(testCase.OutputDir, expected), 'file') > 0, ...
+                sprintf('Expected file %s to exist', expected));
+
+            jsonText = fileread(fullfile(testCase.OutputDir, [expected '.mip.json']));
+            jsonData = jsondecode(jsonText);
+            testCase.verifyEqual(jsonData.version, 'unspecified');
+        end
+
+        function testBundle_NonNumericVersionErrors(testCase)
+            % A non-empty mip.yaml version must be numeric.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', 'main');
+
+            testCase.verifyError( ...
+                @() mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any'), ...
+                'mip:invalidMipYaml');
+        end
+
+        function testBundle_NonNumericReleaseVersionTakesPrecedence(testCase)
+            % A non-numeric channel release version (e.g. a branch name)
+            % overrides mip.yaml's numeric version in mip.json.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', '1.2.3');
+            writeReleaseVersion(srcDir, 'main');
+            mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');
+
+            expected = 'mypkg-main-any.mhl';
+            testCase.verifyTrue(exist(fullfile(testCase.OutputDir, expected), 'file') > 0, ...
+                sprintf('Expected file %s to exist', expected));
+
+            jsonText = fileread(fullfile(testCase.OutputDir, [expected '.mip.json']));
+            jsonData = jsondecode(jsonText);
+            testCase.verifyEqual(jsonData.version, 'main');
+        end
+
+        function testBundle_MatchingNumericReleaseVersionOk(testCase)
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', '1.2.3');
+            writeReleaseVersion(srcDir, '1.2.3');
+            mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');
+
+            expected = 'mypkg-1.2.3-any.mhl';
+            testCase.verifyTrue(exist(fullfile(testCase.OutputDir, expected), 'file') > 0, ...
+                sprintf('Expected file %s to exist', expected));
+        end
+
+        function testBundle_ConflictingNumericReleaseVersionErrors(testCase)
+            % A numeric release version must match mip.yaml's version.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', '1.2.3');
+            writeReleaseVersion(srcDir, '2.0.0');
+
+            testCase.verifyError( ...
+                @() mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any'), ...
+                'mip:build:versionMismatch');
+        end
+
+        function testBundle_NumericReleaseVersionWithBlankYamlVersionOk(testCase)
+            % When mip.yaml's version is blank, the release directory
+            % supplies the version outright.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', 'version', '');
+            writeReleaseVersion(srcDir, '3.1.4');
+            mip.bundle(srcDir, '--output', testCase.OutputDir, '--arch', 'any');
+
+            expected = 'mypkg-3.1.4-any.mhl';
+            testCase.verifyTrue(exist(fullfile(testCase.OutputDir, expected), 'file') > 0, ...
+                sprintf('Expected file %s to exist', expected));
+
+            jsonText = fileread(fullfile(testCase.OutputDir, [expected '.mip.json']));
+            jsonData = jsondecode(jsonText);
+            testCase.verifyEqual(jsonData.version, '3.1.4');
+        end
+
         function testBundle_MipJsonContainsPaths(testCase)
             % The bundled mip.json must carry a "paths" array so mip.load
             % can addpath the right source subdirs at load time.
@@ -146,4 +223,12 @@ classdef TestBundleCommand < matlab.unittest.TestCase
         end
 
     end
+end
+
+function writeReleaseVersion(srcDir, releaseVersion)
+% Drop the .release_version side file the channel build uses to pass the
+% release-directory name to mip bundle.
+    fid = fopen(fullfile(srcDir, '.release_version'), 'w');
+    fwrite(fid, releaseVersion);
+    fclose(fid);
 end

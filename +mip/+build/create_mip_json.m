@@ -22,6 +22,12 @@ if isfield(opts, 'version') && ~isempty(opts.version)
 else
     mipData.version = mipConfig.version;
 end
+% mip.json is the canonical place mip reads a package's version from, so
+% always record a non-empty string: a blank mip.yaml version with no
+% channel release-version override becomes 'unspecified'.
+if isempty(mipData.version)
+    mipData.version = 'unspecified';
+end
 
 if isfield(mipConfig, 'description')
     mipData.description = mipConfig.description;

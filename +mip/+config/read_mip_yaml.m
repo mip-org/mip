@@ -44,8 +44,29 @@ if ~mip.name.is_valid_canonical(mipConfig.name)
           mipConfig.name, mipYamlPath);
 end
 
+% Normalize and validate version: the field is optional (missing or blank),
+% but when set it must be numeric (e.g. '1.2.3'). Non-numeric versions like
+% branch names belong in the channel release directory, not in mip.yaml.
+% The YAML parser resolves unquoted numeric scalars (version: 1.5) to
+% doubles; convert those back to strings so the version is always a char
+% and mip.json always records a string.
 if ~isfield(mipConfig, 'version') || isempty(mipConfig.version)
     mipConfig.version = '';
+elseif isnumeric(mipConfig.version) && isscalar(mipConfig.version)
+    mipConfig.version = num2str(mipConfig.version);
+end
+if ~ischar(mipConfig.version)
+    error('mip:invalidMipYaml', ...
+          ['mip.yaml "version" field must be a scalar string or number. ' ...
+           '(File: %s)'], mipYamlPath);
+end
+if ~isempty(mipConfig.version) && ~mip.resolve.is_numeric_version(mipConfig.version)
+    error('mip:invalidMipYaml', ...
+          ['mip.yaml "version" field value "%s" must be blank or numeric ' ...
+           '(dot-separated digits, e.g. "1.2.3"). Non-numeric versions ' ...
+           'such as branch names are set by the channel release ' ...
+           'directory, not by mip.yaml. (File: %s)'], ...
+          mipConfig.version, mipYamlPath);
 end
 
 % Normalize dependencies to cell array
