@@ -870,6 +870,8 @@ With a package name, displays information about that package from two sources:
 
 Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`). Always re-downloads the channel index, bypassing the on-disk cache (see [§11.6](#116-channel-index-cache)) so the displayed list reflects the current state of the channel.
 
+Packages in the default `mip-org/core` channel are listed as bare names — bare names resolve to `mip-org/core` first (see [§3.1.1](#311-channel-resolution)), so the listed names can be passed to `mip install` as-is. Packages in any other channel are listed with display-form qualified names (e.g. `mip-org/test-channel1/alpha`, or `magland/chunkie` for a personal channel), since a bare name would not resolve to that channel.
+
 ### 9.4 `mip version`
 
 Prints the mip version string. Reads `mip.json` (the authoritative version written at install/build time) when present in the package root, and falls back to `mip.yaml` for source checkouts that have no `mip.json`. If neither file's `version` is set, an empty string is printed (see [§11.2](#112-mipyaml-schema)).

@@ -14,7 +14,10 @@ function avail(varargin)
 %                     github.com/<owner>/mip-<owner>.
 %
 % Displays an alphabetical list of all available packages in the online
-% repository for the current architecture, shown with fully qualified names.
+% repository for the current architecture. Packages in the default
+% mip-org/core channel are shown as bare names (bare names resolve to
+% mip-org/core first, so they can be passed to "mip install" as-is);
+% packages in any other channel are shown with qualified names.
 
 [opts, ~] = mip.parse.flags(varargin, struct('channel', ''));
 channel = opts.channel;
@@ -54,9 +57,8 @@ try
 
             canFallbackToWasm = startsWith(currentArch, 'numbl_') && ~strcmp(currentArch, 'numbl_wasm');
             if strcmp(arch, currentArch) || strcmp(arch, 'any') || (canFallbackToWasm && strcmp(arch, 'numbl_wasm'))
-                fqn = mip.parse.make_fqn(channelOwner, channelName, pkg.name);
-                if ~ismember(fqn, availablePackages)
-                    availablePackages = [availablePackages, {fqn}]; %#ok<AGROW>
+                if ~ismember(pkg.name, availablePackages)
+                    availablePackages = [availablePackages, {pkg.name}]; %#ok<AGROW>
                 end
             end
         end
@@ -65,10 +67,19 @@ try
     % Sort alphabetically
     availablePackages = sort(availablePackages);
 
-    % Display the list
+    % Display the list. The default mip-org/core channel is listed with
+    % bare names — bare names resolve to mip-org/core first, so they can
+    % be passed to "mip install" as-is. Other channels need the qualified
+    % name for the install to target them.
+    isCoreChannel = strcmp(channelOwner, 'mip-org') && strcmp(channelName, 'core');
     fprintf('\nAvailable packages for %s:\n\n', currentArch);
     for i = 1:length(availablePackages)
-        fprintf('  %s\n', mip.parse.display_fqn(availablePackages{i}));
+        if isCoreChannel
+            fprintf('  %s\n', availablePackages{i});
+        else
+            fqn = mip.parse.make_fqn(channelOwner, channelName, availablePackages{i});
+            fprintf('  %s\n', mip.parse.display_fqn(fqn));
+        end
     end
     fprintf('\n');
 
