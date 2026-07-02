@@ -38,3 +38,36 @@ jobs:
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  dispatch-core-build:
+    # After the test matrix passes on a push to main, ask the mip-core channel
+    # to rebuild the mip package's `main` release (packages/mip/main, which
+    # tracks this branch) instead of waiting up to 24h for its daily probe.
+    #
+    # Depends on `test` only, NOT `coverage`: a codecov upload or low-coverage
+    # failure must not block a release, but a real test failure on ANY arch
+    # (the matrix is fail-fast: false, so every arch runs) fails `test` and
+    # skips this job.
+    #
+    # Gated to push-on-main so pull requests — including forks — never run this
+    # job and never reach the MIP_CORE_DISPATCH_TOKEN secret.
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch mip build on mip-core
+        # Cross-repo dispatch: the default GITHUB_TOKEN can't start a workflow
+        # in another repo. MIP_CORE_DISPATCH_TOKEN is a classic PAT with `repo`
+        # scope. build-package.yml rebuilds only if the source hash actually
+        # moved (force=false); the mip package is arch `any`, so one dispatch
+        # covers it.
+        env:
+          GH_TOKEN: ${{ secrets.MIP_CORE_DISPATCH_TOKEN }}
+        run: |
+          gh workflow run build-package.yml \
+            --repo mip-org/mip-core \
+            -f package_path=packages/mip/main \
+            -f architecture=any \
+            -f force=false
