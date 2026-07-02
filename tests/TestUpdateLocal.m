@@ -56,6 +56,46 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
                 'mip:update:notInstalled');
         end
 
+        %% --- @version rejection ---
+
+        function testUpdateVersionSpec_ErrorsBareName(testCase)
+            testCase.verifyError(@() mip.update('somepkg@1.2.3'), ...
+                'mip:update:versionNotAllowed');
+        end
+
+        function testUpdateVersionSpec_ErrorsFQN(testCase)
+            testCase.verifyError(@() mip.update('mip-org/core/somepkg@main'), ...
+                'mip:update:versionNotAllowed');
+        end
+
+        function testUpdateVersionSpec_ErrorsForInstalledPackage(testCase)
+            % Rejected even when the package is installed — the user must
+            % use "mip install <pkg>@<version>" to switch versions.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '1.0.0');
+            mip.install(srcDir);
+            testCase.verifyError(@() mip.update('local/mypkg@2.0.0'), ...
+                'mip:update:versionNotAllowed');
+        end
+
+        function testUpdateVersionSpec_ErrorsInMultiPackageBatch(testCase)
+            % A @version anywhere in the batch fails fast, before any
+            % package is updated.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'version', '1.0.0');
+            mip.install(srcDir);
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            info1 = mip.config.read_package_json(pkgDir);
+
+            testCase.verifyError( ...
+                @() mip.update('local/mypkg', 'somepkg@1.0'), ...
+                'mip:update:versionNotAllowed');
+
+            info2 = mip.config.read_package_json(pkgDir);
+            testCase.verifyEqual(info2.timestamp, info1.timestamp, ...
+                'No package should have been updated');
+        end
+
         %% --- Local package update always reinstalls ---
 
         function testUpdateLocalPackage_AlwaysReinstalls(testCase)

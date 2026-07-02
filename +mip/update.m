@@ -36,7 +36,10 @@ function update(varargin)
 %
 % Any packages that were loaded before the update are reloaded afterward.
 %
-% Accepts both bare package names and fully qualified names.
+% Accepts both bare package names and fully qualified names. Version
+% specifiers are not accepted: update always stays on the installed
+% version's branch or release stream. To switch to a different branch or
+% version, use "mip install <package>@<version>" instead.
 
     if nargin < 1
         error('mip:update:noPackage', 'At least one package name is required for update command.');
@@ -45,6 +48,20 @@ function update(varargin)
     % Check for --force, --all, --deps, and --no-compile flags
     [opts, args] = mip.parse.flags(varargin, struct( ...
         'force', false, 'all', false, 'deps', false, 'no_compile', false));
+
+    % Reject @version suffixes up front. Update always stays on the
+    % installed version's branch or release stream (see
+    % checkRemoteNeedsUpdate); switching to a different branch or version
+    % requires an explicit "mip install <pkg>@<version>".
+    for i = 1:length(args)
+        parsed = mip.parse.parse_package_arg(args{i});
+        if ~isempty(parsed.version)
+            error('mip:update:versionNotAllowed', ...
+                  ['A version specifier is not allowed with "mip update" ("%s"). ' ...
+                   'To switch to a different branch or version, run: mip install %s'], ...
+                  args{i}, args{i});
+        end
+    end
 
     % --all: expand to all installed packages. Pinned packages are
     % filtered up-front for --all (the user did not specify an explicit
