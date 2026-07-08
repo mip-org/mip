@@ -40,6 +40,11 @@ function varargout = mip(command, varargin)
 %   mip channel append <channel>                    - Subscribe at lowest priority
 %   mip channel remove <channel>                    - Unsubscribe from a channel
 %   mip channel list                                - List channels in priority order
+%   mip env init [--directory <dir>]                - Create a project environment (mipenv.yaml)
+%   mip env add <package> [...]                     - Add a dependency, re-lock, and install
+%   mip env lock                                    - Resolve the spec into mipenv.lock
+%   mip env sync                                    - Install exactly what mipenv.lock specifies
+%   mip env activate [--directory <dir>]            - Use a project environment in this session
 %   mip help [command]                              - Show help text for command
 %
 % Channels:
@@ -79,7 +84,7 @@ command = lower(command);
 % ensures this fires even if the command errors partway through
 % (e.g. `install a b` failing on `b` after `a` succeeded).
 if ismember(command, {'install','update','uninstall','load','unload', ...
-                     'pin','unpin','reset'})
+                     'pin','unpin','reset','env'})
     refreshSignatures = onCleanup(@safe_update_signatures); %#ok<NASGU>
 end
 
@@ -163,12 +168,20 @@ switch command
     case 'channel'
         mip.channel(varargin{:});
 
+    case 'env'
+        mip.env.dispatch(varargin{:});
+
     case 'version'
         fprintf('%s\n', mip.version());
 
     case 'help'
         if nargin > 1
-            % Show help text for command
+            % Show help text for command. 'env' is a subcommand group whose
+            % handler lives in the +env package rather than a +mip/<cmd>.m.
+            if strcmpi(varargin{1}, 'env')
+                help('mip.env.dispatch');
+                return
+            end
             command = ['+mip/' strrep(varargin{1}, '-', '_') '.m'];
             if ~exist(command, 'file')
                 error('mip:unknownCommand', ['Unknown mip command ''' varargin{1} '''.']);
