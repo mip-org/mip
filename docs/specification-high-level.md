@@ -8,7 +8,7 @@ A quick overview of how the MIP package manager works. For exact rules and edge 
 
 MIP is a package manager for MATLAB. It installs, loads, updates, and unloads packages from **channels** -- package repositories hosted on GitHub Pages.
 
-Packages live at `~/.mip/packages/<owner>/<channel>/<name>/`.
+Packages live at `<mip root>/packages/<owner>/<channel>/<name>/`, where the mip root is the directory mip itself was installed into (default `<userpath>/mip`, e.g. `~/Documents/MATLAB/mip`).
 
 ---
 
@@ -67,7 +67,7 @@ mip install chebfun@1.2.0                    % pin a version
 
 **From a local directory:**
 ```
-mip install ./mypackage                      % copy into ~/.mip
+mip install ./mypackage                      % copy into the mip root
 mip install -e ./mypackage                   % editable (symlink-like)
 mip install -e ./mypackage --no-compile      % editable, skip compilation
 ```
@@ -145,7 +145,7 @@ builds:
 ## Filesystem Layout
 
 ```
-~/.mip/
+<mip root>/                        # default: <userpath>/mip
   packages/
     directly_installed.txt        # tracks user-installed packages
     mip-org/

@@ -10,8 +10,8 @@ function env(varargin)
 %   mip env deactivate             - Alias for "mip deactivate"
 %
 % An environment is a mip root - a directory with a packages/ subtree and
-% its own install state, exactly like the global root (~/.mip) - plus the
-% mip-env.json marker written by "mip env create". Session commands
+% its own install state, exactly like the global root where mip itself is
+% installed - plus the mip-env.json marker written by "mip env create". Session commands
 % (install, uninstall, update, load, list, ...) act on the active
 % environment, which defaults to the global root when nothing is
 % activated.

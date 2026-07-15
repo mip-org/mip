@@ -240,19 +240,31 @@ function unloadAll(forceUnload)
         return
     end
 
-    % Find packages to unload (never unload mip itself)
+    % The running mip code is never unloaded implicitly: removing it from
+    % the path mid-command would silently hand later dispatches to a
+    % different (or no) mip. gh/mip-org/core/mip is always protected; a
+    % session running mip from another installed copy (e.g. a preview
+    % build loaded with `mip load mip-org/labs/mip`) protects that copy
+    % too. An explicit `mip unload <that-copy>` remains allowed.
+    protected = {'gh/mip-org/core/mip'};
+    runningFqn = mip.self.running_fqn();
+    if ~isempty(runningFqn) && ~ismember(runningFqn, protected)
+        protected{end+1} = runningFqn;
+    end
+
+    % Find packages to unload
     packagesToUnload = {};
     if forceUnload
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~strcmp(pkg, 'gh/mip-org/core/mip')
+            if ~ismember(pkg, protected)
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
     else
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~ismember(pkg, MIP_STICKY_PACKAGES)
+            if ~ismember(pkg, MIP_STICKY_PACKAGES) && ~ismember(pkg, protected)
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
@@ -286,15 +298,26 @@ function unloadAll(forceUnload)
         fprintf('  Unloaded package "%s"\n', mip.parse.display_fqn(pkg));
     end
 
-    % Update global variables (mip always remains)
+    % Update global variables (mip itself and the running copy remain)
     if forceUnload
-        MIP_LOADED_PACKAGES = {'gh/mip-org/core/mip'};
-        MIP_DIRECTLY_LOADED_PACKAGES = {};
-        MIP_STICKY_PACKAGES = {'gh/mip-org/core/mip'};
+        MIP_LOADED_PACKAGES = MIP_LOADED_PACKAGES( ...
+            ismember(MIP_LOADED_PACKAGES, protected));
+        if ~ismember('gh/mip-org/core/mip', MIP_LOADED_PACKAGES)
+            MIP_LOADED_PACKAGES{end+1} = 'gh/mip-org/core/mip';
+        end
+        MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES( ...
+            ismember(MIP_DIRECTLY_LOADED_PACKAGES, MIP_LOADED_PACKAGES));
+        MIP_STICKY_PACKAGES = MIP_STICKY_PACKAGES( ...
+            ismember(MIP_STICKY_PACKAGES, MIP_LOADED_PACKAGES));
+        if ~ismember('gh/mip-org/core/mip', MIP_STICKY_PACKAGES)
+            MIP_STICKY_PACKAGES{end+1} = 'gh/mip-org/core/mip';
+        end
     else
-        MIP_LOADED_PACKAGES = MIP_STICKY_PACKAGES;
-        MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES(    ...
-            ismember(MIP_DIRECTLY_LOADED_PACKAGES, MIP_STICKY_PACKAGES) ...
+        MIP_LOADED_PACKAGES = MIP_LOADED_PACKAGES( ...
+            ismember(MIP_LOADED_PACKAGES, MIP_STICKY_PACKAGES) ...
+            | ismember(MIP_LOADED_PACKAGES, protected));
+        MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES(  ...
+            ismember(MIP_DIRECTLY_LOADED_PACKAGES, MIP_LOADED_PACKAGES) ...
         );
     end
 

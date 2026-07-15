@@ -268,6 +268,47 @@ classdef TestActivateDeactivate < matlab.unittest.TestCase
 
         % ---- mip identity inside an env ----
 
+        function testRunningMipCopySurvivesActivateDeactivate(testCase)
+            % A session may run mip from a copy other than
+            % gh/mip-org/core/mip (e.g. a preview build loaded with
+            % "mip load mip-org/labs/mip"). The full swap must not unload
+            % the running copy - otherwise the very commands being used
+            % would vanish from the path mid-activation.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'labs', 'mip');
+            mip.load('mip-org/labs/mip');
+            setappdata(0, 'MIP_SELF_FQN', 'gh/mip-org/labs/mip');
+            mip.env.create('scratch');
+
+            mip.activate('scratch');
+            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
+                'the running mip copy must survive the activation swap');
+
+            mip.deactivate();
+            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
+                'the running mip copy must survive deactivation too');
+        end
+
+        function testRunningMipCopySurvivesUnloadAllButNotExplicitUnload(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'labs', 'mip');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            mip.load('mip-org/labs/mip');
+            mip.load('mip-org/core/pkgA');
+            setappdata(0, 'MIP_SELF_FQN', 'gh/mip-org/labs/mip');
+
+            mip.unload('--all');
+            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'));
+            testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/core/pkgA'));
+
+            mip.unload('--all', '--force');
+            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
+                'the running copy survives --all --force');
+
+            % The documented way back to the released mip stays available.
+            mip.unload('mip-org/labs/mip');
+            testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
+                'an explicit unload of the running copy is still allowed');
+        end
+
         function testUninstallMipInsideEnvIsOrdinary(testCase)
             mip.env.create('scratch');
             mip.activate('scratch');

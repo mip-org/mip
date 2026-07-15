@@ -573,19 +573,21 @@ When multiple loaded packages share the same bare name:
 
 ### 5.3 Unload All (`mip unload --all`)
 
-1. Find all loaded packages that are **not** in `MIP_STICKY_PACKAGES`.
+1. Find all loaded packages that are **not** in `MIP_STICKY_PACKAGES` and not **protected** (see below).
 2. Remove the `mip.json` `paths` entries for each.
-3. Update state: `MIP_LOADED_PACKAGES` is set to just the sticky packages.
-4. `MIP_DIRECTLY_LOADED_PACKAGES` is filtered to only those that are also sticky.
+3. Update state: `MIP_LOADED_PACKAGES` is filtered to the sticky and protected packages.
+4. `MIP_DIRECTLY_LOADED_PACKAGES` is filtered to only those that remain loaded.
+
+**Protected packages.** The running mip code is never unloaded implicitly: removing it from the path mid-command would silently hand later dispatches to a different (or no) mip. `gh/mip-org/core/mip` is always protected; when the session is running mip from another **installed** copy (e.g. a preview build loaded with `mip load mip-org/labs/mip`), that copy — identified by [`mip.self.running_fqn()`](../+mip/+self/running_fqn.m) from the running code's on-disk location (tests override via the `MIP_SELF_FQN` appdata seam) — is protected too. An **explicit** `mip unload <that-copy>` remains allowed; only the `--all` forms protect it.
 
 ### 5.4 Unload All Force (`mip unload --all --force`)
 
-1. Find all loaded packages **except** `mip-org/core/mip`.
+1. Find all loaded packages **except** the protected ones (`mip-org/core/mip` and the running copy — see [§5.3](#53-unload-all-mip-unload---all)).
 2. Remove the `mip.json` `paths` entries for each.
 3. Reset state:
-   - `MIP_LOADED_PACKAGES` = `{'mip-org/core/mip'}`
-   - `MIP_DIRECTLY_LOADED_PACKAGES` = `{}`
-   - `MIP_STICKY_PACKAGES` = `{'mip-org/core/mip'}`
+   - `MIP_LOADED_PACKAGES` = the protected packages (always including `mip-org/core/mip`)
+   - `MIP_DIRECTLY_LOADED_PACKAGES` = filtered to those still loaded
+   - `MIP_STICKY_PACKAGES` = filtered to those still loaded, plus `mip-org/core/mip`
 
 ### 5.5 Dependency Pruning After Unload
 
@@ -1283,7 +1285,7 @@ Every root is fully self-contained: package tree, `directly_installed.txt`, `pin
 
 ### 13.11 mip Itself and Environments
 
-mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment.
+mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment. A session running mip from a different installed copy (e.g. a preview build loaded with `mip load mip-org/labs/mip`) keeps that copy loaded through activation and deactivation — the swap's `unload --all --force` never unloads the running copy ([§5.3](#53-unload-all-mip-unload---all)) — so the commands being used cannot vanish mid-swap.
 
 The **self- flows** key on *which root is active*, via [`mip.self.is_active_root()`](../+mip/+self/is_active_root.m): self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)), self-update ([§7.7](#77-self-update-mip-update-mip)), and the install-time version hot-swap trigger **only when the active root is the root the running mip code is installed into** (derived from the running code's location by [`mip.paths.derived_root()`](../+mip/+paths/derived_root.m); tests opt in via the `MIP_SELF_ROOT` appdata seam). In any other root — an activated environment, or an external root targeted via `MIP_ROOT` — `gh/mip-org/core/mip` is an ordinary, **inert** package: `mip install mip-org/core/mip` installs a copy into the root, `mip uninstall mip` removes that copy (skipping the unload step — the copy was never on the path) or reports "not installed", and `mip update mip` updates it through the normal remote-update path. The running mip is untouched, and `mip load mip` keeps its "always loaded" no-op, so a root's copy can never shadow the running one. This guarantees the self-uninstall flow can never delete an environment root out from under the user.
 
