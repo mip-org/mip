@@ -1201,11 +1201,11 @@ Implements [MEP 8](https://github.com/mip-org/meps/blob/main/meps/mep-0008.md). 
 
 Three kinds of root can be the session's active target:
 
-| Kind       | Location                      | Created by              | Inventoried? |
-|------------|-------------------------------|-------------------------|--------------|
-| **global** | `~/.mip`                      | bootstrap               | n/a (always) |
-| **named**  | `<baseline root>/envs/<name>` | `mip env create <name>` | yes (`mip env list`) |
-| **local**  | `./.mip` (or any path)        | `mip env create`        | no (self-managed) |
+| Kind       | Location                                          | Created by              | Inventoried? |
+|------------|----------------------------------------------------|-------------------------|--------------|
+| **global** | the root mip is installed into (default `<userpath>/mip`) | bootstrap        | n/a (always) |
+| **named**  | `<baseline root>/envs/<name>`                      | `mip env create <name>` | yes (`mip env list`) |
+| **local**  | `./.mip` (or any path)                             | `mip env create`        | no (self-managed) |
 
 ### 13.1 The Baseline Root
 
