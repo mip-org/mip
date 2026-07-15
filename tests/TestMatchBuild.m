@@ -39,10 +39,12 @@ classdef TestMatchBuild < matlab.unittest.TestCase
         end
 
         function testNoBuilds(testCase)
+            % builds: is optional - a package without one is a pure-MATLAB
+            % package built for any architecture with the top-level defaults.
             cfg = struct('builds', {{}});
-            testCase.verifyError( ...
-                @() mip.build.match_build(cfg, 'linux_x86_64'), ...
-                'mip:noBuild');
+            [entry, arch] = mip.build.match_build(cfg, 'linux_x86_64');
+            testCase.verifyEqual(arch, 'any');
+            testCase.verifyEqual(entry.architectures, {'any'});
         end
 
         function testMultiArchBuild(testCase)

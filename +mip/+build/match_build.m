@@ -19,7 +19,12 @@ end
 
 builds = mipConfig.builds;
 if isempty(builds)
-    error('mip:noBuild', 'No builds defined in mip.yaml');
+    % builds: is optional in mip.yaml. A package without one is a pure-
+    % MATLAB package: it builds for any architecture with the top-level
+    % defaults (paths, compile_script, ...) and no build-level overrides.
+    buildEntry = struct('architectures', {{'any'}});
+    effectiveArch = 'any';
+    return
 end
 
 % Normalize to cell array
