@@ -36,6 +36,12 @@ function varargout = mip(command, varargin)
 %   mip bundle <directory> [--output <dir>]         - Build .mhl from local package
 %   mip init <directory> [--name <name>]            - Generate a starter mip.yaml
 %   mip reset                                       - Reset mip to a clean state
+%   mip env                                         - Show the active environment
+%   mip env create [name|path]                      - Create an empty environment
+%   mip env list                                    - List named environments
+%   mip env delete <name>                           - Delete a named environment
+%   mip activate [name|path] [--load]               - Point the session at an environment
+%   mip deactivate                                  - Point the session back at the baseline root
 %   mip channel add <channel>                       - Subscribe at highest priority
 %   mip channel append <channel>                    - Subscribe at lowest priority
 %   mip channel remove <channel>                    - Unsubscribe from a channel
@@ -79,7 +85,7 @@ command = lower(command);
 % ensures this fires even if the command errors partway through
 % (e.g. `install a b` failing on `b` after `a` succeeded).
 if ismember(command, {'install','update','uninstall','load','unload', ...
-                     'pin','unpin','reset'})
+                     'pin','unpin','reset','activate','deactivate','env'})
     refreshSignatures = onCleanup(@safe_update_signatures); %#ok<NASGU>
 end
 
@@ -159,6 +165,15 @@ switch command
 
     case 'avail'
         mip.avail(varargin{:});
+
+    case 'env'
+        mip.env(varargin{:});
+
+    case 'activate'
+        mip.activate(varargin{:});
+
+    case 'deactivate'
+        mip.deactivate(varargin{:});
 
     case 'channel'
         mip.channel(varargin{:});

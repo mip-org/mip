@@ -6,11 +6,12 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
 
 - `mip.m` — CLI entry point, dispatches to command handlers
 - `+mip/` — MATLAB package namespace containing all functionality
-  - Core commands: `install.m`, `update.m`, `uninstall.m`, `load.m`, `unload.m`, `list.m`, `info.m`, `avail.m`, `bundle.m`
+  - Core commands: `install.m`, `update.m`, `uninstall.m`, `load.m`, `unload.m`, `list.m`, `info.m`, `avail.m`, `bundle.m`, `env.m`, `activate.m`, `deactivate.m`
   - `+build/` — Package preparation, compilation, script generation
   - `+channel/` — Network operations (downloading .mhl archives, fetching channel indexes)
   - `+config/` — Config file reading (mip.yaml, mip.json, build fields, local install setup)
   - `+dependency/` — Dependency graph resolution and topological sorting
+  - `+env/` — Environments (MEP 8): create/list/delete named or path envs, activation helpers
   - `+parse/` — Input parsing (package args, channel specs, YAML, FQN construction)
   - `+paths/` — Directory and path management (package dirs, source dirs, cleanup)
   - `+resolve/` — Package discovery and resolution (name resolution, version selection, dependency traversal)
@@ -33,6 +34,7 @@ A package manager for MATLAB/MEX. Handles installing, updating, loading, and unl
   - `<root>/packages/local/<package>/`, `<root>/packages/fex/<package>/`, or `<root>/packages/web/<package>/` (non-gh)
 - **Editable installs**: Thin wrapper at `local/<pkg>/` pointing to source directory
 - **Persistent state**: Uses `setappdata(0, key, value)` for loaded/sticky/directly-loaded package tracking; `directly_installed.txt` for install tracking
+- **Environments**: An env is a mip root with a `mip-env.json` marker. `mip activate` points the session at it via `setenv('MIP_ROOT', ...)` after a full unload swap; named envs live at `<baseline root>/envs/<name>`. Self-uninstall/self-update only trigger when the active root is the running mip's own root (`mip.self.is_active_root`; tests opt in via the `MIP_SELF_ROOT` appdata seam).
 
 ## Running Tests
 

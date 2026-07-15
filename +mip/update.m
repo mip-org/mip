@@ -45,6 +45,8 @@ function update(varargin)
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
 
+    mip.env.print_header();
+
     % Check for --force, --all, --deps, and --no-compile flags
     [opts, args] = mip.parse.flags(varargin, struct( ...
         'force', false, 'all', false, 'deps', false, 'no_compile', false));
@@ -218,7 +220,12 @@ function item = classifyArg(packageArg)
     end
 
     p = resolvePackage(packageArg);
-    if strcmp(p.fqn, 'gh/mip-org/core/mip')
+    % The self-update hot swap replaces the running mip, so it only
+    % triggers when the active root is the root the running mip is
+    % installed into; a gh/mip-org/core/mip copy in any other root (an
+    % activated environment, an external MIP_ROOT target) is an ordinary
+    % inert package and takes the normal remote-update path.
+    if strcmp(p.fqn, 'gh/mip-org/core/mip') && mip.self.is_active_root()
         item = struct('kind', 'self-update', 'pkg', p);
     elseif p.noSource
         item = struct('kind', 'no-source-skip', 'pkg', p);

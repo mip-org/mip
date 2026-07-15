@@ -16,6 +16,8 @@ function uninstall(varargin)
               'At least one package name is required for uninstall command.');
     end
 
+    mip.env.print_header();
+
     % Opportunistically reclaim package dirs that an earlier removal could
     % only move aside (a binary was still loaded in that session).
     mip.paths.purge_trash();
@@ -63,8 +65,13 @@ function uninstall(varargin)
         end
     end
 
-    % Self-uninstall: gh/mip-org/core/mip triggers full mip removal
-    if ismember('gh/mip-org/core/mip', resolvedPackages)
+    % Self-uninstall: gh/mip-org/core/mip triggers full mip removal, but
+    % only when the active root is the root the running mip is installed
+    % into. In any other root (an activated environment, an external
+    % MIP_ROOT target), the FQN is an ordinary, inert package: removing
+    % it does not affect the running mip, and the self flow must never
+    % tear down an environment root.
+    if ismember('gh/mip-org/core/mip', resolvedPackages) && mip.self.is_active_root()
         if uninstallSelf()
             return
         end
@@ -88,7 +95,10 @@ function uninstall(varargin)
         pkgDir = mip.paths.get_package_dir(fqn);
         displayFqn = mip.parse.display_fqn(fqn);
 
-        if mip.state.is_loaded(fqn)
+        % gh/mip-org/core/mip is always marked loaded for the session; a
+        % copy reached here lives in a non-self root, was never actually
+        % on the path, and mip.unload rejects the FQN - so skip unload.
+        if mip.state.is_loaded(fqn) && ~strcmp(fqn, 'gh/mip-org/core/mip')
             mip.unload(fqn);
         end
 

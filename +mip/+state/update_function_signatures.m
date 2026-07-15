@@ -102,7 +102,8 @@ function json = build_signatures(installed, loadable, loaded, pinned)
 
     subcommands = {'install','update','uninstall','list','load','unload', ...
                    'pin','unpin','info','test','compile','bundle','init', ...
-                   'reset','avail','index','arch','root','version','help'};
+                   'reset','avail','index','arch','root','version','help', ...
+                   'env','activate','deactivate'};
 
     lines = {'{', '  "_schemaVersion": "1.0.0"'};
     for i = 1:numel(subcommands)

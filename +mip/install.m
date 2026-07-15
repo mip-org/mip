@@ -52,6 +52,8 @@ function install(varargin)
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
 
+    mip.env.print_header();
+
     % Reclaim any package dirs left in the trash by an earlier removal that
     % could only move them aside (a binary was still loaded at the time).
     mip.paths.purge_trash();

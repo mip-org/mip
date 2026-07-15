@@ -16,6 +16,10 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
             mkdir(fullfile(testCase.TestRoot, 'packages'));
             setenv('MIP_ROOT', testCase.TestRoot);
             clearMipState();
+            % The self-uninstall flow only triggers when the active root
+            % is the root the running mip is installed into; the running
+            % copy here is the source checkout, so opt in via the seam.
+            setappdata(0, 'MIP_SELF_ROOT', testCase.TestRoot);
         end
     end
 
@@ -145,6 +149,25 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
                 'Root directory should be deleted');
             testCase.verifyFalse(exist(otherPkgDir, 'dir') > 0, ...
                 'Other package should be gone with root dir');
+        end
+
+        function testNoSelfUninstallWhenActiveRootIsNotRunningRoot(testCase)
+            % Without the MIP_SELF_ROOT seam, the active root (the test
+            % root) is not the root the running mip is installed into, so
+            % gh/mip-org/core/mip is an ordinary package: uninstalling it
+            % removes the package directory but must not tear down the
+            % root.
+            rmappdata(0, 'MIP_SELF_ROOT');
+            mipCopyDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
+            mip.state.add_directly_installed('gh/mip-org/core/mip');
+            setenv('MIP_CONFIRM', 'yes');
+
+            mip.uninstall('mip-org/core/mip');
+
+            testCase.verifyFalse(exist(mipCopyDir, 'dir') > 0, ...
+                'the inert mip copy should be uninstalled as an ordinary package');
+            testCase.verifyTrue(exist(testCase.TestRoot, 'dir') > 0, ...
+                'the root directory must survive');
         end
 
         function testSelfUninstallAbortContinuesWithOtherPackages(testCase)

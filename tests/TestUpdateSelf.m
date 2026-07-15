@@ -25,6 +25,10 @@ classdef TestUpdateSelf < matlab.unittest.TestCase
             mkdir(fullfile(testCase.TestRoot, 'packages'));
             setenv('MIP_ROOT', testCase.TestRoot);
             clearMipState();
+            % The self-update flow only triggers when the active root is
+            % the root the running mip is installed into; the running
+            % copy here is the source checkout, so opt in via the seam.
+            setappdata(0, 'MIP_SELF_ROOT', testCase.TestRoot);
         end
     end
 

@@ -64,14 +64,24 @@ if exist(pkgDir, 'dir')
     return;
 end
 
-% Check dependencies are installed
+% Install any missing dependencies. Channel (gh) dependencies are
+% auto-installed transitively (not marked directly installed), matching
+% the behavior of remote installs. Non-channel dependencies (local/,
+% fex/, web/, mhl/) cannot be fetched from a channel, so a missing one
+% is still an error.
 if ~isempty(mipConfig.dependencies)
     fprintf('Dependencies: %s\n', strjoin(mipConfig.dependencies, ', '));
     missing = mip.dependency.find_missing(mipConfig.dependencies, fqn);
     if ~isempty(missing)
-        error('mip:dependencyNotFound', ...
-              'Dependency "%s" is not installed. Install it first.', ...
-              mip.parse.display_fqn(missing{1}));
+        nonChannel = missing(~startsWith(missing, 'gh/'));
+        if ~isempty(nonChannel)
+            error('mip:dependencyNotFound', ...
+                  'Dependency "%s" is not installed. Install it first.', ...
+                  mip.parse.display_fqn(nonChannel{1}));
+        end
+        missingDisplay = cellfun(@mip.parse.display_fqn, missing, 'UniformOutput', false);
+        fprintf('Installing missing dependencies: %s\n', strjoin(missingDisplay, ', '));
+        mip.install.from_repository(missing, '', false);
     end
 end
 

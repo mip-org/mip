@@ -31,7 +31,11 @@ function wasLoaded = replace_installed(fqn, pkgDir, latestInfo)
     mip.channel.extract_mhl(mhlPath, stagingDir);
 
     % Download succeeded — now it is safe to unload and swap.
-    wasLoaded = mip.state.is_loaded(fqn);
+    % gh/mip-org/core/mip is always marked loaded for the session; when
+    % this code path replaces it, it is an inert copy in a non-self root
+    % (the self flows use mip.self.hot_swap instead), so it was never on
+    % the path and must not be unloaded (mip.unload rejects the FQN).
+    wasLoaded = mip.state.is_loaded(fqn) && ~strcmp(fqn, 'gh/mip-org/core/mip');
     if wasLoaded
         mip.unload(fqn);
     end

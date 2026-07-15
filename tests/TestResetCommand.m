@@ -56,6 +56,20 @@ classdef TestResetCommand < matlab.unittest.TestCase
             testCase.verifyFalse(isappdata(0, 'MIP_TEST_CONTEXT'));
         end
 
+        function testReset_DeactivatesActiveEnv(testCase)
+            mip.env.create('scratch');
+            mip.activate('scratch');
+            testCase.assertEqual(getenv('MIP_ROOT'), ...
+                fullfile(testCase.TestRoot, 'envs', 'scratch'));
+
+            mip.reset();
+
+            testCase.verifyEqual(getenv('MIP_ROOT'), testCase.TestRoot, ...
+                'MIP_ROOT should be restored to the baseline root');
+            testCase.verifyEmpty(mip.state.get_active_env());
+            testCase.verifyFalse(isappdata(0, 'MIP_ACTIVE_ENV'));
+        end
+
         function testReset_WorksWhenNothingLoaded(testCase)
             % Should not error when no packages are loaded
             mip.reset();

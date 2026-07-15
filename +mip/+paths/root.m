@@ -28,31 +28,16 @@ if ~isempty(root)
     return;
 end
 
-% Navigate up from this file's location:
-%   +paths/root -> +paths -> +mip -> mip (source) -> mip (package) -> core -> mip-org -> gh -> packages -> root
-this_dir     = fileparts(mfilename('fullpath')); % .../+paths
-mip_dir      = fileparts(this_dir);              % .../+mip
-source_dir   = fileparts(mip_dir);               % .../mip/mip
-package_dir  = fileparts(source_dir);            % .../core/mip
-channel_dir  = fileparts(package_dir);           % .../mip-org/core
-owner_dir    = fileparts(channel_dir);           % .../gh/mip-org
-gh_dir       = fileparts(owner_dir);             % .../packages/gh
-packages_dir = fileparts(gh_dir);                % .../packages
-root         = fileparts(packages_dir);          % .../root
-
-if ~isfolder(fullfile(root, 'packages'))
-    % Path-based detection failed (e.g., editable install where
-    % mfilename returns the source path). Fall back to <userpath>/mip.
-    root = fullfile(userpath, 'mip');
-    if ~isfolder(fullfile(root, 'packages'))
-        if ~ispc && ~isempty(getenv('HOME'))
-            root = replace(root, getenv('HOME'), '~');
-        end
-        error('mip:rootNotFound', ...
-            ['Could not determine the mip root directory.\n' ...
-             'Set the MIP_ROOT environment variable to point to your mip root directory.\n' ...
-             'For example: setenv(''MIP_ROOT'', ''%s'')'], root);
+root = mip.paths.derived_root();
+if isempty(root)
+    suggestion = fullfile(userpath, 'mip');
+    if ~ispc && ~isempty(getenv('HOME'))
+        suggestion = replace(suggestion, getenv('HOME'), '~');
     end
+    error('mip:rootNotFound', ...
+        ['Could not determine the mip root directory.\n' ...
+         'Set the MIP_ROOT environment variable to point to your mip root directory.\n' ...
+         'For example: setenv(''MIP_ROOT'', ''%s'')'], suggestion);
 end
 
 end

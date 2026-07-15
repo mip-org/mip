@@ -224,11 +224,57 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
         end
 
-        function testInstallLocal_MissingDependencyErrors(testCase)
+        function testInstallLocal_MissingNonChannelDependencyErrors(testCase)
+            % Non-channel dependencies (local/, fex/, ...) cannot be
+            % fetched from a channel, so a missing one is still an error.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/nonexistent_dep'});
+            testCase.verifyError(@() mip.install('-e', srcDir), ...
+                'mip:dependencyNotFound');
+        end
+
+        function testInstallLocal_AutoInstallsMissingChannelDeps_Editable(testCase)
+            % A missing channel dependency is auto-installed transitively
+            % (not marked directly installed) instead of erroring.
+            seedChannelDep(testCase, 'depauto');
+
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depauto'});
+            mip.install('-e', srcDir);
+
+            testCase.verifyTrue(exist(fullfile(testCase.TestRoot, ...
+                'packages', 'local', 'mypkg'), 'dir') > 0);
+            testCase.verifyTrue(exist(fullfile(testCase.TestRoot, ...
+                'packages', 'gh', 'mip-org', 'core', 'depauto'), 'dir') > 0, ...
+                'Missing channel dependency should be auto-installed');
+            testCase.verifyFalse(mip.state.is_directly_installed('gh/mip-org/core/depauto'), ...
+                'Auto-installed dependency should be transitive, not directly installed');
+        end
+
+        function testInstallLocal_AutoInstallsMissingChannelDeps_Copy(testCase)
+            % Same as above, for the copy (non-editable) install path.
+            seedChannelDep(testCase, 'depauto2');
+
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depauto2'});
+            mip.install(srcDir);
+
+            testCase.verifyTrue(exist(fullfile(testCase.TestRoot, ...
+                'packages', 'local', 'mypkg'), 'dir') > 0);
+            testCase.verifyTrue(exist(fullfile(testCase.TestRoot, ...
+                'packages', 'gh', 'mip-org', 'core', 'depauto2'), 'dir') > 0, ...
+                'Missing channel dependency should be auto-installed');
+        end
+
+        function testInstallLocal_MissingChannelDepNotInChannelErrors(testCase)
+            % A missing channel dependency that the channel does not
+            % publish surfaces the channel-resolution error.
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
+
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'nonexistent_dep'});
             testCase.verifyError(@() mip.install('-e', srcDir), ...
-                'mip:dependencyNotFound');
+                'mip:packageNotFound');
         end
 
         function testInstallLocal_ShowsLoadHintWithBareName(testCase)
@@ -406,6 +452,27 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             info = mip.config.read_package_json(pkgDir);
             testCase.verifyTrue(info.editable);
             testCase.verifyTrue(contains(info.source_path, '@MyClass'));
+        end
+
+    end
+
+    methods (Access = private)
+
+        function seedChannelDep(testCase, depName)
+            % Publish depName in a synthetic mip-org/core index whose
+            % mhl_url points at a locally bundled .mhl, so from_local's
+            % auto-dependency install works without network access.
+            depSrc = createTestSourcePackage(testCase.SourceDir, depName);
+            bundleDir = fullfile(testCase.SourceDir, 'bundles');
+            if ~exist(bundleDir, 'dir')
+                mkdir(bundleDir);
+            end
+            mip.bundle(depSrc, '--output', bundleDir, '--arch', 'any');
+            mhlFiles = dir(fullfile(bundleDir, [depName '-*.mhl']));
+            testCase.assertNotEmpty(mhlFiles, '.mhl bundle was not produced');
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', ...
+                {struct('name', depName, ...
+                        'mhl_url', fullfile(bundleDir, mhlFiles(1).name))});
         end
 
     end
