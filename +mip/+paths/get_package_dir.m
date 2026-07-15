@@ -12,8 +12,8 @@ function pkgDir = get_package_dir(fqn)
 %   fqn - Canonical FQN:
 %           'gh/<owner>/<channel>/<name>'  (GitHub channel package)
 %           'local/<name>'                 (Local directory install)
-%           'fex/<name>'                   (File Exchange / --url install)
-%           'web/<name>'                   (Generic remote .zip --url install)
+%           'fex/<name>'                   (File Exchange URL install)
+%           'web/<name>'                   (Generic remote .zip URL install)
 %           'mhl/<name>'                   (.mhl install with no --channel)
 %
 % Returns:

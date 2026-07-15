@@ -1,5 +1,5 @@
 function fqn = make_fex_fqn(packageName)
-%MAKE_FEX_FQN   Create an FQN for a File Exchange / --url install.
+%MAKE_FEX_FQN   Create an FQN for a File Exchange URL install.
 %
 % Args:
 %   packageName - Package name

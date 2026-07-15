@@ -15,7 +15,9 @@ function install(varargin)
 %   mip install . --editable                                       - Editable install (like pip -e)
 %   mip install -e /path/to/package                                - Editable install (short form)
 %   mip install -e . --no-compile                                  - Editable install, skip compilation
-%   mip install mypkg --url https://example.com/pkg.zip            - Install from a remote .zip URL
+%   mip install https://example.com/pkg.zip --name mypkg           - Install from a remote .zip URL
+%   mip install https://www.mathworks.com/matlabcentral/fileexchange/23629-export_fig
+%                                                                   - Install from the File Exchange
 %
 % Options:
 %   --channel <name>    Install from a specific channel (default: mip-org/core)
@@ -25,12 +27,17 @@ function install(varargin)
 %                       github.com/<owner>/mip-<owner>.
 %   --editable, -e      Install in editable mode (local packages only)
 %   --no-compile        Skip compilation (editable installs only)
-%   --url <zip-url>     Install from a remote .zip archive. The positional
-%                       argument is used as the package name. At most one
-%                       --url per call; incompatible with --editable.
-%                       File Exchange landing URLs (https://www.mathworks
-%                       .com/matlabcentral/fileexchange/...) are also
-%                       accepted and auto-resolved to their .zip download.
+%   --name <name>       Package name for a .zip / File Exchange URL install.
+%                       If omitted, mip prompts for the name with a default
+%                       derived from the URL. Requires the argument list to
+%                       be a single URL; incompatible with --editable.
+%
+% Remote .zip / File Exchange URLs:
+%   An http(s):// URL whose path ends in .zip, or a File Exchange landing
+%   URL (https://www.mathworks.com/matlabcentral/fileexchange/...), is
+%   downloaded, extracted, and installed under web/<name> (or fex/<name>
+%   for File Exchange). File Exchange landing URLs are auto-resolved to
+%   their .zip download. https:// is required.
 %
 % Local packages:
 %   To install a local directory, the path must start with '~', '.', '/',
@@ -56,9 +63,10 @@ function install(varargin)
     % could only move them aside (a binary was still loaded at the time).
     mip.paths.purge_trash();
 
-    % Check for --editable / -e, --no-compile, --url, and --channel flags
+    % Check for --editable / -e, --no-compile, --name, and --channel flags
+    % (--url is retained in the spec only to give a migration error)
     [opts, args] = mip.parse.flags(varargin, ...
-        struct('editable', false, 'no_compile', false, 'url', '', 'channel', ''), ...
+        struct('editable', false, 'no_compile', false, 'url', '', 'name', '', 'channel', ''), ...
         struct('e', 'editable'));
     channel = opts.channel;
     if ~isempty(channel)
@@ -71,8 +79,14 @@ function install(varargin)
     end
 
     if ~isempty(opts.url)
-        mip.install.from_url(args, opts.url, opts.editable, opts.no_compile);
-        return;
+        if isscalar(args)
+            hint = sprintf('mip install %s --name %s', opts.url, char(args{1}));
+        else
+            hint = sprintf('mip install %s --name <name>', opts.url);
+        end
+        error('mip:install:urlFlagRemoved', ...
+              ['The --url flag has been removed. Pass the URL directly:\n' ...
+               '  %s'], hint);
     end
 
     if isempty(args)
@@ -80,20 +94,19 @@ function install(varargin)
     end
 
     % Categorize each argument by how it should be installed:
-    %   - mhl source   (.mhl file or http(s) URL)
+    %   - URL source   (File Exchange landing URL or http(s) .zip URL)
+    %   - mhl source   (.mhl file or other http(s) URL)
     %   - local path   (starts with ~, ., /, or a Windows drive letter)
     %   - repo package (bare name or <owner>/<channel>/<package> FQN)
+    urlSources = {};
     mhlSources = {};
     localPaths = {};
     repoPackages = {};
     for i = 1:length(args)
         pkg = char(args{i});
-        if endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
-            if mip.install.is_fex_url(pkg)
-                error('mip:install:fexRequiresName', ...
-                      ['To install a package from the File Exchange, you must specify a package name using the syntax\n' ...
-                       '   mip install <name> --url <url>']);
-            end
+        if mip.install.is_url_source(pkg)
+            urlSources{end+1} = pkg; %#ok<AGROW>
+        elseif endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
             mhlSources{end+1} = pkg; %#ok<AGROW>
         elseif mip.install.is_local_path(pkg)
             localPaths{end+1} = pkg; %#ok<AGROW>
@@ -115,6 +128,18 @@ function install(varargin)
                        '  mip install ./%s'], pkg, pkg);
             end
             repoPackages{end+1} = pkg; %#ok<AGROW>
+        end
+    end
+
+    if ~isempty(opts.name)
+        if isempty(urlSources)
+            error('mip:install:nameRequiresUrl', ...
+                  '--name can only be used when installing from a .zip or File Exchange URL.');
+        end
+        if length(args) > 1
+            error('mip:install:nameTakesSingleUrl', ...
+                  '--name can only be used with a single URL argument; got %d arguments.', ...
+                  length(args));
         end
     end
 
@@ -144,7 +169,14 @@ function install(varargin)
         mip.install.from_local(localPath, opts.editable, opts.no_compile, 'local');
     end
 
-    % If only local installs were requested, we're done
+    % Process .zip / File Exchange URL installs. opts.name is only
+    % non-empty when there is a single URL argument (checked above);
+    % with no --name, from_url prompts for each URL's name.
+    for i = 1:length(urlSources)
+        mip.install.from_url(urlSources{i}, opts.name, opts.editable, opts.no_compile);
+    end
+
+    % If only local and URL installs were requested, we're done
     if isempty(repoPackages) && isempty(mhlSources)
         return;
     end

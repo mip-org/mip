@@ -1,17 +1,22 @@
 classdef TestInstallZipUrl < matlab.unittest.TestCase
-%TESTINSTALLZIPURL   Tests for `mip install <name> --url <zip-url>`.
+%TESTINSTALLZIPURL   Tests for `mip install <url> [--name <name>]`.
 % Validation tests do not require network. The end-to-end download path
-% is covered by manual smoke testing; these tests focus on argument
-% categorization, flag validation, and download-error surfacing.
+% is covered by the E2E tests at the bottom (skipped under
+% MIP_SKIP_REMOTE); the rest focus on argument categorization, flag
+% validation, name derivation/prompting, and download-error surfacing.
 
     properties
         OrigMipRoot
+        OrigMipConfirm
         TestRoot
     end
 
     methods (TestMethodSetup)
         function setupTestEnvironment(testCase)
             testCase.OrigMipRoot = getenv('MIP_ROOT');
+            testCase.OrigMipConfirm = getenv('MIP_CONFIRM');
+            % Ensure no stray MIP_CONFIRM leaks into name prompting.
+            setenv('MIP_CONFIRM', '');
             testCase.TestRoot = [tempname '_mip_zip_test'];
             mkdir(testCase.TestRoot);
             mkdir(fullfile(testCase.TestRoot, 'packages'));
@@ -24,6 +29,7 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
         function teardownTestEnvironment(testCase)
             cleanupTestPaths(testCase.TestRoot);
             setenv('MIP_ROOT', testCase.OrigMipRoot);
+            setenv('MIP_CONFIRM', testCase.OrigMipConfirm);
             if exist(testCase.TestRoot, 'dir')
                 rmdir(testCase.TestRoot, 's');
             end
@@ -33,152 +39,171 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
 
     methods (Test)
 
-        %% --- Flag / positional validation ---
+        %% --- Removed --url flag ---
 
-        function testUrl_RequiresPositionalName(testCase)
+        function testUrlFlag_Removed(testCase)
+            testCase.verifyError( ...
+                @() mip.install('mypkg', '--url', 'https://example.com/foo.zip'), ...
+                'mip:install:urlFlagRemoved');
+        end
+
+        function testUrlFlag_Removed_NoPositional(testCase)
             testCase.verifyError( ...
                 @() mip.install('--url', 'https://example.com/foo.zip'), ...
-                'mip:install:urlRequiresName');
+                'mip:install:urlFlagRemoved');
         end
 
-        function testUrl_RejectsMultiplePositionals(testCase)
+        %% --- --name flag validation ---
+
+        function testName_RequiresUrl(testCase)
+            % --name with a bare package name (no URL) is rejected.
             testCase.verifyError( ...
-                @() mip.install('foo', 'bar', '--url', 'https://example.com/x.zip'), ...
-                'mip:install:urlTakesSingleName');
+                @() mip.install('somepkg', '--name', 'foo'), ...
+                'mip:install:nameRequiresUrl');
         end
 
-        function testUrl_RejectsFqnPositional(testCase)
+        function testName_RequiresUrl_MhlUrl(testCase)
+            % .mhl URLs are mhl sources, not URL install sources.
             testCase.verifyError( ...
-                @() mip.install('mip-org/core/foo', '--url', 'https://example.com/x.zip'), ...
-                'mip:install:urlTakesSingleName');
+                @() mip.install('https://example.com/x.mhl', '--name', 'foo'), ...
+                'mip:install:nameRequiresUrl');
         end
 
-        function testUrl_RejectsPathPositional(testCase)
+        function testName_RequiresUrl_NonZipUrl(testCase)
+            % An https URL whose path does not end in .zip is not a URL
+            % install source (it is treated as an .mhl download).
             testCase.verifyError( ...
-                @() mip.install('./foo', '--url', 'https://example.com/x.zip'), ...
-                'mip:install:urlTakesSingleName');
+                @() mip.install('https://example.com/foo.tar.gz', '--name', 'foo'), ...
+                'mip:install:nameRequiresUrl');
         end
 
-        function testUrl_RejectsUrlPositional(testCase)
+        function testName_TakesSingleUrl(testCase)
             testCase.verifyError( ...
-                @() mip.install('https://other.com/x.zip', ...
-                                '--url', 'https://example.com/x.zip'), ...
-                'mip:install:urlTakesSingleName');
+                @() mip.install('https://a.com/x.zip', 'https://b.com/y.zip', ...
+                                '--name', 'foo'), ...
+                'mip:install:nameTakesSingleUrl');
         end
 
-        function testUrl_MissingValue_Errors(testCase)
+        function testName_TakesSingleUrl_MixedArgs(testCase)
             testCase.verifyError( ...
-                @() mip.install('mypkg', '--url'), ...
+                @() mip.install('https://a.com/x.zip', 'otherpkg', ...
+                                '--name', 'foo'), ...
+                'mip:install:nameTakesSingleUrl');
+        end
+
+        function testName_MissingValue_Errors(testCase)
+            testCase.verifyError( ...
+                @() mip.install('https://example.com/x.zip', '--name'), ...
                 'mip:missingFlagValue');
         end
 
-        function testUrl_RepeatedFlag_Errors(testCase)
+        function testName_RepeatedFlag_Errors(testCase)
             testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'https://a.com/x.zip', ...
-                                '--url', 'https://b.com/y.zip'), ...
+                @() mip.install('https://example.com/x.zip', ...
+                                '--name', 'a', '--name', 'b'), ...
                 'mip:repeatedFlag');
         end
 
-        function testUrl_EditableRejected(testCase)
+        function testName_EditableRejected(testCase)
             testCase.verifyError( ...
-                @() mip.install('-e', 'mypkg', '--url', 'https://example.com/x.zip'), ...
+                @() mip.install('-e', 'https://example.com/x.zip', ...
+                                '--name', 'mypkg'), ...
                 'mip:install:editableRequiresLocal');
         end
 
-        function testUrl_InvalidNameRejected(testCase)
-            % Positional name must match the package-name regex (enforced
-            % via parse_package_arg).
+        function testName_InvalidNameRejected(testCase)
+            % The name must match the package-name regex (enforced via
+            % parse_package_arg).
             testCase.verifyError( ...
-                @() mip.install('bad name', '--url', 'https://example.com/x.zip'), ...
+                @() mip.install('https://example.com/x.zip', '--name', 'bad name'), ...
                 'mip:invalidPackageSpec');
         end
 
-        function testUrl_UppercaseNameRejected(testCase)
-            % With --url, the positional name becomes the canonical install
-            % dir / FQN, so it must be lowercase (canonical form). Parse
-            % accepts mixed-case user input, but --url specifically
-            % requires canonical.
+        function testName_UppercaseNameRejected(testCase)
+            % The name becomes the canonical install dir / FQN, so it must
+            % be lowercase (canonical form). Parse accepts mixed-case user
+            % input, but URL installs specifically require canonical.
             testCase.verifyError( ...
-                @() mip.install('MyPkg', '--url', 'https://example.com/x.zip'), ...
+                @() mip.install('https://example.com/x.zip', '--name', 'MyPkg'), ...
                 'mip:install:invalidName');
         end
 
-        %% --- URL validation (must be a .zip) ---
-
-        function testUrl_RejectsNonZipUrl(testCase)
+        function testName_FqnRejected(testCase)
             testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'https://example.com/foo.tar.gz'), ...
-                'mip:install:urlMustBeZip');
+                @() mip.install('https://example.com/x.zip', ...
+                                '--name', 'mip-org/core/foo'), ...
+                'mip:install:invalidName');
         end
 
-        function testUrl_RejectsMhlUrl(testCase)
-            testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'https://example.com/foo.mhl'), ...
-                'mip:install:urlMustBeZip');
-        end
-
-        function testUrl_RejectsNonHttpScheme(testCase)
-            testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'ftp://example.com/foo.zip'), ...
-                'mip:install:urlMustBeZip');
-        end
+        %% --- URL validation ---
 
         function testUrl_RejectsHttpScheme(testCase)
             % Plain http:// is refused: a MITM could swap the archive
             % and gain code execution once the package is loaded. See
-            % #229.
+            % #229. An http .zip URL is still routed to the URL install
+            % path (not the .mhl path) so this error is reported.
             testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'http://example.com/foo.zip'), ...
+                @() mip.install('http://example.com/foo.zip', '--name', 'mypkg'), ...
                 'mip:install:requireHttps');
         end
 
-        function testUrl_RejectsZipOnlyInQueryString(testCase)
-            % .zip appears only in query string (not path) -> not a zip URL
+        function testUrl_NonHttpScheme_NotAUrlSource(testCase)
+            % ftp:// is not an install URL; the argument fails package-spec
+            % parsing during categorization.
             testCase.verifyError( ...
-                @() mip.install('mypkg', '--url', 'https://example.com/foo?file=bar.zip'), ...
-                'mip:install:urlMustBeZip');
+                @() mip.install('ftp://example.com/foo.zip', '--name', 'mypkg'), ...
+                'mip:install:invalidPackageSpec');
         end
 
         %% --- .zip URL acceptance (detection) ---
 
         function testUrl_AcceptsQueryString(testCase)
             % URL with .zip path and query string passes validation; fails
-            % downstream at download (unreachable host). Any error that is
-            % NOT urlMustBeZip means the URL was accepted as a zip URL.
-            try
-                mip.install('mypkg', '--url', ...
-                    'https://127.0.0.1:1/foo.zip?token=abc');
-                testCase.verifyFail('expected a download error');
-            catch ME
-                testCase.verifyEqual(ME.identifier, 'mip:install:zipDownloadFailed');
-            end
+            % downstream at download (unreachable host).
+            testCase.verifyError( ...
+                @() mip.install('https://127.0.0.1:1/foo.zip?token=abc', ...
+                                '--name', 'mypkg'), ...
+                'mip:install:zipDownloadFailed');
         end
 
         function testUrl_AcceptsGitHubArchive(testCase)
-            try
-                mip.install('mypkg', '--url', ...
-                    'https://127.0.0.1:1/foo/bar/archive/refs/heads/main.zip');
-                testCase.verifyFail('expected a download error');
-            catch ME
-                testCase.verifyEqual(ME.identifier, 'mip:install:zipDownloadFailed');
-            end
+            testCase.verifyError( ...
+                @() mip.install('https://127.0.0.1:1/foo/bar/archive/refs/heads/main.zip', ...
+                                '--name', 'mypkg'), ...
+                'mip:install:zipDownloadFailed');
         end
 
         function testUrl_AcceptsUppercaseExtension(testCase)
-            try
-                mip.install('mypkg', '--url', 'https://127.0.0.1:1/Foo.ZIP');
-                testCase.verifyFail('expected a download error');
-            catch ME
-                testCase.verifyEqual(ME.identifier, 'mip:install:zipDownloadFailed');
-            end
+            testCase.verifyError( ...
+                @() mip.install('https://127.0.0.1:1/Foo.ZIP', '--name', 'mypkg'), ...
+                'mip:install:zipDownloadFailed');
         end
 
-        %% --- Download failure surfacing ---
+        %% --- Name prompting (non-interactive via MIP_CONFIRM) ---
 
-        function testUrl_DownloadFailure(testCase)
+        function testNoName_ConfirmYes_AcceptsDefault(testCase)
+            % MIP_CONFIRM=y accepts the URL-derived default name without
+            % prompting; the install then proceeds to the download.
+            setenv('MIP_CONFIRM', 'y');
             testCase.verifyError( ...
-                @() mip.install('nope', '--url', 'https://127.0.0.1:1/foo.zip'), ...
+                @() mip.install('https://127.0.0.1:1/foo.zip'), ...
                 'mip:install:zipDownloadFailed');
+        end
+
+        function testNoName_ConfirmDecline_Errors(testCase)
+            setenv('MIP_CONFIRM', 'n');
+            testCase.verifyError( ...
+                @() mip.install('https://127.0.0.1:1/foo.zip'), ...
+                'mip:install:noName');
+        end
+
+        function testNoName_ConfirmYes_NoDerivableDefault_Errors(testCase)
+            % No valid canonical name can be derived from the URL, so
+            % accepting the default yields no name.
+            setenv('MIP_CONFIRM', 'y');
+            testCase.verifyError( ...
+                @() mip.install('https://127.0.0.1:1/---.zip'), ...
+                'mip:install:noName');
         end
 
         %% --- File Exchange URL handling ---
@@ -187,14 +212,14 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             % File Exchange landing URLs do not end in .zip but are NOT
             % rejected by urlMustBeZip; they go through the FEX resolver.
             % Skip the e2e network call by checking that the error is
-            % anything OTHER than urlMustBeZip when DNS fails on a fake
-            % FEX-shaped URL.
+            % anything OTHER than urlMustBeZip when resolution fails on a
+            % fake FEX-shaped URL.
             if ~isempty(getenv('MIP_SKIP_REMOTE'))
                 return;
             end
             try
-                mip.install('mypkg', '--url', ...
-                    'https://www.mathworks.com/matlabcentral/fileexchange/0-nonexistent');
+                mip.install(['https://www.mathworks.com/matlabcentral/' ...
+                             'fileexchange/0-nonexistent'], '--name', 'mypkg');
                 testCase.verifyFail('expected an error');
             catch ME
                 testCase.verifyNotEqual(ME.identifier, 'mip:install:urlMustBeZip', ...
@@ -205,14 +230,7 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             end
         end
 
-        function testFexUrl_AsPositional_RequiresName(testCase)
-            % `mip install <FEX URL>` (without --url) should produce a
-            % helpful message pointing to the correct syntax, rather than
-            % attempting to download the landing page as an .mhl file.
-            testCase.verifyError( ...
-                @() mip.install('https://www.mathworks.com/matlabcentral/fileexchange/26311-shadederrorbar'), ...
-                'mip:install:fexRequiresName');
-        end
+        %% --- End-to-end installs (skipped under MIP_SKIP_REMOTE) ---
 
         function testWebUrl_E2EInstall(testCase)
             % End-to-end install from a generic (non-FEX) .zip URL. Uses a
@@ -225,7 +243,7 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             end
             zipUrl = ['https://github.com/altmany/export_fig/archive/' ...
                       'refs/heads/master.zip'];
-            mip.install('web_export_fig_test', '--url', zipUrl);
+            mip.install(zipUrl, '--name', 'web_export_fig_test');
 
             installedDir = fullfile(testCase.TestRoot, 'packages', ...
                                     'web', 'web_export_fig_test');
@@ -236,6 +254,24 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
                               'fex', 'web_export_fig_test');
             testCase.verifyFalse(exist(fexDir, 'dir') > 0, ...
                 'Non-FEX zip URL should not install under fex/');
+        end
+
+        function testWebUrl_E2EDefaultName(testCase)
+            % End-to-end install without --name: MIP_CONFIRM=y accepts the
+            % default derived from the URL. For a GitHub archive URL the
+            % default is the repository name.
+            if ~isempty(getenv('MIP_SKIP_REMOTE'))
+                return;
+            end
+            setenv('MIP_CONFIRM', 'y');
+            zipUrl = ['https://github.com/altmany/export_fig/archive/' ...
+                      'refs/heads/master.zip'];
+            mip.install(zipUrl);
+
+            installedDir = fullfile(testCase.TestRoot, 'packages', ...
+                                    'web', 'export_fig');
+            testCase.verifyTrue(exist(installedDir, 'dir') > 0, ...
+                'Default name for a GitHub archive should be the repo name');
         end
 
         function testFexUrl_E2EInstall(testCase)
@@ -249,7 +285,7 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             end
             fexUrl = ['https://www.mathworks.com/matlabcentral/fileexchange/' ...
                      '26311-shadederrorbar'];
-            mip.install('fex_seb_test', '--url', fexUrl);
+            mip.install(fexUrl, '--name', 'fex_seb_test');
 
             installedDir = fullfile(testCase.TestRoot, 'packages', ...
                                     'fex', 'fex_seb_test');

@@ -326,7 +326,7 @@ classdef TestUpdateLocal < matlab.unittest.TestCase
 
         function testUpdateLocalPackage_EmptySourcePathSkipped(testCase)
             % Same behavior when source_path is present but empty (the
-            % state produced by `mip install <name> --url <zip-url>`).
+            % state produced by `mip install <zip-url> --name <name>`).
             pkgDir = createTestPackage(testCase.TestRoot, '', '', 'urlpkg', 'type', 'local');
             setEmptySourcePath(pkgDir);
             mip.state.add_directly_installed('local/urlpkg');

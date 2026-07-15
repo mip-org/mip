@@ -1,10 +1,13 @@
-function from_url(args, zipUrl, editable, noCompile)
-%FROM_URL   Handle `mip install <name> --url <zipUrl>`.
+function from_url(zipUrl, pkgName, editable, noCompile)
+%FROM_URL   Handle `mip install <url> [--name <name>]`.
 %
-% Validation: exactly one positional arg, which must be a bare name
-% (not an FQN, not a path, not itself a URL). The URL must point at
-% a .zip (path component, ignoring query/fragment, ends in .zip).
-% --editable is rejected since the source directory is temporary.
+% zipUrl is a File Exchange landing-page URL or an https:// URL whose
+% path ends in .zip. pkgName is the --name value; pass '' when --name
+% was not given -- a default is then derived from the URL
+% (mip.install.default_name_from_url) and the user is prompted to
+% accept or override it. The name must be bare (not an FQN, not a
+% path, not a URL) and in canonical form. --editable is rejected
+% since the source directory is temporary.
 %
 % Then: download the zip, extract, unwrap a single top-level subdir
 % if present, auto-generate a mip.yaml if missing (with the URL in
@@ -12,49 +15,43 @@ function from_url(args, zipUrl, editable, noCompile)
 
     if editable
         error('mip:install:editableRequiresLocal', ...
-              '--editable cannot be used with --url installs.');
+              '--editable cannot be used with URL installs.');
     end
 
-    if isempty(args)
-        error('mip:install:urlRequiresName', ...
-              ['--url requires a positional package name.\n' ...
-               'Example: mip install mypkg --url %s'], zipUrl);
-    end
-    if length(args) > 1
-        error('mip:install:urlTakesSingleName', ...
-              '--url takes exactly one positional package name; got %d.', ...
-              length(args));
-    end
-
-    pkgName = char(args{1});
-    if startsWith(pkgName, 'http://') || startsWith(pkgName, 'https://') || ...
-       endsWith(pkgName, '.mhl') || mip.install.is_local_path(pkgName) || ...
-       contains(pkgName, '/')
-        error('mip:install:urlTakesSingleName', ...
-              ['With --url, the positional argument must be a bare package ' ...
-               'name (not a URL, path, or FQN). Got: %s'], pkgName);
-    end
-
-    parsed = mip.parse.parse_package_arg(pkgName);  % validates name chars
-    pkgName = parsed.name;
-
-    % With --url, the positional arg defines the canonical name that gets
-    % used as the install directory and FQN, so require canonical form
-    % (lowercase, no leading/trailing separators).
-    if ~mip.name.is_valid_canonical(pkgName)
-        error('mip:install:invalidName', ...
-              ['"%s" is not a valid canonical package name. Canonical names ' ...
-               'must consist of lowercase letters, digits, hyphens, and ' ...
-               'underscores, and must start and end with a letter or digit.'], ...
-              pkgName);
-    end
+    zipUrl = char(zipUrl);
 
     % Require HTTPS. A plain http:// fetch lets a network attacker swap
     % the archive contents, and the unzipped tree is added to the path
     % on load — i.e. persistent code execution.
     if startsWith(zipUrl, 'http://')
         error('mip:install:requireHttps', ...
-              '--url must use https://, not http://. Got: %s', zipUrl);
+              'URL installs must use https://, not http://. Got: %s', zipUrl);
+    end
+
+    if isempty(pkgName)
+        pkgName = promptForName(zipUrl);
+    end
+
+    pkgName = char(pkgName);
+    if startsWith(pkgName, 'http://') || startsWith(pkgName, 'https://') || ...
+       endsWith(pkgName, '.mhl') || mip.install.is_local_path(pkgName) || ...
+       contains(pkgName, '/')
+        error('mip:install:invalidName', ...
+              ['The package name for a URL install must be a bare name ' ...
+               '(not a URL, path, or FQN). Got: %s'], pkgName);
+    end
+
+    parsed = mip.parse.parse_package_arg(pkgName);  % validates name chars
+    pkgName = parsed.name;
+
+    % The name defines the canonical install directory and FQN, so
+    % require canonical form (lowercase, no leading/trailing separators).
+    if ~mip.name.is_valid_canonical(pkgName)
+        error('mip:install:invalidName', ...
+              ['"%s" is not a valid canonical package name. Canonical names ' ...
+               'must consist of lowercase letters, digits, hyphens, and ' ...
+               'underscores, and must start and end with a letter or digit.'], ...
+              pkgName);
     end
 
     % If the URL is a File Exchange landing page, resolve it to the
@@ -69,8 +66,8 @@ function from_url(args, zipUrl, editable, noCompile)
 
     if ~mip.install.is_zip_url(zipUrl)
         error('mip:install:urlMustBeZip', ...
-              ['--url value must point to a .zip archive or a File Exchange ' ...
-               'page. Got: %s'], zipUrl);
+              ['A URL install must point to a .zip archive or a File ' ...
+               'Exchange page. Got: %s'], zipUrl);
     end
 
     tempDir = tempname;
@@ -120,6 +117,35 @@ function from_url(args, zipUrl, editable, noCompile)
     % source_path signals "no source available to reinstall from";
     % `mip update` skips such packages.
     clearSourcePath(pkgName, sourceType);
+end
+
+function name = promptForName(zipUrl)
+% Ask the user for the package name, offering a default derived from
+% the URL. Honors MIP_CONFIRM as a non-interactive override (matching
+% install.m's confirmAutoInit): y/yes accepts the derived default, any
+% other non-empty value declines.
+    defaultName = mip.install.default_name_from_url(zipUrl);
+    confirm = getenv('MIP_CONFIRM');
+    if ~isempty(confirm)
+        if strcmpi(confirm, 'y') || strcmpi(confirm, 'yes')
+            name = defaultName;
+        else
+            name = '';
+        end
+    elseif isempty(defaultName)
+        name = strtrim(input('Package name: ', 's'));
+    else
+        name = strtrim(input(sprintf('Package name [%s]: ', defaultName), 's'));
+        if isempty(name)
+            name = defaultName;
+        end
+    end
+    if isempty(name)
+        error('mip:install:noName', ...
+              ['A package name is required to install from a URL. ' ...
+               'Pass one with --name:\n  mip install %s --name <name>'], ...
+              zipUrl);
+    end
 end
 
 function clearSourcePath(pkgName, sourceType)
