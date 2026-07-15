@@ -18,6 +18,7 @@ function cacheFile = writeChannelIndex(rootDir, channel, entries)
 %                 .commit_hash  (optional — field omitted if absent/empty)
 %                 .timestamp    (optional — field omitted if absent/empty)
 %                 .mhl_url      (default 'https://example.invalid/sentinel.mhl')
+%                 .mhl_sha256   (optional — field omitted if absent/empty)
 %                 .dependencies (default {})
 %             Pass {} for an empty index.
 %
@@ -49,6 +50,9 @@ for i = 1:numel(entries)
     pkg.dependencies = fieldOr(e, 'dependencies', {});
     if isfield(e, 'commit_hash') && ~isempty(e.commit_hash)
         pkg.commit_hash = e.commit_hash;
+    end
+    if isfield(e, 'mhl_sha256') && ~isempty(e.mhl_sha256)
+        pkg.mhl_sha256 = e.mhl_sha256;
     end
     if isfield(e, 'timestamp') && ~isempty(e.timestamp)
         pkg.timestamp = e.timestamp;

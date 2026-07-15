@@ -44,66 +44,14 @@ function deactivate(varargin)
         mip.state.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', {});
         mip.state.key_value_set('MIP_STICKY_PACKAGES', {'gh/mip-org/core/mip'});
     end
-    sweepEnvPathEntries(env.path);
+    mip.env.sweep_path_entries(env.path);
 
     % Restore the pre-activation root pointer ('' = unset).
     setenv('MIP_ROOT', env.saved.mip_root);
     mip.state.set_active_env([]);
 
-    restoreSavedPackages(env.saved);
+    mip.env.restore_session(env.saved);
 
     fprintf('Deactivated environment: %s\n', mip.env.describe(env));
 
-end
-
-function sweepEnvPathEntries(envPath)
-% Remove any remaining MATLAB path entries under the environment root.
-% Backstop for an environment directory deleted out from under the
-% session, where unload cannot resolve source dirs from mip.json.
-
-    prefixWithSep = [envPath, filesep];
-    entries = strsplit(path, pathsep);
-    oldState = warning('off', 'MATLAB:rmpath:DirNotFound');
-    restoreWarn = onCleanup(@() warning(oldState)); %#ok<NASGU>
-    for k = 1:numel(entries)
-        e = entries{k};
-        if isempty(e)
-            continue
-        end
-        if strcmp(e, envPath) || startsWith(e, prefixWithSep)
-            rmpath(e);
-        end
-    end
-end
-
-function restoreSavedPackages(saved)
-% Put the saved package set back on the path with its prior
-% direct/sticky flags. Best-effort: failures warn and restoration
-% continues with the remaining packages.
-
-    for i = 1:numel(saved.loaded)
-        pkg = saved.loaded{i};
-        if strcmp(pkg, 'gh/mip-org/core/mip')
-            continue  % always loaded
-        end
-        try
-            if ismember(pkg, saved.directly_loaded)
-                mip.load(pkg);
-            else
-                mip.load(pkg, '--transitive');
-            end
-        catch ME
-            warning('mip:deactivate:restoreFailed', ...
-                    'Could not restore package "%s": %s', ...
-                    mip.parse.display_fqn(pkg), ME.message);
-        end
-    end
-
-    % Restore sticky flags for whatever made it back on the path.
-    for i = 1:numel(saved.sticky)
-        pkg = saved.sticky{i};
-        if mip.state.is_loaded(pkg) && ~mip.state.is_sticky(pkg)
-            mip.state.key_value_append('MIP_STICKY_PACKAGES', pkg);
-        end
-    end
 end

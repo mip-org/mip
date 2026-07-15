@@ -52,6 +52,9 @@ Pin a version with `@`: `chebfun@1.2.0`, `mip-org/core/chebfun@main`
 | `mip bundle ./path` | Build a `.mhl` archive from a local package |
 | `mip reset` | Unload everything and clear all state |
 | `mip version` | Print mip version |
+| `mip env create [name\|path]` | Create an isolated environment (a separate mip root) |
+| `mip activate` / `mip deactivate` | Point the session at an environment / back at the baseline |
+| `mip project <verb>` | Declarative lockfile workflow: `init`, `add`, `remove`, `lock`, `sync`, `run`, `status` |
 
 ---
 
@@ -74,7 +77,7 @@ mip install -e ./mypackage --no-compile      % editable, skip compilation
 
 A bare name like `chebfun` is always treated as a channel install, even if a `chebfun/` directory exists locally. Use `./chebfun` for local install.
 
-Dependencies are installed automatically for channel packages. For local packages, dependencies must already be installed.
+Dependencies are installed automatically for channel packages, and a local package's missing *channel* dependencies are auto-installed too; a local package's non-channel dependencies (`local/`, `fex/`, ...) must already be installed.
 
 ---
 

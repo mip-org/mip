@@ -103,7 +103,7 @@ function json = build_signatures(installed, loadable, loaded, pinned)
     subcommands = {'install','update','uninstall','list','load','unload', ...
                    'pin','unpin','info','test','compile','bundle','init', ...
                    'reset','avail','index','arch','root','version','help', ...
-                   'env','activate','deactivate'};
+                   'env','activate','deactivate','project'};
 
     lines = {'{', '  "_schemaVersion": "1.0.0"'};
     for i = 1:numel(subcommands)
@@ -139,6 +139,9 @@ function sig = signature_for(cmd, installed, loadable, loaded, pinned, subcomman
             inputs{end+1} = '{"name":"directory","kind":"required","type":["folder"]}';
         case 'init'
             inputs{end+1} = '{"name":"directory","kind":"ordered","type":["folder"]}';
+        case 'project'
+            inputs{end+1} = choices_arg('subcommand', 'ordered', ...
+                {'init','add','remove','lock','sync','run','status'});
     end
 
     sig = sprintf('{"inputs":[%s]}', strjoin(inputs, ','));

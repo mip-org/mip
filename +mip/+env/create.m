@@ -19,7 +19,7 @@ function create(varargin)
 % that is not an environment is an error - mip will not adopt arbitrary
 % directories. The no-argument form additionally errors when a mip.lock
 % file is present in the current directory (that directory's .mip is
-% managed declaratively by "mip sync").
+% managed declaratively by "mip project sync").
 %
 % A local ./.mip environment should normally be added to the project's
 % .gitignore; mip does not edit user files.
@@ -33,7 +33,7 @@ function create(varargin)
         if isfile(fullfile(pwd, 'mip.lock'))
             error('mip:env:lockfilePresent', ...
                   ['A mip.lock file is present in this directory, so its .mip ' ...
-                   'environment is managed declaratively. Run "mip sync" to ' ...
+                   'environment is managed declaratively. Run "mip project sync" to ' ...
                    'materialize it instead of "mip env create".']);
         end
         t = struct('kind', 'path', 'name', '', 'path', fullfile(pwd, '.mip'));
@@ -47,33 +47,11 @@ function create(varargin)
         end
     end
 
-    markerPath = fullfile(t.path, 'mip-env.json');
-    if isfile(markerPath)
+    if mip.env.is_env(t.path)
         error('mip:env:alreadyExists', ...
               'Environment already exists: %s', t.path);
     end
-    if isfolder(t.path) && ~dir_is_empty(t.path)
-        error('mip:env:directoryNotEmpty', ...
-              ['Directory "%s" already exists and is not empty. ' ...
-               'mip will not adopt an arbitrary directory as an environment.'], ...
-              t.path);
-    end
-
-    packagesDir = fullfile(t.path, 'packages');
-    if ~isfolder(packagesDir)
-        mkdir(packagesDir);
-    end
-
-    marker = struct( ...
-        'format_version', 1, ...
-        'created', char(datetime('now', 'Format', 'yyyy-MM-dd''T''HH:mm:ss')), ...
-        'mip_version', mip.version());
-    fid = fopen(markerPath, 'w');
-    if fid == -1
-        error('mip:fileError', 'Could not write to %s', markerPath);
-    end
-    fwrite(fid, jsonencode(marker));
-    fclose(fid);
+    mip.env.materialize(t.path);
 
     if strcmp(t.kind, 'name')
         fprintf('Created environment "%s" at %s\n', t.name, mip.env.display_path(t.path));
@@ -82,10 +60,4 @@ function create(varargin)
     end
     fprintf('To activate it, run:\n  %s\n', activateHint);
 
-end
-
-function tf = dir_is_empty(d)
-    entries = dir(d);
-    entries = entries(~ismember({entries.name}, {'.', '..'}));
-    tf = isempty(entries);
 end

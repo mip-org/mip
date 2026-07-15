@@ -449,6 +449,8 @@ Every `.mhl` downloaded from a channel is subject to two integrity mechanisms be
 
 **SHA-256 digest verification (currently suspended).** Channel index entries may include an `mhl_sha256` hex digest, and the index is expected to keep carrying it so that verification can be re-enabled later. **Verification is not currently performed**, so `mip:digestMismatch` is never raised. It was suspended because channel publishing is not atomic: the `.mhl` asset is uploaded before `index.json` is redeployed, so a client fetching mid-publish can pair an old digest with a new archive and would wrongly trip `mip:digestMismatch` (see [#201](https://github.com/mip-org/mip/issues/201)). When re-enabled, the downloaded (or locally copied) file's SHA-256 will be compared against the index value (case-insensitive); on mismatch the file is deleted and `mip:digestMismatch` is raised, while a missing digest (e.g. legacy releases) or an unavailable JVM (e.g. `numbl_wasm`) silently skips the check. `mip install /path/to/file.mhl` and `mip install https://.../file.mhl` (bypassing the channel index) have no digest source, so they would not be verified even once verification is restored.
 
+The one place digests **are** verified today is `mip project sync` ([§14.8](#148-mip-project-sync)): the lock records the digest and URL from a single index snapshot, so a mismatch at sync time means the archive changed since locking — a reproducibility failure the lock exists to catch — and raises `mip:digestMismatch`.
+
 **Path-traversal validation.** Before `unzip` is ever called, the `.mhl` archive is parsed in pure MATLAB (central directory + each local file header) and every entry name is validated. Any of the following rejects the archive with `mip:pathTraversal`:
 
 - an entry name containing an absolute path, a Windows drive letter, a null byte, or a `..` component that resolves outside the extraction root (benign in-tree `..` such as `foo/../bar` is allowed);
@@ -818,6 +820,8 @@ When installing or compiling a package, MIP selects a build entry from the `buil
 
 This guarantees an exact architecture match is always preferred over `any`, regardless of declaration order in `mip.yaml`.
 
+`builds:` is optional. A `mip.yaml` with no `builds` entries is a pure-MATLAB package: it matches as an implicit `{ architectures: [any] }` build, taking the top-level defaults (`paths`, `compile_script`, …) with no build-level overrides.
+
 ---
 
 ## 8. Compilation
@@ -1110,7 +1114,14 @@ builds:                         # Optional
   - architectures: [any]
     compile_script: "compile.m" # Optional
     test_script: "run_tests.m"  # Optional
+dependency_groups:              # Optional; project-only ([§14.1](#141-the-project-spec)) — never emitted into mip.json
+  dev:
+    - moxunit
+channels:                       # Optional; project-only — extra channels consulted at lock time
+  - mip-org/labs
 ```
+
+`mip.yaml` also serves as the **project spec** ([§14.1](#141-the-project-spec)), where `name:`/`version:` are optional and dependency entries may carry `@version` pins. As a *package* manifest — anything being installed, bundled, or published — `name` remains required and dependencies remain pin-free.
 
 #### 11.2.1 Channel Version Rules
 
@@ -1224,7 +1235,7 @@ Environment arguments are disambiguated **syntactically**, never by guessing:
 
 Creates an empty environment: a `packages/` subtree plus the `mip-env.json` marker.
 
-- **No argument**: creates `./.mip` in the current directory — exactly, with no walking. Errors with `mip:env:lockfilePresent` if a `mip.lock` file is present in the current directory (that directory's `.mip` belongs to the declarative workflow's `mip sync`).
+- **No argument**: creates `./.mip` in the current directory — exactly, with no walking. Errors with `mip:env:lockfilePresent` if a `mip.lock` file is present in the current directory (that directory's `.mip` is derived by `mip project sync`, [§14.8](#148-mip-project-sync)).
 - **Bare name**: creates `<baseline root>/envs/<name>` — always the baseline store, even while another environment is active.
 - **Path**: creates that directory.
 
@@ -1247,7 +1258,7 @@ Deletes a named environment — the only data-destroying verb in the environment
 
 ### 13.6 `mip activate [name|path] [--load]`
 
-Points the session at an environment. With a name, resolves against the baseline `envs/` store; with a path, against that directory; with no argument, `./.mip` in the current directory (no walking). In every form the target must be an environment — directory exists (`mip:env:notFound` otherwise, with a `mip env create` hint), marker present (`mip:env:notAnEnvironment`), `packages/` present (`mip:env:invalid`).
+Points the session at an environment. With a name, resolves against the baseline `envs/` store; with a path, against that directory; with no argument, the nearest project's `.mip` via the project walk, falling back to `./.mip` in the current directory when there is no project ([§14.11](#1411-refinement-of-mip-activate)). In every form the target must be an environment — directory exists (`mip:env:notFound` otherwise, with a `mip env create` hint, or `mip project sync` when the project has a lock), marker present (`mip:env:notAnEnvironment`), `packages/` present (`mip:env:invalid`).
 
 Activation is **exclusive** (one environment at a time) and executes no package code (loading/unloading is pure `addpath`/`rmpath`). The steps:
 
@@ -1259,7 +1270,7 @@ Activation is **exclusive** (one environment at a time) and executes no package 
 
 Without `--load` (the default), activation is pointer-only: nothing is on the path until you `mip load` it — the uniform rule mip uses everywhere. No root is ever bulk-loaded implicitly.
 
-Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (with the same caveats as [§15.7](#157-concurrent-matlab-sessions)) and load state is per-session.
+Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (with the same caveats as [§16.7](#167-concurrent-matlab-sessions)) and load state is per-session.
 
 ### 13.7 `mip deactivate`
 
@@ -1268,7 +1279,7 @@ Points the session back at the baseline root, restoring the state saved at activ
 1. If no environment is active: prints a message and does nothing.
 2. Unloads all loaded packages except mip via `mip unload --all --force`, followed by a prefix sweep that removes any remaining path entries under the environment root. If the environment directory was deleted out from under the session, the unload machinery cannot even resolve the root; in that case the load-state lists are reset to the baseline directly and the sweep alone removes the stale path entries.
 3. Restores `MIP_ROOT` to its saved value (which may be an externally set custom root, or unset).
-4. Restores the saved package set: each formerly loaded package goes back on the path with its prior direct/sticky flags. Restoration is best-effort — a failure (e.g. a package uninstalled meanwhile by another session) issues a `mip:deactivate:restoreFailed` warning rather than aborting.
+4. Restores the saved package set: each formerly loaded package goes back on the path with its prior direct/sticky flags ([`mip.env.restore_session`](../+mip/+env/restore_session.m), shared with `mip project run`). Restoration is best-effort — a failure (e.g. a package uninstalled meanwhile by another session) issues a `mip:env:restoreFailed` warning rather than aborting.
 
 ### 13.8 Showing the Target
 
@@ -1295,7 +1306,99 @@ The active environment is tracked in the `MIP_ACTIVE_ENV` appdata key ([§10.1](
 
 ---
 
-## 14. Error Identifiers
+## 14. Projects
+
+Implements [MEP 9](https://github.com/mip-org/meps/blob/main/meps/mep-0009.md): a declarative, lockfile-driven workflow — the MATLAB analog of `uv` — layered on [§13](#13-environments)'s environments. Where the imperative commands have you manage an environment by hand, a **project** declares its dependencies in `mip.yaml` and mip makes the environment match, pinning the resolved closure in `mip.lock` so any machine rebuilds it identically. The verbs live in one command group, `mip project` ([`mip.project`](../+mip/project.m)):
+
+```
+mip project init / add / remove / lock / sync / run / status
+```
+
+Bare `mip project` is an alias for `mip project status`. The files involved:
+
+| File       | Role                                                     | Edited by | Committed? |
+|------------|----------------------------------------------------------|-----------|------------|
+| `mip.yaml` | Spec: dependencies, `dependency_groups`, `channels`      | you       | yes |
+| `mip.lock` | Lock: resolved versions, `.mhl` URLs, digests (JSON)     | mip       | yes |
+| `.mip/`    | The project's local environment (derived from the lock)  | mip       | no (gitignore) |
+
+### 14.1 The Project Spec
+
+`mip.yaml` serves as **both** the packaging manifest ([§11.2](#112-mipyaml-schema)) and the project spec. As a project spec, package identity is optional: a nameless `mip.yaml` is a plain project spec, read by [`mip.project.read_spec`](../+mip/+project/read_spec.m) (the package-manifest reader `read_mip_yaml` still requires `name`). When `name:` is present it must satisfy the package rules, and the spec is simultaneously a valid package. Two project-only keys are recognized:
+
+- **`dependency_groups`** — a map of named extra dependency lists (`dev` is the conventional group; `--dev` is shorthand for `--group dev` everywhere it appears). Group names must be valid identifiers (`mip:project:invalidGroupName` otherwise).
+- **`channels`** — extra channels beyond `mip-org/core`, consulted at lock time in listed order (after `mip-org/core`). The session's channel subscriptions are deliberately **not** consulted — only the committed spec drives the lock.
+
+Project dependency lists may carry `@version` pins (e.g. `chebfun@1.0.0`), unlike package dependency lists. Only channel (`gh`) packages may be declared (`mip:project:unsupportedDependency` otherwise). Both keys and identity-optionality are meaningful to the project layer only: `create_mip_json` never emits `dependency_groups` or `channels` into `mip.json`, so a published package never carries them, and session-side local installs read `dependencies:` only.
+
+### 14.2 Project Discovery
+
+Project commands act on the nearest `mip.yaml`, found by walking up from the current directory ([`mip.project.find_dir`](../+mip/+project/find_dir.m)) the way git finds `.git`: the innermost spec wins, the home directory is checked but never passed, and the filesystem root terminates the walk. `--directory <dir>` overrides the starting point; `mip:project:notFound` is raised when no spec is found. The first output line always announces the target: `using project at <dir> (mip.yaml)` ([`mip.project.locate`](../+mip/+project/locate.m)). Activation state is ignored.
+
+This is the deliberate counterpart to [§13.9](#139-how-a-command-finds-its-target): **session** commands never discover anything on the filesystem; **project** commands walk — but only to the committed, user-owned `mip.yaml`, never to mutable environment state. The one exception is `mip project init`, which never walks: it creates a project exactly where it is run.
+
+### 14.3 The Two Modes
+
+The switch between the hand-managed mode ([§13](#13-environments)) and the declarative one is a single observable fact: **does `mip.lock` exist?** No mode flag, no setting. `mip project lock`, `add`, and `run` each create the lock and thereby opt the directory in; committing the lock opts in the whole team. In uv mode the lock is authoritative and `.mip/` is a disposable copy of it; `mip install` still works, but its additions are unrecorded and removed by the next `mip project sync`. (This is why `mip env create` refuses its no-argument form when a `mip.lock` is present — [§13.3](#133-mip-env-create-namepath).)
+
+### 14.4 `mip.lock` Format
+
+The lock is JSON despite its `.lock` extension (following `uv.lock`), pretty-printed for reviewable diffs, with **no timestamps** — re-locking an unchanged spec produces an identical file. Read/written by [`read_lock`](../+mip/+project/read_lock.m) / [`write_lock`](../+mip/+project/write_lock.m). Top level: `lock_version` (currently `1`; an unrecognized version raises `mip:project:lockInvalid`), `mip_version`, `spec_sha256`, and `packages` — the full transitive closure in dependency-first order. Each entry carries:
+
+| Field | Meaning |
+|---|---|
+| `fqn`, `name`, `version`, `architecture` | The resolved package (v1 locks the current architecture) |
+| `mhl_url`, `mhl_sha256` | The exact archive and its digest, **copied from the channel index** (locking downloads nothing; an index entry without a digest locks without one) |
+| `commit_hash`, `source_hash` | Traceability, as published by the index (may be empty) |
+| `dependencies` | The entry's dependency list, as published |
+| `direct` | `true` for packages named in the spec |
+| `base`, `groups` | Which requirement sets need it: the top-level `dependencies` closure (`base`) and/or named groups' closures |
+
+`spec_sha256` is the SHA-256 of the `mip.yaml` the lock was resolved from ([`spec_hash`](../+mip/+project/spec_hash.m)); staleness ("the spec is newer than the lock") is a content-hash mismatch, robust across fresh clones where mtimes are not. An empty hash on either side (no JVM) reads as "cannot tell", not stale.
+
+### 14.5 `mip project init [--from-env]`
+
+Creates a nameless `mip.yaml` in the current directory (never walks; `mip:project:specExists` if one exists). It does **not** create a lock — only `lock`/`add`/`run` opt into uv mode. `--from-env` seeds the dependency list from the active root's directly-installed packages: names only, no version pins (the first `mip project lock` pins exact versions), bare names for `mip-org/core` packages and display FQNs otherwise; non-channel installs (`local/`, `fex/`, `web/`, `mhl/`) are skipped with a note. The existing `mip init` package scaffold is untouched.
+
+### 14.6 `mip project lock [--upgrade]`
+
+Resolves the spec — the base dependency list plus **all** groups — against `mip-org/core` plus the spec's channels, and writes `mip.lock` ([`lock_project`](../+mip/+project/lock_project.m)). Bare names go to the first priority channel that publishes them; FQNs pin their channel; cross-channel dependencies fetch their channels on demand. Reuses the install machinery (`fetch_index`, `build_package_info_map`, `build_graph`, `topological_sort`), so version and variant selection match [§3.1](#31-remote-installation-mip-install-package). Locking installs nothing.
+
+Spec `@version` pins always win; conflicting pins for one package raise `mip:project:conflictingPins`. Without `--upgrade`, versions recorded in an existing lock are preserved when the channel still publishes them — re-locking after a spec edit does not silently upgrade unrelated packages; with `--upgrade`, everything re-resolves to the newest permitted versions. An unreadable existing lock warns (`mip:project:lockUnreadable`) and resolves fresh.
+
+### 14.7 `mip project add / remove`
+
+[`add`](../+mip/+project/add.m) and [`remove`](../+mip/+project/remove.m) edit the spec's dependency list (`--dev` / `--group <g>` target a group), re-lock, and sync (`--no-sync` skips the sync). The edit ([`edit_spec`](../+mip/+project/edit_spec.m)) is **surgical**: only the target list's lines change; comments, ordering, and other keys are preserved (block and single-line flow sequences are supported; a missing key or group is created). `add` of a package already declared in the list **replaces** that entry (so `add chebfun@2.0` re-pins an existing entry); entries match by package name under [§1.8](#18-name-equivalence) equivalence, ignoring `@version` and channel qualification. `remove` of a name not in the target list raises `mip:project:dependencyNotDeclared`. If the re-lock fails (e.g. the package is in no channel), the spec edit is rolled back before the error propagates.
+
+### 14.8 `mip project sync`
+
+Makes `.mip/` match `mip.lock` ([`sync_project`](../+mip/+project/sync_project.m)); `mip:project:lockNotFound` when there is no lock. Selection: the `base` closure plus the `dev` group by default; `--no-dev` skips dev, `--group <name>` adds a group (unknown → `mip:project:unknownGroup`), `--all-groups` selects every group. The steps:
+
+1. **Materialize** `./.mip` (marker and all, [`mip.env.materialize`](../+mip/+env/materialize.m)) if it does not exist, with `mip env create`'s strictness.
+2. **Remove** installed packages the lock does not select — including unrecorded `mip install` additions and deselected groups' packages, excluding only the project's own package (`local/<name>`, see step 5). The first sync of an environment with no sync stamp lists what it would remove and confirms (`--yes` skips; `MIP_CONFIRM` honored); declining raises `mip:project:syncAborted`. Loaded packages are unloaded first only when the session's active root **is** this environment (load state is session-global and FQN-keyed, so unloading otherwise would rip a same-named package loaded from another root off the path).
+3. **Install** each selected entry straight from its locked `mhl_url` — no resolution — verifying the locked `mhl_sha256` when present: unlike install-time verification (suspended, [§3.6](#36-mhl-archive-integrity)), a digest mismatch here raises `mip:digestMismatch` — the lock is a reproducibility promise. An installed entry at the wrong version is replaced; an entry locked for another architecture re-resolves at the locked version for the current one ([§3.1.4](#314-architecture-selection-select_best_variant) against a fresh index). The `direct` flags are reconciled into `directly_installed.txt`.
+4. **Stamp** the environment: `.mip/mip-sync.json` records the lock's SHA-256, the selected groups, and the mip version — how later syncs skip the prune confirmation and `status` detects "lock newer than env" drift.
+5. **Self-install**: when the spec carries `name:`, sync finishes by installing the project itself into the environment as an **editable** install (never pruned). A failure here raises `mip:project:selfInstallFailed` with the underlying message.
+
+All environment mutation happens with `MIP_ROOT` temporarily pointed at `.mip/` and restored on the way out; the session's activation state is untouched.
+
+### 14.9 `mip project run <target>`
+
+The mip analog of `uv run` ([`run`](../+mip/+project/run.m)); supersedes the MEP 3 draft. Four steps: **lock** if missing or stale (spec-hash mismatch; with `--locked`, raise `mip:project:lockStale` instead — CI strictness), **sync** (dev group included; plus any repeatable `--with <pkg>`, installed into the env but recorded nowhere so the next plain sync removes them; `--no-sync` skips the step and instead errors if the environment is missing (`mip:project:envMissing`) or lacks a selected locked package (`mip:project:envIncomplete`); `--no-sync` + `--with` conflict), **activate scoped** (the full [§13.6](#136-mip-activate-namepath---load) swap with `--load` semantics, guarded by `onCleanup`), **run and restore** — on return, normal or error, the previous `MIP_ROOT`, active environment, MATLAB path, and load state are restored, and any error is rethrown.
+
+The target is disambiguated syntactically ([`exec_target`](../+mip/+project/exec_target.m)): a **script** (contains a path separator or ends in `.m`; `mip:project:targetNotFound` if missing) is executed with `run` from the directory it lives in; a **function call** (a bare identifier, optionally followed by arguments) is evaluated as MATLAB command syntax, every argument arriving as char (`mip project run f 3` is `f('3')`; for non-char arguments or arguments starting with `--`, use the expression form); anything else is an **expression**. Every form executes in a scoped, throwaway workspace — mip never injects variables into the base workspace (no `evalin`/`assignin`); a target's output is what it displays or writes to disk. Restoration is best-effort by design: mip-managed state is guaranteed, but a run can leak `javaaddpath` entries, globals, or loaded MEX files, and `parpool` workers do not inherit the temporary path. Full isolation is `matlab -batch "mip project run ..."` — also the shell/CI spelling.
+
+### 14.10 `mip project status [--check]`
+
+Reports the resolved project (name or nameless), the mode (pip+venv / uv by lock presence), the active environment (noting when it is this project's `.mip`), and drift across the spec → lock → environment chain: spec hash vs `spec_sha256` ("run `mip project lock`"); missing environment, missing sync stamp, or stamp lock-hash vs current lock ("run `mip project sync`"); plus a content check against the last-synced group selection — selected entries missing or at the wrong version, and unrecorded extras (which the next sync removes). `--check` turns any drift into `mip:project:drift`, so `matlab -batch` exits nonzero — the CI guard.
+
+### 14.11 Refinement of `mip activate`
+
+With MEP 9, the **no-argument** `mip activate` uses the project walk: it activates the `.mip` of the nearest project, falling back to `./.mip` in the current directory when no `mip.yaml` is found on the walk ([§13.6](#136-mip-activate-namepath---load) otherwise unchanged). When the found project has a `mip.lock`, the not-an-environment hint says `mip project sync` rather than `mip env create`.
+
+---
+
+## 15. Error Identifiers
 
 | Error ID | Trigger |
 |---|---|
@@ -1335,7 +1438,7 @@ The active environment is tracked in the `MIP_ACTIVE_ENV` appdata key ([§10.1](
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
 | `mip:install:equivalentAlreadyInstalled` | Install requested for a package whose name is equivalent (case / `-` / `_`) to one already installed (see [§1.8](#18-name-equivalence)) |
-| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification against the channel index digest. **Not currently raised** — digest verification is suspended pending atomic channel publishing ([#201](https://github.com/mip-org/mip/issues/201)); see [§3.6](#36-mhl-archive-integrity) |
+| `mip:digestMismatch` | Downloaded `.mhl` failed SHA-256 verification. Install-time verification is suspended pending atomic channel publishing ([#201](https://github.com/mip-org/mip/issues/201); see [§3.6](#36-mhl-archive-integrity)), so this is currently raised only by `mip project sync` verifying a locked digest ([§14.8](#148-mip-project-sync)) |
 | `mip:downloadMhl:requireHttps` | `.mhl` download source is a plain `http://` URL; `https://` is required (see [§3.3](#33-installation-from-mhl-file)) |
 | `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
 | `mip:update:notInstalled` | Package not installed |
@@ -1371,7 +1474,6 @@ The active environment is tracked in the `MIP_ACTIVE_ENV` appdata key ([§10.1](
 | `mip:fileNotFound` | A required file does not exist |
 | `mip:fileError` | Generic file I/O failure (open/read/write) |
 | `mip:copyFailed` | `copyfile` operation failed |
-| `mip:noBuild` | `mip.yaml` has no `builds` entries |
 | `mip:noMatchingBuild` | No `builds` entry matches the current architecture (and no `any` fallback) |
 | `mip:build:noArchitecture` | A package's `mip.json` has no `architecture` field, so its effective architecture cannot be determined (`mip.build.effective_arch`) |
 | `mip:mhlNotFound` | `.mhl` archive is missing where expected |
@@ -1420,6 +1522,29 @@ The active environment is tracked in the `MIP_ACTIVE_ENV` appdata key ([§10.1](
 | `mip:env:tooManyArgs` | Extra arguments to a `mip env` subcommand |
 | `mip:activate:tooManyArgs` | More than one environment argument to `mip activate` |
 | `mip:deactivate:tooManyArgs` | Any argument to `mip deactivate` |
+| `mip:project:notFound` | No `mip.yaml` found walking up from the starting directory ([§14.2](#142-project-discovery)) |
+| `mip:project:directoryNotFound` | `--directory` does not exist or is not a directory |
+| `mip:project:specNotFound` | The project directory has no `mip.yaml` (internal spec read) |
+| `mip:project:specExists` | `mip project init` where a `mip.yaml` already exists |
+| `mip:project:specUnsupported` | `mip project add/remove` cannot edit the spec (the target key's value is not a list) |
+| `mip:project:dependencyNotDeclared` | `mip project remove` of a name not in the target list |
+| `mip:project:unsupportedDependency` | A non-channel package in a project dependency list (`lock`) or argument (`add`) |
+| `mip:project:conflictingPins` | The spec pins one package to two different versions |
+| `mip:project:conflictingFlags` | `--dev` combined with a different `--group`, or `--with` with `--no-sync` |
+| `mip:project:invalidGroupName` | A dependency group name that is not a valid identifier |
+| `mip:project:lockNotFound` | `mip project sync`/`run --no-sync` with no `mip.lock` |
+| `mip:project:lockInvalid` | `mip.lock` cannot be parsed or has an unsupported `lock_version` |
+| `mip:project:lockStale` | `mip project run --locked` with a missing or stale lock |
+| `mip:project:unknownGroup` | `--group` names a group in neither the spec nor the lock |
+| `mip:project:syncAborted` | The first-sync prune confirmation was declined |
+| `mip:project:selfInstallFailed` | Sync could not install the named project package editable ([§14.8](#148-mip-project-sync)) |
+| `mip:project:envMissing` | `mip project run --no-sync` with no project environment |
+| `mip:project:envIncomplete` | `mip project run --no-sync` with a selected locked package missing |
+| `mip:project:targetNotFound` | `mip project run` script target does not exist |
+| `mip:project:noTarget` | `mip project run` with no target |
+| `mip:project:noPackage` | `mip project add/remove` with no package arguments |
+| `mip:project:tooManyArgs` | Extra arguments to a `mip project` subcommand |
+| `mip:project:drift` | `mip project status --check` detected drift ([§14.10](#1410-mip-project-status---check)) |
 
 The following **warning** identifiers are also issued:
 
@@ -1428,36 +1553,38 @@ The following **warning** identifiers are also issued:
 | `mip:unloadNotFound` | `mip unload <pkg>` on a package whose `mip.json` has no `paths` field (see [§5.8](#58-path-removal-from-mipjson)) |
 | `mip:brokenDependencies` | After an unload/uninstall, at least one still-loaded or still-installed package has a dependency that is no longer loaded/installed |
 | `mip:load:unknownGroup` | `mip load --with <group>` where no loaded package declares that `extra_paths` group (see [§4.9](#49-the---with-flag)) |
-| `mip:deactivate:restoreFailed` | `mip deactivate` could not restore a saved package (see [§13.7](#137-mip-deactivate)) |
+| `mip:env:restoreFailed` | A session restore (`mip deactivate`, the end of `mip project run`) could not restore a saved package (see [§13.7](#137-mip-deactivate)) |
+| `mip:project:lockUnreadable` | `mip project lock` found an existing `mip.lock` it could not parse; it is ignored and the spec resolves fresh |
+| `mip:project:unloadFailed` | `mip project sync` could not unload a package before removing it |
 
 ---
 
-## 15. Open Questions and Gaps
+## 16. Open Questions and Gaps
 
 This section collects unresolved design questions and untested behaviors. Items that were previously open but have since been resolved are documented in the relevant sections above (see issues [#94](https://github.com/mip-org/mip/issues/94), [#95](https://github.com/mip-org/mip/issues/95), [#99](https://github.com/mip-org/mip/issues/99)--[#105](https://github.com/mip-org/mip/issues/105)).
 
-### 15.4 No Lock File
+### 16.4 No Lock File in the Hand-Managed Mode
 
-There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk (`<root>/packages/` and `directly_installed.txt`) is the only record, so installs are not reproducible across machines or over time. Lock file support is **not planned for the first release**.
+In the hand-managed mode ([§13](#13-environments)), the installed state on disk (`<root>/packages/` and `directly_installed.txt`) is the only record of what is installed, so installs are not reproducible across machines or over time. This is by design: reproducibility is the project layer's job — `mip.lock` and `mip project sync` ([§14](#14-projects)) rebuild an environment identically, and `mip project init --from-env` bridges a hand-managed environment into that mode.
 
-### 15.5 Ambiguous Unload Uses Load Order
+### 16.5 Ambiguous Unload Uses Load Order
 
 When multiple loaded packages share a bare name, `mip unload <bare>` unloads the most recently loaded one ([§5.2](#52-bare-name-disambiguation-for-unload)). This differs from `mip uninstall`, which refuses and requires FQN disambiguation ([§6.3](#63-bare-name-ambiguity)). Should these be consistent?
 
-### 15.6 `mip load --install` Channel Handling
+### 16.6 `mip load --install` Channel Handling
 
 `mip load --install chebfun` installs from the default channel (or `--channel`) if not installed. There is no disambiguation check when the package name exists on multiple channels. Should this error like `mip uninstall` does?
 
 **Untested.**
 
-### 15.7 Concurrent MATLAB Sessions
+### 16.7 Concurrent MATLAB Sessions
 
 Running multiple MATLAB sessions that share the same mip root directory is **not supported**. In-memory state (`setappdata`) is per-session, while file state (`directly_installed.txt`, installed packages on disk) is shared with no file locking. Concurrent `mip install`/`mip uninstall` operations can race on `directly_installed.txt` (read-modify-write without locking) and one session's `mip uninstall` can remove packages another session has loaded. Users should avoid running `mip` commands that modify state from multiple sessions simultaneously.
 
-### 15.8 Missing Test Coverage
+### 16.8 Missing Test Coverage
 
 Behaviors specified in this document but not covered by tests:
 
-- `mip load --install` with `--channel` ([§15.6](#156-mip-load---install-channel-handling))
+- `mip load --install` with `--channel` ([§16.6](#166-mip-load---install-channel-handling))
 - `mip install` from URL (`https://...`)
 - `mip avail` ([§9.3](#93-mip-avail)), `mip info` remote-only display with `--channel`

@@ -2,17 +2,18 @@ function activate(varargin)
 %ACTIVATE   Point the session at a mip environment.
 %
 % Usage:
-%   mip activate                - Activate ./.mip in the current directory
+%   mip activate                - Activate the nearest project's .mip
 %   mip activate <name>         - Activate a named env from <baseline root>/envs/
 %   mip activate <path>         - Activate the environment at a path
 %   mip activate ... --load     - Also load the env's directly installed packages
 %
 % A bare word is a name in the central store; anything containing a path
-% separator is a path. The no-argument form acts on ./.mip in the current
-% directory exactly - it never walks up the directory tree. In every form
-% the target must be an environment: the directory exists, contains the
-% mip-env.json marker written by "mip env create", and has a packages/
-% subtree.
+% separator is a path. The no-argument form uses the project walk: it
+% activates the .mip of the nearest mip.yaml walking up from the current
+% directory, or ./.mip in the current directory when there is no
+% project. In every form the target must be an environment: the
+% directory exists, contains the mip-env.json marker written by
+% "mip env create" (or "mip project sync"), and has a packages/ subtree.
 %
 % Activation is exclusive (one environment at a time; activating another
 % environment deactivates the current one first) and swaps the whole
@@ -45,8 +46,26 @@ function activate(varargin)
     end
 
     if isempty(args)
-        t = struct('kind', 'path', 'name', '', 'path', fullfile(pwd, '.mip'));
-        createHint = 'mip env create';
+        % With no argument, activate the nearest project's .mip - the
+        % project walk of MEP 9 - falling back to ./.mip in the current
+        % directory when no mip.yaml is found on the walk.
+        projectDir = mip.project.find_dir(pwd);
+        if isempty(projectDir)
+            envPath = fullfile(pwd, '.mip');
+            createHint = 'mip env create';
+        else
+            envPath = fullfile(projectDir, '.mip');
+            if isfile(fullfile(projectDir, 'mip.lock'))
+                createHint = 'mip project sync';
+            else
+                createHint = 'mip env create';
+            end
+            if ~strcmp(projectDir, pwd)
+                fprintf('using project at %s (mip.yaml)\n', ...
+                        mip.env.display_path(projectDir));
+            end
+        end
+        t = struct('kind', 'path', 'name', '', 'path', envPath);
     else
         t = mip.env.classify_arg(args{1});
         if strcmp(t.kind, 'name')
@@ -75,7 +94,7 @@ function activate(varargin)
     if ~isempty(active) && mip.paths.is_same(active.path, t.path)
         fprintf('Environment %s is already active\n', mip.env.describe(active));
         if opts.load
-            loadEnvPackages();
+            mip.env.load_direct();
         end
         return
     end
@@ -106,40 +125,7 @@ function activate(varargin)
     fprintf('Activated environment: %s\n', mip.env.describe(env));
 
     if opts.load
-        loadEnvPackages();
+        mip.env.load_direct();
     end
 
-end
-
-function loadEnvPackages()
-% Load the environment's directly installed packages as direct loads
-% (dependencies come in transitively, exactly as if the user had run
-% "mip load" on each). Best-effort: the pointer swap has already
-% completed, each failure prints the mip error, and a summary closes the
-% command. The environment stays active regardless.
-
-    direct = mip.state.get_directly_installed();
-    direct = direct(~strcmp(direct, 'gh/mip-org/core/mip'));
-    if isempty(direct)
-        fprintf('No directly installed packages to load.\n');
-        return
-    end
-
-    nLoaded = 0;
-    nFailed = 0;
-    for i = 1:numel(direct)
-        try
-            mip.load(direct{i});
-            nLoaded = nLoaded + 1;
-        catch ME
-            nFailed = nFailed + 1;
-            fprintf('Failed to load "%s": %s\n', ...
-                    mip.parse.display_fqn(direct{i}), ME.message);
-        end
-    end
-    if nFailed > 0
-        fprintf('Loaded %d package(s), %d failed.\n', nLoaded, nFailed);
-    else
-        fprintf('Loaded %d package(s).\n', nLoaded);
-    end
 end

@@ -42,6 +42,14 @@ function varargout = mip(command, varargin)
 %   mip env delete <name>                           - Delete a named environment
 %   mip activate [name|path] [--load]               - Point the session at an environment
 %   mip deactivate                                  - Point the session back at the baseline root
+%   mip project                                     - Show project status
+%   mip project init [--from-env]                   - Create a mip.yaml project spec here
+%   mip project add <pkg> [...]                     - Declare a dependency (re-lock + sync)
+%   mip project remove <pkg> [...]                  - Undeclare a dependency (re-lock + sync)
+%   mip project lock [--upgrade]                    - Resolve mip.yaml into mip.lock
+%   mip project sync                                - Make ./.mip match mip.lock
+%   mip project run <target>                        - Lock/sync, run inside the project env
+%   mip project status [--check]                    - Report project health and drift
 %   mip channel add <channel>                       - Subscribe at highest priority
 %   mip channel append <channel>                    - Subscribe at lowest priority
 %   mip channel remove <channel>                    - Unsubscribe from a channel
@@ -85,7 +93,8 @@ command = lower(command);
 % ensures this fires even if the command errors partway through
 % (e.g. `install a b` failing on `b` after `a` succeeded).
 if ismember(command, {'install','update','uninstall','load','unload', ...
-                     'pin','unpin','reset','activate','deactivate','env'})
+                     'pin','unpin','reset','activate','deactivate','env', ...
+                     'project'})
     refreshSignatures = onCleanup(@safe_update_signatures); %#ok<NASGU>
 end
 
@@ -174,6 +183,9 @@ switch command
 
     case 'deactivate'
         mip.deactivate(varargin{:});
+
+    case 'project'
+        mip.project(varargin{:});
 
     case 'channel'
         mip.channel(varargin{:});
