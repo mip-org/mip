@@ -1175,7 +1175,7 @@ Whenever the `mip-org/core` index is loaded through [`mip.channel.fetch_index`](
 
 Two checks run, in priority order:
 
-1. **Required minimum version.** The index may carry an optional top-level `min_mip_version` field (a numeric version string). If the installed mip version is numerically below it, the notice states that an update is **required** and suggests `mip update mip`. This is advisory only: mip keeps functioning normally — no command is blocked. A `min_mip_version` that is missing, empty, or non-numeric is ignored.
+1. **Compatibility floor.** The index may carry an optional top-level `mip_compatibility_floor` field (a numeric version string). If the installed mip version is numerically below it, the notice states that an update is **required** and suggests `mip update mip`. This is advisory only: mip keeps functioning normally — no command is blocked. A `mip_compatibility_floor` that is missing, empty, or non-numeric is ignored.
 2. **Newer version available.** Otherwise, the latest **numeric** version published for the `mip` package in the index (name equivalence per [§1.8](#18-name-equivalence); non-numeric versions like `main` are ignored) is compared against the installed version. If it is greater, the notice suggests running `mip update mip`.
 
 Both checks are skipped entirely when the installed mip version is **non-numeric** (e.g. a branch install like `main`, or `unspecified` from a source checkout) — there is no meaningful ordering against numeric releases. The installed version is resolved via `mip.version()` ([§9.4](#94-mip-version)).

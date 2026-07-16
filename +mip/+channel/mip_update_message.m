@@ -11,9 +11,9 @@ function msg = mip_update_message(index, installedVersion)
 %
 % Two checks are performed, in priority order:
 %
-%   1. If the index carries a numeric top-level min_mip_version field and
-%      the installed version is below it, the notice states that an update
-%      is REQUIRED by the channel.
+%   1. If the index carries a numeric top-level mip_compatibility_floor
+%      field and the installed version is below it, the notice states that
+%      an update is REQUIRED by the channel.
 %   2. Otherwise, if the latest numeric version of the "mip" package
 %      published in the index is greater than the installed version, the
 %      notice suggests updating.
@@ -32,12 +32,12 @@ if ~ischar(installedVersion) || isempty(installedVersion) || ...
     return
 end
 
-minRequired = read_min_mip_version(index);
-if ~isempty(minRequired) && ...
-        mip.resolve.compare_versions(installedVersion, minRequired) < 0
+floorVersion = read_mip_compatibility_floor(index);
+if ~isempty(floorVersion) && ...
+        mip.resolve.compare_versions(installedVersion, floorVersion) < 0
     msg = sprintf(['This channel requires mip %s or newer (installed: %s). ' ...
                    'An update is required: run "mip update mip".'], ...
-                  minRequired, installedVersion);
+                  floorVersion, installedVersion);
     return
 end
 
@@ -52,18 +52,18 @@ end
 end
 
 
-function minRequired = read_min_mip_version(index)
+function floorVersion = read_mip_compatibility_floor(index)
 % Optional top-level index field. Ignored unless it is a numeric version.
-minRequired = '';
-if ~isstruct(index) || ~isfield(index, 'min_mip_version')
+floorVersion = '';
+if ~isstruct(index) || ~isfield(index, 'mip_compatibility_floor')
     return
 end
-v = index.min_mip_version;
+v = index.mip_compatibility_floor;
 if isstring(v) && isscalar(v)
     v = char(v);
 end
 if ischar(v) && ~isempty(v) && mip.resolve.is_numeric_version(v)
-    minRequired = v;
+    floorVersion = v;
 end
 end
 

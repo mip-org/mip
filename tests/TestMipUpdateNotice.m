@@ -1,7 +1,7 @@
 classdef TestMipUpdateNotice < matlab.unittest.TestCase
 %TESTMIPUPDATENOTICE   Self-update notice when loading the core channel index.
 %   Covers mip.channel.mip_update_message (notice composition, including the
-%   optional min_mip_version index field), mip.channel.check_mip_update
+%   optional mip_compatibility_floor index field), mip.channel.check_mip_update
 %   (printing + once-per-command suppression), and the fetch_index wiring
 %   (the check applies only to the mip-org/core channel).
 
@@ -62,7 +62,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
             % A source checkout ('unspecified') or branch install ('main')
             % has no meaningful ordering against numeric releases.
             index = makeIndex({mipEntry('99.0.0')});
-            index.min_mip_version = '99.0.0';
+            index.mip_compatibility_floor = '99.0.0';
             testCase.verifyEmpty(mip.channel.mip_update_message(index, 'main'));
             testCase.verifyEmpty(mip.channel.mip_update_message(index, 'unspecified'));
             testCase.verifyEmpty(mip.channel.mip_update_message(index, ''));
@@ -103,11 +103,11 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
             testCase.verifySubstring(msg, '3.0.0');
         end
 
-        % ---- mip_update_message: min_mip_version ----
+        % ---- mip_update_message: mip_compatibility_floor ----
 
-        function testMinVersionUnsatisfiedSaysRequired(testCase)
+        function testFloorUnsatisfiedSaysRequired(testCase)
             index = makeIndex({mipEntry('1.2.0')});
-            index.min_mip_version = '1.2.0';
+            index.mip_compatibility_floor = '1.2.0';
             msg = mip.channel.mip_update_message(index, '1.1.0');
             testCase.verifySubstring(msg, 'required');
             testCase.verifySubstring(msg, '1.2.0');
@@ -115,32 +115,32 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
             testCase.verifySubstring(msg, 'mip update mip');
         end
 
-        function testMinVersionSatisfiedFallsBackToSuggestion(testCase)
+        function testFloorSatisfiedFallsBackToSuggestion(testCase)
             index = makeIndex({mipEntry('1.3.0')});
-            index.min_mip_version = '1.1.0';
+            index.mip_compatibility_floor = '1.1.0';
             msg = mip.channel.mip_update_message(index, '1.2.0');
             testCase.verifySubstring(msg, '1.3.0');
             testCase.verifyEmpty(strfind(msg, 'required'));
         end
 
-        function testMinVersionWithoutMipEntryStillRequired(testCase)
-            % min_mip_version applies even if the index publishes no mip entry.
+        function testFloorWithoutMipEntryStillRequired(testCase)
+            % mip_compatibility_floor applies even if the index publishes no mip entry.
             index = makeIndex({pkgEntry('chebfun', '5.0.0')});
-            index.min_mip_version = '2.0.0';
+            index.mip_compatibility_floor = '2.0.0';
             msg = mip.channel.mip_update_message(index, '1.0.0');
             testCase.verifySubstring(msg, 'required');
         end
 
-        function testNonNumericMinVersionIgnored(testCase)
+        function testNonNumericFloorIgnored(testCase)
             index = makeIndex({mipEntry('1.0.0')});
-            index.min_mip_version = 'main';
+            index.mip_compatibility_floor = 'main';
             msg = mip.channel.mip_update_message(index, '1.0.0');
             testCase.verifyEmpty(msg);
         end
 
-        function testEmptyMinVersionIgnored(testCase)
+        function testEmptyFloorIgnored(testCase)
             index = makeIndex({mipEntry('1.0.0')});
-            index.min_mip_version = '';
+            index.mip_compatibility_floor = '';
             msg = mip.channel.mip_update_message(index, '1.0.0');
             testCase.verifyEmpty(msg);
         end
@@ -201,7 +201,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
 
         function testFetchIndexNonCoreChannelNoNotice(testCase)
             % The check applies only to mip-org/core: a non-core index with a
-            % huge mip version and min_mip_version prints nothing, regardless
+            % huge mip version and mip_compatibility_floor prints nothing, regardless
             % of the installed mip version.
             writeCache(testCase.TestRoot, 'mylab/custom', ...
                 makeIndex({mipEntry('999999.0.0')}, '999999.0.0'));
@@ -241,10 +241,10 @@ function e = mipEntry(version)
 e = pkgEntry('mip', version);
 end
 
-function index = makeIndex(entries, minMipVersion)
+function index = makeIndex(entries, floorVersion)
 index = struct('packages', {entries});
 if nargin >= 2
-    index.min_mip_version = minMipVersion;
+    index.mip_compatibility_floor = floorVersion;
 end
 end
 
