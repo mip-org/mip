@@ -71,6 +71,11 @@ end
 mip.state.key_value_append('MIP_LOADED_PACKAGES', 'gh/mip-org/core/mip');
 mip.state.key_value_append('MIP_STICKY_PACKAGES', 'gh/mip-org/core/mip');
 
+% Let the core-channel self-update notice print again for this command
+% (mip.channel.check_mip_update prints each distinct notice at most once
+% per command).
+mip.state.key_value_set('MIP_UPDATE_NOTICE_SHOWN', '');
+
 % Normalize command to lowercase
 command = lower(command);
 
