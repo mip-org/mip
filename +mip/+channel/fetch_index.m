@@ -13,6 +13,9 @@ function index = fetch_index(channel, forceRefresh)
 % <root>/cache/index/<owner>/<channel>.json. The cache entry is reused if it
 % is less than CACHE_TTL_SECONDS old, unless forceRefresh is true. Failed
 % fetches are not cached.
+%
+% Every load of the mip-org/core index (cached or fresh) also triggers the
+% mip self-update notice check (mip.channel.check_mip_update).
 
 CACHE_TTL_SECONDS = 30;
 
@@ -43,6 +46,7 @@ if ~forceRefresh && ~isempty(cacheFile) && isfile(cacheFile)
             try
                 indexJson = fileread(cacheFile);
                 index = parse_index_json(indexJson);
+                maybe_check_mip_update(index, channelOwner, channelName);
                 return
             catch
                 % Corrupt cache; fall through to re-fetch.
@@ -66,6 +70,7 @@ catch ME
 end
 
 index = parse_index_json(indexJson);
+maybe_check_mip_update(index, channelOwner, channelName);
 
 if ~isempty(cacheFile)
     try
@@ -83,6 +88,15 @@ if ~isempty(cacheFile)
     end
 end
 
+end
+
+
+function maybe_check_mip_update(index, channelOwner, channelName)
+% Whenever the core channel index is loaded (cache or network), check
+% whether the running mip is outdated and print a self-update notice.
+if strcmp(channelOwner, 'mip-org') && strcmp(channelName, 'core')
+    mip.channel.check_mip_update(index);
+end
 end
 
 

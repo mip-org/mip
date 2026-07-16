@@ -291,6 +291,8 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 
 Channel index fetches go through an on-disk cache (see [§11.6](#116-channel-index-cache)). Repeat fetches of the same channel within the cache TTL are served from the cache without hitting the network.
 
+Every load of the `mip-org/core` index (cached or fresh, from any command) also triggers the mip self-update notice check (see [§11.8](#118-core-channel-mip-self-update-notice)).
+
 #### 3.1.3 Version Selection (`select_best_version`)
 
 Given all available versions for a package:
@@ -1178,6 +1180,22 @@ This replaces the earlier Windows-only "move aside on `rmdir` failure" logic and
 **Which removals use it.** `mip uninstall`, dependency pruning ([§6.2](#62-dependency-pruning-after-uninstall)), and the old-package backups discarded after a successful `mip update`/`mip install` replacement all go through `remove_dir`. Throwaway temporary directories (freshly downloaded/extracted staging, failed-download cleanup) and the self-update of mip itself use a plain `rmdir` — they never hold a binary that was loaded in this session. The self-uninstall root deletion is also a direct `rmdir` (the trash cannot hold its own root), preceded by clearing all MEX ([§6.4](#64-self-uninstall-mip-uninstall-mip)).
 
 The `.trash` directory lives beside `packages/` under the mip root, so it is never mistaken for a package and is not scanned by package discovery.
+
+### 11.8 Core-Channel mip Self-Update Notice
+
+Whenever the `mip-org/core` index is loaded through [`mip.channel.fetch_index`](../+mip/+channel/fetch_index.m) — from the network **or** from the on-disk cache ([§11.6](#116-channel-index-cache)), and regardless of which command triggered the fetch — mip checks whether the running mip installation is outdated and prints a self-update notice ([`mip.channel.check_mip_update`](../+mip/+channel/check_mip_update.m), message composition in [`mip.channel.mip_update_message`](../+mip/+channel/mip_update_message.m)). Non-core channel indexes are never checked.
+
+Two checks run, in priority order:
+
+1. **Compatibility floor.** The index may carry an optional top-level `mip_compatibility_floor` field (a numeric version string). If the installed mip version is numerically below it, the notice states that an update is **required** and suggests `mip update mip`. This is advisory only: mip keeps functioning normally — no command is blocked. A `mip_compatibility_floor` that is missing, empty, or non-numeric is ignored.
+2. **Newer version available.** Otherwise, the latest **numeric** version published for the `mip` package in the index (name equivalence per [§1.8](#18-name-equivalence); non-numeric versions like `main` are ignored) is compared against the installed version. If it is greater, the notice suggests running `mip update mip`.
+
+Both checks are skipped entirely when the installed mip version is **non-numeric** (e.g. a branch install like `main`, or `unspecified` from a source checkout) — there is no meaningful ordering against numeric releases. The installed version is resolved via `mip.version()` ([§9.4](#94-mip-version)).
+
+Noise control and robustness:
+
+- Each distinct notice is printed **at most once per mip command**: the printed text is remembered in the `MIP_UPDATE_NOTICE_SHOWN` state key, which the `mip` CLI entry point clears at dispatch. Repeated core-index loads within a single command (e.g. a multi-package install) therefore print the notice only once, while the next command prints it again.
+- The check is **best-effort and never raises**: a malformed index, an unreadable version, or any other failure is silently ignored so the notice can never break the command in progress.
 
 ---
 
