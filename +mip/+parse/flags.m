@@ -5,7 +5,7 @@ function [opts, positionals] = flags(args, spec, aliases)
 % defaults; each field's type determines the flag's arity:
 %
 %   false  - boolean flag:         --force sets opts.force = true
-%   ''     - single-value flag:    --url <v> sets opts.url = v;
+%   ''     - single-value flag:    --name <v> sets opts.name = v;
 %            a repeat raises mip:repeatedFlag
 %   {}     - repeatable flag:      each --with <v> appends v to opts.with
 %

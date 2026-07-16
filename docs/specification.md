@@ -15,7 +15,7 @@ Every installed package has a unique **FQN** that begins with a **source-type pr
 | `gh` — GitHub channel package | `gh/<owner>/<channel>/<name>` | `gh/mip-org/core/chebfun` |
 | `local` — local directory / editable install | `local/<name>` | `local/mypkg` |
 | `fex` — File Exchange landing-page URL install | `fex/<name>` | `fex/some_fex_pkg` |
-| `web` — generic remote `.zip` (`--url`) install | `web/<name>` | `web/some_web_pkg` |
+| `web` — generic remote `.zip` URL install | `web/<name>` | `web/some_web_pkg` |
 | `mhl` — `.mhl` install with no `--channel` | `mhl/<name>` | `mhl/chebfun` |
 
 There are five source-type prefixes in total; the full reserved list is `gh`, `local`, `fex`, `web`, `mhl`. Only `gh` carries an `<owner>/<channel>`; the other four are addressed by the source-type prefix directly (see [§1.6](#16-non-channel-source-types)).
@@ -96,7 +96,7 @@ Packages installed from local directories, File Exchange, generic remote `.zip` 
 
 - `local/<name>` — directory and editable installs
 - `fex/<name>` — File Exchange landing-page URLs (see [§3.4](#34-installation-from-a-remote-zip-url))
-- `web/<name>` — generic remote `.zip` archives installed via `--url` (see [§3.4](#34-installation-from-a-remote-zip-url))
+- `web/<name>` — generic remote `.zip` archives installed from a URL (see [§3.4](#34-installation-from-a-remote-zip-url))
 - `mhl/<name>` — `.mhl` installs performed without `--channel` (see [§3.3](#33-installation-from-mhl-file))
 
 These are addressed by the source-type prefix directly; no `<owner>/<channel>` is involved.
@@ -263,9 +263,10 @@ Used by: `mip install` for remote packages
 
 `mip install` accepts a mix of argument types in a single call. Each positional argument is categorized **before** any installation work happens:
 
-1. If the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
-2. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
-3. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`<owner>/<channel>/<pkg>`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
+1. If the argument is a File Exchange landing-page URL (`https://www.mathworks.com/matlabcentral/fileexchange/...`) or an `http(s)://` URL whose path component (before `?` or `#`) ends in `.zip` (case-insensitive), it is a **URL install source** (see [§3.4](#34-installation-from-a-remote-zip-url)). A plain `http://` `.zip` URL is categorized here too, so that the https requirement is reported by the URL install path (`mip:install:requireHttps`) rather than the argument being misrouted to an `.mhl` download.
+2. Else if the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
+3. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
+4. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`<owner>/<channel>/<pkg>`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
 
 This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
 
@@ -416,26 +417,37 @@ If the package is already installed at `local/<name>`, prints a message and retu
 
 ### 3.4 Installation from a Remote `.zip` URL
 
-`mip install <name> --url <zip-url>` installs a package from a remote `.zip` archive, using the positional `<name>` as the package name:
+`mip install <url> [--name <name>]` installs a package from a remote `.zip` archive or a File Exchange landing page. The URL is a positional argument, recognized during argument categorization ([§3.0](#30-argument-categorization)); `--name` supplies the package name:
 
-1. Download the archive to a temporary directory.
-2. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
-3. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No prompt is issued -- the user opted in by specifying `--url`.
-4. Run a non-editable local install (`mip.install.from_local`) on the extracted source. A generic `.zip` URL lands under `<root>/packages/web/<name>/` (source type `web`); a File Exchange landing-page URL lands under `<root>/packages/fex/<name>/` (source type `fex`, see below).
-5. Clear `source_path` in the installed `mip.json` to an empty string. `from_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
-6. Clean up the temp directory regardless of success or failure.
+1. Determine the package name. If `--name` is given, its value is used. Otherwise a default is derived from the URL (see below) and the user is prompted (`Package name [<default>]:`); pressing Enter accepts the default, any other entry overrides it. When no default can be derived, the prompt (`Package name:`) has no default and an empty entry raises `mip:install:noName`. The `MIP_CONFIRM` environment variable overrides the prompt for non-interactive use: `y`/`yes` (case-insensitive) accepts the derived default (raising `mip:install:noName` when there is none); any other non-empty value declines, raising `mip:install:noName`.
+2. Download the archive to a temporary directory.
+3. Extract it. If the archive expands to a single top-level subdirectory (as GitHub-produced source archives do, e.g. `repo-main/`), descend into that subdirectory and treat its contents as the source tree. Otherwise use the extraction root.
+4. If the extracted source has no `mip.yaml`, run `mip init` on it with `--name <name>` and `--repository <zip-url>`. The URL is recorded in the generated mip.yaml's `repository` field. No confirmation prompt is issued -- the user opted in by passing the URL.
+5. Run a non-editable local install (`mip.install.from_local`) on the extracted source. A generic `.zip` URL lands under `<root>/packages/web/<name>/` (source type `web`); a File Exchange landing-page URL lands under `<root>/packages/fex/<name>/` (source type `fex`, see below).
+6. Clear `source_path` in the installed `mip.json` to an empty string. `from_local` would otherwise record the temp extraction directory, which is about to be deleted; storing that stale path is worse than storing none. An empty `source_path` signals "no source available to reinstall from", which `mip update` handles by skipping ([§7.1](#71-update-flow-mip-update-x-y-z)).
+7. Clean up the temp directory regardless of success or failure.
+
+**Default name derivation** (`mip.install.default_name_from_url`): the candidate name is, ignoring any query string or fragment,
+
+- for a File Exchange landing page: the slug after the numeric id in the last path segment (`.../fileexchange/23629-export_fig` → `export_fig`); an id-only URL yields no candidate;
+- for a GitHub archive URL (`github.com/<owner>/<repo>/archive/...`): the repository name — GitHub archives are named after the ref (e.g. `master.zip`), which would make a poor package name;
+- for any other URL: the archive file name without its `.zip` extension.
+
+The candidate is then sanitized to canonical form: lowercased, characters other than lowercase letters, digits, `-`, `_` replaced with `_`, and leading/trailing separators stripped. If the result is still not a valid canonical name, there is no default.
 
 Constraints:
 
-- The `--url` value must use `https://`; a plain `http://` URL is refused with `mip:install:requireHttps` (the archive is unzipped onto the path and loaded, so an unencrypted fetch would let a network attacker inject code).
-- The URL must point to a `.zip` archive: the URL's path component (before `?` or `#`) ends in `.zip`, case-insensitive. Otherwise raises `mip:install:urlMustBeZip`.
-- Exactly one positional argument is required when `--url` is given, and it must be a bare name (not an FQN, URL, or path). Otherwise raises `mip:install:urlRequiresName` / `mip:install:urlTakesSingleName`.
-- `--url` may appear at most once per call (raises `mip:install:multipleUrls`).
+- The URL must use `https://`; a plain `http://` URL is refused with `mip:install:requireHttps` (the archive is unzipped onto the path and loaded, so an unencrypted fetch would let a network attacker inject code).
+- The URL must point to a `.zip` archive or a File Exchange landing page; a non-`.zip` URL reaching `mip.install.from_url` raises `mip:install:urlMustBeZip`. (Via the CLI this is enforced earlier: a non-`.zip`, non-File-Exchange URL is never categorized as a URL install source — see [§3.0](#30-argument-categorization).)
+- The package name (from `--name`, the prompt, or the derived default) must be a bare name in canonical form: lowercase letters, digits, hyphens, and underscores, starting and ending with a letter or digit. A URL, path, FQN, or non-canonical name raises `mip:install:invalidName`.
+- `--name` requires the argument list to be exactly one URL install source: with no `.zip` / File Exchange URL among the arguments it raises `mip:install:nameRequiresUrl`; with more than one positional argument it raises `mip:install:nameTakesSingleUrl`. Multiple URL install sources in one call are allowed only without `--name`; each prompts for its own name.
+- `--name` may appear at most once per call (raises `mip:repeatedFlag`); `--name` in final position with no value raises `mip:missingFlagValue`.
 - `--editable` / `-e` is rejected (the source dir is temporary; raises `mip:install:editableRequiresLocal`).
+- The former `mip install <name> --url <url>` syntax is removed; passing `--url` raises `mip:install:urlFlagRemoved` with a hint showing the new form.
 
-**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`. A package installed from a File Exchange landing page is placed under `<root>/packages/fex/<name>/` (source type `fex`) rather than `web/`.
+**File Exchange URLs**: a URL starting with `https://www.mathworks.com/matlabcentral/fileexchange/` is treated as a landing page, not a direct download. mip resolves it to the underlying `.zip` URL by appending `?download=true`, issuing a HEAD request (with a curl-style User-Agent to bypass MathWorks' Akamai bot detection), following the 302 redirect to the UUID-based `mlc-downloads/...` URL, and stripping its query string. The resolved zip URL is what gets downloaded **and** what gets recorded in the auto-generated mip.yaml's `repository` field. The default package name, however, is derived from the original landing URL's slug, not the resolved UUID URL. If resolution fails (network error, non-2xx response, or final URL is not a `.zip`), raises `mip:install:fexResolveFailed`. A package installed from a File Exchange landing page is placed under `<root>/packages/fex/<name>/` (source type `fex`) rather than `web/`.
 
-Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. `mip update <name>` (or `mip update --all`) prints a skip message for URL-installed packages and moves on. To pull in an updated archive, re-run `mip install <name> --url <zip-url>` (uninstall first if needed).
+Limitation: because the source directory is deleted after install, `mip update` cannot reinstall from the original URL. `mip update <name>` (or `mip update --all`) prints a skip message for URL-installed packages and moves on. To pull in an updated archive, re-run `mip install <zip-url> --name <name>` (uninstall first if needed).
 
 ### 3.5 Load Hint After Install
 
@@ -1040,7 +1052,7 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
         mip.json                           # source_path: /original/source (for updates)
         copypkg/                           # Copied source files
     web/
-      some_web_pkg/                        # Generic remote .zip installed via --url
+      some_web_pkg/                        # Generic remote .zip installed from a URL
         mip.json
         some_web_pkg/
     mhl/
@@ -1215,16 +1227,15 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:unknownPackage` | Package not installed and not found in any channel |
 | `mip:install:noPackage` | No package specified for install |
 | `mip:install:abortedNoMipYaml` | Local install aborted because user declined to auto-generate `mip.yaml` |
-| `mip:install:urlRequiresName` | `--url` given without a positional package name |
-| `mip:install:urlTakesSingleName` | `--url` given with 0 or 2+ positional args, or a non-bare-name positional |
-| `mip:install:urlMustBeZip` | `--url` value does not point to a `.zip` archive |
-| `mip:install:requireHttps` | `--url` value is a plain `http://` URL; `https://` is required (see [§3.4](#34-installation-from-a-remote-zip-url)) |
-| `mip:install:multipleUrls` | `--url` passed more than once |
-| `mip:install:missingUrlValue` | `--url` flag provided without a value |
+| `mip:install:urlFlagRemoved` | The removed `--url` flag was passed; use `mip install <url> [--name <name>]` instead (see [§3.4](#34-installation-from-a-remote-zip-url)) |
+| `mip:install:nameRequiresUrl` | `--name` given without a `.zip` / File Exchange URL argument (see [§3.4](#34-installation-from-a-remote-zip-url)) |
+| `mip:install:nameTakesSingleUrl` | `--name` given with more than one positional argument (see [§3.4](#34-installation-from-a-remote-zip-url)) |
+| `mip:install:noName` | A URL install ended up with no package name: the prompt was declined via `MIP_CONFIRM`, or there was no derivable default and the prompt entry was empty (see [§3.4](#34-installation-from-a-remote-zip-url)) |
+| `mip:install:urlMustBeZip` | URL install target does not point to a `.zip` archive or File Exchange page |
+| `mip:install:requireHttps` | URL install target is a plain `http://` URL; `https://` is required (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:zipDownloadFailed` | Download of a `.zip` URL failed |
 | `mip:install:zipExtractFailed` | Extraction of a downloaded `.zip` failed |
 | `mip:install:fexResolveFailed` | File Exchange URL resolution failed (network error, non-2xx, or resolved URL is not a `.zip`) |
-| `mip:install:fexRequiresName` | A File Exchange `--url` was passed as a positional without a name; use `mip install <name> --url <url>` (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:editableRequiresLocal` | `--editable` used without a local directory |
 | `mip:install:noCompileRequiresEditable` | `--no-compile` used without `--editable` |
 | `mip:install:equivalentAlreadyInstalled` | Install requested for a package whose name is equivalent (case / `-` / `_`) to one already installed (see [§1.8](#18-name-equivalence)) |
@@ -1277,7 +1288,7 @@ The `.trash` directory lives beside `packages/` under the mip root, so it is nev
 | `mip:name:invalidInput` | Input passed to `mip.name.normalize` / `mip.name.match` is not a valid string |
 | `mip:version:noMetadata` | `mip version` cannot locate either `mip.json` or `mip.yaml` in the package root |
 | `mip:install:invalidPackageSpec` | Install argument has 2 or 4+ slash-separated parts (see [§3.0](#30-argument-categorization)) |
-| `mip:install:invalidName` | The `<name>` positional for a `--url` install is not a valid canonical package name (see [§3.4](#34-installation-from-a-remote-zip-url)) |
+| `mip:install:invalidName` | The package name for a URL install (from `--name`, the prompt, or the derived default) is not a bare canonical package name (see [§3.4](#34-installation-from-a-remote-zip-url)) |
 | `mip:install:notADirectory` | Local install target exists but is not a directory |
 | `mip:update:noPackage` | `mip update` called with no arguments and no `--all` |
 | `mip:update:allWithPackages` | `mip update --all foo` — `--all` cannot be combined with explicit package names |
@@ -1338,5 +1349,5 @@ Running multiple MATLAB sessions that share the same mip root directory is **not
 Behaviors specified in this document but not covered by tests:
 
 - `mip load --install` with `--channel` ([§14.6](#146-mip-load---install-channel-handling))
-- `mip install` from URL (`https://...`)
+- `mip install https://.../package.mhl` (remote `.mhl` source)
 - `mip avail` ([§9.3](#93-mip-avail)), `mip info` remote-only display with `--channel`

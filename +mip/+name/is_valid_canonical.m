@@ -8,7 +8,7 @@ function tf = is_valid_canonical(name)
 % mip.name.normalize).
 %
 % Use this when creating or storing a package name: mip.init writes this
-% into mip.yaml, `mip install <name> --url <zip>` uses it as the install
+% into mip.yaml, `mip install <url> --name <name>` uses it as the install
 % directory, and the channel's prepare step enforces it on published
 % packages. For validating names the user types on the command line, use
 % mip.name.is_valid.

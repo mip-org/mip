@@ -7,8 +7,8 @@ function result = parse_package_arg(arg)
 % The canonical internal FQN shapes are:
 %   gh/<owner>/<channel>/<name>   - GitHub channel package
 %   local/<name>                  - Local directory / editable install
-%   fex/<name>                    - File Exchange / --url zip install
-%   web/<name>                    - Generic remote .zip / --url install
+%   fex/<name>                    - File Exchange URL install
+%   web/<name>                    - Generic remote .zip URL install
 %   mhl/<name>                    - .mhl install with no --channel given
 %
 % On input, the 'gh/' prefix may be omitted: a 3-part '<owner>/<channel>/<name>'
