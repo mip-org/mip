@@ -14,8 +14,14 @@ function exec_target(target, extraArgs)
 % script form can call MATLAB's run: inside a function named "run", an
 % unqualified run(...) would recurse.
 
-isScript = contains(target, '/') || (ispc && contains(target, '\')) ...
-           || endsWith(target, '.m');
+% A target can look path-like and still be an expression that merely
+% mentions a path, e.g. save('./out/x.mat','v'). Treat it as a script only
+% when the file exists, or when it carries no expression syntax at all --
+% so a genuinely missing script still errors instead of being eval'd.
+looksLikePath = contains(target, '/') || (ispc && contains(target, '\')) ...
+                || endsWith(target, '.m');
+isExpressionLike = ~isempty(regexp(target, '[;()=,]', 'once'));
+isScript = looksLikePath && (isfile(target) || ~isExpressionLike);
 if isScript
     if ~isfile(target)
         error('mip:project:targetNotFound', 'Script "%s" not found.', target);
