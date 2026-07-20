@@ -52,9 +52,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
             % 'mip uninstall mip' should trigger self-uninstall when
             % mip-org/core/mip is the only installed package named 'mip'
             mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
-            mipSourceDir = fullfile(mipPkgDir, 'mip');
-            mkdir(mipSourceDir);
-            addpath(mipSourceDir);
+            mipSourceDir = plantStubMip(mipPkgDir);
             testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             setenv('MIP_CONFIRM', 'yes');
 
@@ -83,9 +81,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
 
         function testSelfUninstallDeletesRootDir(testCase)
             mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
-            mipSourceDir = fullfile(mipPkgDir, 'mip');
-            mkdir(mipSourceDir);
-            addpath(mipSourceDir);
+            mipSourceDir = plantStubMip(mipPkgDir);
             testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             setenv('MIP_CONFIRM', 'yes');
 
@@ -97,9 +93,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
 
         function testSelfUninstallRemovesFromPath(testCase)
             mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
-            mipSourceDir = fullfile(mipPkgDir, 'mip');
-            mkdir(mipSourceDir);
-            addpath(mipSourceDir);
+            mipSourceDir = plantStubMip(mipPkgDir);
             testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             setenv('MIP_CONFIRM', 'yes');
 
@@ -112,9 +106,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
 
         function testSelfUninstallResetsState(testCase)
             mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
-            mipSourceDir = fullfile(mipPkgDir, 'mip');
-            mkdir(mipSourceDir);
-            addpath(mipSourceDir);
+            mipSourceDir = plantStubMip(mipPkgDir);
             testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             setenv('MIP_CONFIRM', 'yes');
 
@@ -131,9 +123,7 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
             % When mip-org/core/mip is uninstalled alongside other packages,
             % the root dir deletion removes everything
             mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
-            mipSourceDir = fullfile(mipPkgDir, 'mip');
-            mkdir(mipSourceDir);
-            addpath(mipSourceDir);
+            mipSourceDir = plantStubMip(mipPkgDir);
             testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             setenv('MIP_CONFIRM', 'yes');
 
@@ -147,10 +137,29 @@ classdef TestUninstallSelf < matlab.unittest.TestCase
                 'Other package should be gone with root dir');
         end
 
+        function testNotOwnRootDoesOrdinaryUninstall(testCase)
+            % MEP 8: when the active root is not the root mip runs from
+            % (no stub mip.m planted here, so which('mip') resolves to the
+            % repo), gh/mip-org/core/mip is an ordinary package — its copy
+            % is removed but the root survives and no confirmation runs.
+            mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
+            mip.state.add_directly_installed('gh/mip-org/core/mip');
+            setenv('MIP_CONFIRM', 'no');  % would abort a self-uninstall
+
+            mip.uninstall('mip-org/core/mip');
+
+            testCase.verifyFalse(exist(mipPkgDir, 'dir') > 0, ...
+                'The inert mip copy should be uninstalled like any package');
+            testCase.verifyTrue(exist(testCase.TestRoot, 'dir') > 0, ...
+                'Root directory must survive: self-uninstall must not trigger');
+        end
+
         function testSelfUninstallAbortContinuesWithOtherPackages(testCase)
             % When user declines self-uninstall, other packages should
             % still be uninstalled
-            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
+            mipPkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
+            mipSourceDir = plantStubMip(mipPkgDir);
+            testCase.addTeardown(@() rmpath_safe(mipSourceDir));
             pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'otherpkg');
             mip.state.add_directly_installed('mip-org/core/otherpkg');
             setenv('MIP_CONFIRM', 'no');

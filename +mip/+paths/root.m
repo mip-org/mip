@@ -9,9 +9,11 @@ function root = root()
 % existing directory containing a 'packages' subdirectory; otherwise an error is
 % raised. An empty MIP_ROOT is treated the same as unset.
 %
-% When MIP_ROOT is unset (or empty), the root is determined by navigating up
-% from this file's installed location, assuming the layout:
-%   <root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/root.m
+% When MIP_ROOT is unset (or empty), the root is determined from mip's own
+% install location (see mip.paths.default_root).
+%
+% While an environment is active (MEP 8), MIP_ROOT points at that
+% environment, so this returns the active environment's root.
 
 root = getenv('MIP_ROOT');
 if ~isempty(root)
@@ -28,31 +30,6 @@ if ~isempty(root)
     return;
 end
 
-% Navigate up from this file's location:
-%   +paths/root -> +paths -> +mip -> mip (source) -> mip (package) -> core -> mip-org -> gh -> packages -> root
-this_dir     = fileparts(mfilename('fullpath')); % .../+paths
-mip_dir      = fileparts(this_dir);              % .../+mip
-source_dir   = fileparts(mip_dir);               % .../mip/mip
-package_dir  = fileparts(source_dir);            % .../core/mip
-channel_dir  = fileparts(package_dir);           % .../mip-org/core
-owner_dir    = fileparts(channel_dir);           % .../gh/mip-org
-gh_dir       = fileparts(owner_dir);             % .../packages/gh
-packages_dir = fileparts(gh_dir);                % .../packages
-root         = fileparts(packages_dir);          % .../root
-
-if ~isfolder(fullfile(root, 'packages'))
-    % Path-based detection failed (e.g., editable install where
-    % mfilename returns the source path). Fall back to <userpath>/mip.
-    root = fullfile(userpath, 'mip');
-    if ~isfolder(fullfile(root, 'packages'))
-        if ~ispc && ~isempty(getenv('HOME'))
-            root = replace(root, getenv('HOME'), '~');
-        end
-        error('mip:rootNotFound', ...
-            ['Could not determine the mip root directory.\n' ...
-             'Set the MIP_ROOT environment variable to point to your mip root directory.\n' ...
-             'For example: setenv(''MIP_ROOT'', ''%s'')'], root);
-    end
-end
+root = mip.paths.default_root();
 
 end

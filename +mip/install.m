@@ -42,8 +42,11 @@ function install(varargin)
 % Local packages:
 %   To install a local directory, the path must start with '~', '.', '/',
 %   or a Windows drive letter (e.g. 'C:\path\mypkg', 'C:/path/mypkg').
-%   The directory must contain a mip.yaml file. In editable mode, changes
-%   to the source directory are reflected immediately without reinstalling.
+%   The directory must contain a mip.yaml file. Missing channel
+%   dependencies declared in mip.yaml are installed automatically (as
+%   transitive dependencies, like remote installs). In editable mode,
+%   changes to the source directory are reflected immediately without
+%   reinstalling.
 %   '@' in local paths is treated as a literal character, not a version
 %   separator (e.g. './@MyClass', './pkg@dev' are valid local paths).
 %
@@ -58,6 +61,10 @@ function install(varargin)
     if nargin < 1
         error('mip:install:noPackage', 'At least one package name is required for install command.');
     end
+
+    % Show the target when an environment is active (session state has no
+    % shell prompt to reflect it).
+    mip.env.print_banner();
 
     % Reclaim any package dirs left in the trash by an earlier removal that
     % could only move them aside (a binary was still loaded at the time).

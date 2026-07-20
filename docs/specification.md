@@ -109,7 +109,7 @@ The package `gh/mip-org/core/mip` is the package manager itself. It has special 
 - It **cannot** be unloaded via `mip unload` (raises `mip:cannotUnloadMip`).
 - It survives `mip unload --all --force`.
 - It is never pruned during dependency pruning.
-- `mip uninstall mip-org/core/mip` triggers a full self-uninstall (see [§6.4](#64-self-uninstall-mip-uninstall-mip)) rather than an ordinary package removal.
+- `mip uninstall mip-org/core/mip` triggers a full self-uninstall (see [§6.4](#64-self-uninstall-mip-uninstall-mip)) rather than an ordinary package removal — but only when the active root is the root mip actually runs from (see [§14.7](#147-mip-itself-and-environments)). In any other active root (an activated environment, or an external `MIP_ROOT`), the identity is an ordinary, inert package.
 
 **Important**: These protections apply **only** to the exact canonical FQN `gh/mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`) or any `local/mip` or `fex/mip` is treated as a normal package. The match is by name equivalence (see [§1.8](#18-name-equivalence)), so any case variant of `mip` under `gh/mip-org/core/` refers to the same protected identity.
 
@@ -392,14 +392,13 @@ Source file changes are reflected immediately without reinstalling.
 - Skips the compile step but still stores `compile_script` in `mip.json`.
 - Prints a hint to run `mip compile <name>` later.
 
-#### 3.2.4 Dependency Validation for Local Install
+#### 3.2.4 Dependencies of a Local Install
 
-Before installing, all dependencies listed in `mip.yaml` are checked:
-- FQN dependencies: check if the directory exists at the expected path.
-- Bare-name dependencies: resolve to `gh/mip-org/core/<name>` and check existence.
-- If any dependency is missing, raises `mip:dependencyNotFound`.
+Before installing, all dependencies listed in `mip.yaml` are resolved (FQN dependencies as given; bare-name dependencies per [§2](#2-parsing-and-resolution)):
+- Missing **channel** (`gh/...`) dependencies are auto-installed from their channels, exactly as remote installs do: transitively (not marked directly installed), so they can be pruned when no longer needed. If an auto-install fails (dependency not in its channel index, download failure), the local package is not installed; any dependencies installed during the failed attempt are pruned as orphans.
+- Missing **non-channel** dependencies (`local/...`, `fex/...`, `web/...`) cannot be fetched from a channel, so a missing one raises `mip:dependencyNotFound` — they must be pre-installed.
 
-Note: local install does **not** auto-install dependencies. They must be pre-installed.
+This applies to copy and editable installs alike, in any root, and (via the shared `from_local` path) to `mip update` of local packages.
 
 #### 3.2.5 Already-Installed Behavior (Local)
 
@@ -650,7 +649,7 @@ A loaded native binary keeps its file open for the life of the MATLAB process. O
 1. Resolve each argument to an FQN:
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
-2. If `mip-org/core/mip` is among the resolved packages, dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
+2. If `mip-org/core/mip` is among the resolved packages **and the active root is the root mip actually runs from** ([`mip.self.is_own_root`](../+mip/+self/is_own_root.m); see [§14.7](#147-mip-itself-and-environments)), dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). When the active root is some other root (an activated environment, an external `MIP_ROOT`), the identity stays in the list and is uninstalled as an ordinary package — except that the unload step is skipped for it (its copy there is inert and never on the path; `mip unload` would refuse the identity anyway). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
 3. Walk the resolved packages in argument order, running each package's full lifecycle before moving on to the next. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next:
    - Unload it if it is currently loaded (which also clears its MEX, [§5.10](#510-mex-unloading-on-unload)).
    - Remove its directory via the robust trash-based removal ([§11.7](#117-robust-directory-removal-and-the-trash-area)). A removal that cannot even move the directory aside raises `mip:uninstallFailed`.
@@ -679,7 +678,7 @@ Using an FQN bypasses this check entirely.
 
 ### 6.4 Self-Uninstall (`mip uninstall mip`)
 
-When `mip-org/core/mip` is among the resolved uninstall targets, the command delegates to a self-uninstall flow:
+When `mip-org/core/mip` is among the resolved uninstall targets **and** the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)), the command delegates to a self-uninstall flow:
 
 1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
 2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
@@ -706,7 +705,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
    - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
    - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable` (checked after the `noSource` filter in step 4).
 4. **Skip** local packages whose `source_path` is absent or empty in `mip.json` (`noSource = true`) -- these have no local source to reinstall from (URL installs being the primary case, see [§3.4](#34-installation-from-a-remote-zip-url)). A "Skipping" message is printed and they are dropped from the batch. If every requested package is skipped, `mip update` returns without error. `--force` does not override this skip.
-5. If `mip-org/core/mip` is among the arguments, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch.
+5. If `mip-org/core/mip` is among the arguments and the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)), handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch. In any other active root the identity's copy is an ordinary remote package and follows the normal staging replace (its unload step is skipped — the copy is inert and never on the path).
 6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
@@ -761,7 +760,7 @@ Skips the up-to-date check. The named package is replaced with the latest versio
 
 ### 7.7 Self-Update (`mip update mip`)
 
-Special flow for `mip-org/core/mip`:
+Special flow for `mip-org/core/mip`, taken only when the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)):
 1. Fetch the latest from the `mip-org/core` channel.
 2. Download the new `.mhl`, extract to staging.
 3. Replace the installed package in-place.
@@ -984,6 +983,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 | `MIP_DIRECTLY_LOADED_PACKAGES` | Cell array of FQNs | Only packages explicitly loaded by the user |
 | `MIP_STICKY_PACKAGES` | Cell array of FQNs | Packages that survive `mip unload --all` |
 | `MIP_TEST_CONTEXT` | FQN of the package currently under `mip test` | Set for the duration of a `mip test` run so the running test script can self-identify via [`mip.test.get_fqn`](#97-mip-test-package) (and from there query `mip.build.effective_arch` / `mip.build.has_mex`); cleared when the run ends. See [`+mip/test.m`](../+mip/test.m). |
+| `MIP_ENV_STATE` | Struct (or empty when none) | The active environment and the saved pre-activation session: env root and name, prior `MIP_ROOT`, and the prior loaded / directly-loaded / sticky lists. See [§14.4](#144-activation-mip-activate--mip-deactivate) and [`mip.env.active`](../+mip/+env/active.m). |
 
 ### 10.2 File-Based State (Persistent)
 
@@ -1150,10 +1150,12 @@ After removing a package, empty channel and user directories are cleaned up:
 
 The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.paths.root()`](../+mip/+paths/root.m) according to these rules:
 
-- **Unset**: `mip.paths.root()` first tries path-based detection (navigating up from the installed `+mip/+paths/root.m` location, assuming `<root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/root.m`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where `root.m` resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
+- **Unset**: `mip.paths.root()` falls back to path-based detection ([`mip.paths.default_root`](../+mip/+paths/default_root.m), navigating up from the installed `+mip/+paths/` location, assuming `<root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where the detection resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
 - **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.paths.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.paths.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
+
+`MIP_ROOT` is also the environment-activation pointer ([§14.4](#144-activation-mip-activate--mip-deactivate)): `mip activate` sets it (after saving the prior value) and `mip deactivate` restores it, so child processes spawned from the session inherit the active environment.
 
 ### 11.6 Channel Index Cache
 
@@ -1287,6 +1289,17 @@ Noise control and robustness:
 | `mip:invalidPackageFormat` | Package argument has a structurally invalid format (distinct from §2.1 spec violations) |
 | `mip:invalidFqn` | A bare (non-FQN) name was passed where a fully qualified name is required (e.g. to `mip.paths.get_package_dir` or `mip.build.effective_arch`) |
 | `mip:rootNotFound` | `MIP_ROOT` unset and both path-based detection and the `<userpath>/mip` fallback lack a `packages/` subdir (see [§11.5](#115-mip_root-environment-variable)) |
+| `mip:env:invalidName` | Environment name fails `mip.name.is_valid` (see [§14.1](#141-what-an-environment-is)) |
+| `mip:env:alreadyExists` | `mip env create` target is already an environment |
+| `mip:env:directoryNotEmpty` | `mip env create` target is an existing non-empty non-environment directory |
+| `mip:env:lockfilePresent` | No-argument `mip env create` in a directory with a `mip.lock` (declarative mode, MEP 9) |
+| `mip:env:createFailed` | `mkdir` of the environment's `packages/` subtree failed |
+| `mip:env:notAnEnvironment` | `mip activate` target (or `mip env delete` store entry) has no `packages/` subtree |
+| `mip:env:notFound` | `mip env delete` of an unknown environment name |
+| `mip:env:pathDelete` | `mip env delete` given a path (path envs are self-managed) |
+| `mip:env:deleteActive` | `mip env delete` of the active environment |
+| `mip:env:nameRequired` | `mip env delete` with no name |
+| `mip:env:tooManyArgs` | An env command given more arguments than it takes |
 | `mip:indexFetchFailed` | Channel index could not be fetched (network failure or non-2xx) |
 | `mip:availFailed` | `mip avail` failed to fetch the channel index |
 | `mip:downloadFailed` | Download of a file (e.g. `.mhl`) failed |
@@ -1340,32 +1353,104 @@ The following **warning** identifiers are also issued:
 
 ---
 
-## 14. Open Questions and Gaps
+## 14. Environments (MEP 8)
+
+mip has first-class **environments**: addressable package roots the user creates, activates, and installs into by hand — the MATLAB analog of a conda env or a Python venv. See [MEP 8](https://github.com/mip-org/meps/blob/main/meps/mep-0008.md) for the design rationale.
+
+### 14.1 What an Environment Is
+
+An environment is a mip root — a directory with a `packages/` subtree, cache, and install state, exactly like the global root. A directory *is* an environment exactly when it exists and holds a `packages/` subtree ([`mip.paths.is_root`](../+mip/+paths/is_root.m)) — the same signal `mip.paths.root()` keys on. There is no separate marker file. There are three kinds:
+
+| Kind       | Location                          | Created by              | Inventoried? |
+|------------|-----------------------------------|-------------------------|--------------|
+| **global** | where mip is installed (default `<userpath>/mip`) | bootstrap | n/a (always) |
+| **named**  | `<baseline root>/envs/<name>`     | `mip env create <name>` | yes (`mip env list`) |
+| **local**  | `./.mip` (or any path)            | `mip env create [path]` | no (self-managed) |
+
+Every root is fully self-contained ([§11](#11-filesystem-layout)): package tree, `directly_installed.txt`, pins, channel subscriptions, and the channel index cache are all per-root. A fresh environment starts with no subscribed channels, no pins, and a cold index cache.
+
+**The baseline root** is the root the session uses when no environment is active: the externally set `MIP_ROOT` if any, otherwise the root derived from mip's install location ([`mip.paths.default_root`](../+mip/+paths/default_root.m)). Activation never moves the baseline — `mip deactivate` always returns to it — and the named-env store lives at `<baseline root>/envs/` ([`mip.env.baseline_root`](../+mip/+env/baseline_root.m)). Named env operations (`create <name>`, `list`, `delete <name>`, `activate <name>`) always resolve against the baseline store, even while some other environment is active.
+
+**Argument disambiguation is syntactic, never guessed**: a bare word is a name (resolved in the baseline `envs/` store only, no fallback to a local path); anything containing a path separator (`/`, or `\` on Windows) is a path ([`mip.env.is_path_arg`](../+mip/+env/is_path_arg.m)). Names are validated with `mip.name.is_valid` and compared exactly as typed.
+
+### 14.2 `mip env create`
+
+- No argument → creates `./.mip` in the current directory (no walking). Errors with `mip:env:lockfilePresent` if a `mip.lock` is present in the current directory (that directory is managed declaratively — MEP 9).
+- Bare name → creates `<baseline root>/envs/<name>`; invalid names raise `mip:env:invalidName`.
+- Path → creates that directory.
+
+Creation materializes exactly one thing: an empty `packages/` subtree; everything else in a root is created lazily by the existing machinery. Creation is strict: an existing environment raises `mip:env:alreadyExists`; an existing non-empty non-environment directory raises `mip:env:directoryNotEmpty`; an empty or missing directory is created. On success the created path and an activation hint are printed. A local `./.mip` should normally be gitignored; mip does not edit user files.
+
+### 14.3 `mip env list` and `mip env delete`
+
+`mip env list` reads `<baseline root>/envs/` and lists each subdirectory that is an environment (entries without a `packages/` subtree are ignored), marking the active one with `*`. Path environments never appear.
+
+`mip env delete <name>` is the only data-destroying verb in the env group and always confirms (`--yes` skips; `MIP_CONFIRM` is honored for non-interactive use). It takes names only — a path argument raises `mip:env:pathDelete` ("path envs are self-managed"). It raises `mip:env:notFound` for an unknown name, `mip:env:notAnEnvironment` for a store entry with no `packages/` subtree, and `mip:env:deleteActive` for the active environment (run `mip deactivate` first).
+
+### 14.4 Activation (`mip activate` / `mip deactivate`)
+
+Activation is session state ([§10](#10-state-management), key `MIP_ENV_STATE`): a single session-wide pointer moved by `setenv('MIP_ROOT', ...)` after saving the prior value, which child processes inherit. `mip env activate` / `mip env deactivate` are the primary spellings; `mip activate` / `mip deactivate` are top-level aliases. `mip env` (no arguments) reports the active environment; `mip info` (no argument) also reports it. Activation has no meaning in the shell CLI — there a specific root is targeted via the `MIP_ROOT` environment variable.
+
+`mip activate [name|path]` (no argument → `./.mip` in the current directory, exactly — no walking) requires the target to be an environment; otherwise it raises `mip:env:notAnEnvironment` with a `mip env create` hint. Activation is exclusive and disk-read-only with respect to the environment (it never installs and never executes package code):
+
+1. If the same environment is already active: print "already active" and stop (`--load` still performs its load pass). If a different one is active: run the full `mip deactivate` first — so the saved state is always the baseline session's; there is no activation stack.
+2. Save the session state: the current `MIP_ROOT` value and the loaded / directly-loaded / sticky lists.
+3. Unload every loaded package **including sticky ones** (only `gh/mip-org/core/mip` stays) via the normal unload machinery — path entries removed, MEX binaries cleared.
+4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky).
+5. With `--load`: load each of the env's directly installed packages as a direct load (dependencies transitively), best-effort — each failure prints the error, and the command ends with a `Loaded N package(s)[, M failed]` summary. The env stays active regardless. Without `--load`, activation is pointer-only: nothing is on the path until `mip load`.
+
+`mip deactivate` restores the prior session: it unloads everything except mip (sweeping any remaining path entries under the environment root, so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
+
+Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (as with the global root, [§15.7](#157-concurrent-matlab-sessions)), load state is per-session.
+
+### 14.5 How a Command Finds Its Target
+
+Session commands (`install`, `uninstall`, `update`, `load`, `unload`, `list`, `info`, `avail`, `pin`, `channel`, ...) act on the **active environment** — the global root when none is active — ignoring the current directory. Session commands never discover anything on the filesystem: no walking, no sniffing for a nearby `.mip`. (`mip env create` and no-argument `mip activate` do refer to the current directory — but explicitly and without walking: they act on `./.mip` exactly.) Discovery by walking is reserved for MEP 9's project commands, which act on committed spec files only.
+
+### 14.6 Showing the Target
+
+While an environment is active, the commands that mutate it — `install`, `uninstall`, `update` — and `mip list` print one leading line ([`mip.env.print_banner`](../+mip/+env/print_banner.m)):
+
+```
+environment: scratch (~/Documents/MATLAB/mip/envs/scratch)
+```
+
+(for a path env, the path alone). When nothing is active, output is exactly as before — the global root is a first-class default target, not a mistake.
+
+### 14.7 mip Itself and Environments
+
+mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment.
+
+The self flows key on which root is active: self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)) and self-update ([§7.7](#77-self-update-mip-update-mip)) trigger **only when the active root is the root mip actually runs from**, as determined by [`mip.self.is_own_root`](../+mip/+self/is_own_root.m): the active root's `gh/mip-org/core/mip` source directory must be among the locations of `mip.m` on the MATLAB path (`which('mip', '-all')`). While an environment is active, `gh/mip-org/core/mip` is an ordinary package there — `mip install mip-org/core/mip` installs an inert copy into the environment, `mip uninstall mip` removes that copy or reports "not installed", and `mip update mip` updates it via the normal staging replace. The running mip is untouched, and `mip load mip` keeps its "always loaded" no-op, so an environment copy can never shadow the running one. This guarantees the self-uninstall flow can never delete an environment root out from under the user.
+
+---
+
+## 15. Open Questions and Gaps
 
 This section collects unresolved design questions and untested behaviors. Items that were previously open but have since been resolved are documented in the relevant sections above (see issues [#94](https://github.com/mip-org/mip/issues/94), [#95](https://github.com/mip-org/mip/issues/95), [#99](https://github.com/mip-org/mip/issues/99)--[#105](https://github.com/mip-org/mip/issues/105)).
 
-### 14.4 No Lock File
+### 15.4 No Lock File
 
 There is no lock file recording exact versions/commits of installed dependencies. The installed state on disk (`<root>/packages/` and `directly_installed.txt`) is the only record, so installs are not reproducible across machines or over time. Lock file support is **not planned for the first release**.
 
-### 14.5 Ambiguous Unload Uses Load Order
+### 15.5 Ambiguous Unload Uses Load Order
 
 When multiple loaded packages share a bare name, `mip unload <bare>` unloads the most recently loaded one ([§5.2](#52-bare-name-disambiguation-for-unload)). This differs from `mip uninstall`, which refuses and requires FQN disambiguation ([§6.3](#63-bare-name-ambiguity)). Should these be consistent?
 
-### 14.6 `mip load --install` Channel Handling
+### 15.6 `mip load --install` Channel Handling
 
 `mip load --install chebfun` installs from the default channel (or `--channel`) if not installed. There is no disambiguation check when the package name exists on multiple channels. Should this error like `mip uninstall` does?
 
 **Untested.**
 
-### 14.7 Concurrent MATLAB Sessions
+### 15.7 Concurrent MATLAB Sessions
 
 Running multiple MATLAB sessions that share the same mip root directory is **not supported**. In-memory state (`setappdata`) is per-session, while file state (`directly_installed.txt`, installed packages on disk) is shared with no file locking. Concurrent `mip install`/`mip uninstall` operations can race on `directly_installed.txt` (read-modify-write without locking) and one session's `mip uninstall` can remove packages another session has loaded. Users should avoid running `mip` commands that modify state from multiple sessions simultaneously.
 
-### 14.8 Missing Test Coverage
+### 15.8 Missing Test Coverage
 
 Behaviors specified in this document but not covered by tests:
 
-- `mip load --install` with `--channel` ([§14.6](#146-mip-load---install-channel-handling))
+- `mip load --install` with `--channel` ([§15.6](#156-mip-load---install-channel-handling))
 - `mip install https://.../package.mhl` (remote `.mhl` source)
 - `mip avail` ([§9.3](#93-mip-avail)), `mip info` remote-only display with `--channel`

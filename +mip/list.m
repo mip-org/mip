@@ -8,6 +8,10 @@ function list(varargin)
 % Columns: name, fqn, version. Asterisk (*) marks directly loaded packages.
 % Editable packages show their source location.
 
+% Show the target when an environment is active (session state has no
+% shell prompt to reflect it).
+mip.env.print_banner();
+
 packagesDir = mip.paths.get_packages_dir();
 
 if ~exist(packagesDir, 'dir')

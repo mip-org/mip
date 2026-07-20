@@ -31,8 +31,10 @@ function update(varargin)
 % package) are pruned.
 %
 % Local packages are reinstalled from their source path without going
-% through uninstall (since from_local cannot re-fetch deps from a
-% channel). The old package is backed up and restored if reinstall fails.
+% through uninstall (which would prune still-needed dependencies
+% mid-update). Missing channel dependencies declared in mip.yaml are
+% installed as part of the reinstall. The old package is backed up and
+% restored if reinstall fails.
 %
 % Any packages that were loaded before the update are reloaded afterward.
 %
@@ -44,6 +46,10 @@ function update(varargin)
     if nargin < 1
         error('mip:update:noPackage', 'At least one package name is required for update command.');
     end
+
+    % Show the target when an environment is active (session state has no
+    % shell prompt to reflect it).
+    mip.env.print_banner();
 
     % Check for --force, --all, --deps, and --no-compile flags
     [opts, args] = mip.parse.flags(varargin, struct( ...
@@ -218,7 +224,12 @@ function item = classifyArg(packageArg)
     end
 
     p = resolvePackage(packageArg);
-    if strcmp(p.fqn, 'gh/mip-org/core/mip')
+    % The self-update hot swap only applies when the active root is the
+    % root mip actually runs from. Elsewhere (an activated environment, or
+    % an external MIP_ROOT) the identity is an ordinary package: its copy
+    % is updated through the normal replace path without touching the
+    % running mip.
+    if strcmp(p.fqn, 'gh/mip-org/core/mip') && mip.self.is_own_root()
         item = struct('kind', 'self-update', 'pkg', p);
     elseif p.noSource
         item = struct('kind', 'no-source-skip', 'pkg', p);
@@ -231,8 +242,8 @@ function updateLocalPackage(p, noCompile)
 % Update a local package: backup, remove from directly_installed, then
 % from_local from the original source path. Restore the backup if
 % from_local fails. Local packages do NOT go through mip.uninstall
-% because that would prune orphaned deps, which from_local cannot
-% re-fetch from a channel.
+% because that would prune dependencies that are still needed while the
+% package is momentarily absent.
 
     displayFqn = mip.parse.display_fqn(p.fqn);
     fprintf('Updating local package "%s"...\n', displayFqn);
