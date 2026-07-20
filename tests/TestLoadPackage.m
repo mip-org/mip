@@ -114,6 +114,31 @@ classdef TestLoadPackage < matlab.unittest.TestCase
             testCase.verifyTrue(ismember('gh/mip-org/core/pkgA', direct));
         end
 
+        function testLoadPackage_AlreadyLoaded_ReloadPromotesPathPrecedence(testCase)
+            % Issue #345: re-loading an already-loaded package must move
+            % its source directory back to the front of the MATLAB path,
+            % so "most recently loaded wins" holds for function shadowing,
+            % not just for the recency lists. addpath de-dupes, so the
+            % re-load moves the folder rather than duplicating it.
+            pkgDirA = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgA');
+            pkgDirB = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkgB');
+            srcA = fullfile(pkgDirA, 'pkgA');
+            srcB = fullfile(pkgDirB, 'pkgB');
+
+            mip.load('mip-org/core/pkgA');   % path: [srcA]
+            mip.load('mip-org/core/pkgB');   % path: [srcB, srcA] -- B shadows A
+            testCase.verifyLessThan(pathIndex(srcB), pathIndex(srcA), ...
+                'after loading B, srcB should precede srcA on the path');
+
+            % Re-load pkgA: its source dir must jump ahead of srcB so A wins.
+            mip.load('mip-org/core/pkgA');
+            testCase.verifyLessThan(pathIndex(srcA), pathIndex(srcB), ...
+                'after re-loading A, srcA should precede srcB on the path');
+            % No duplicate path entry was introduced.
+            testCase.verifyEqual( ...
+                sum(strcmp(strsplit(path, pathsep), srcA)), 1);
+        end
+
         function testLoadPackage_WithStickyFlag(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'testpkg');
             mip.load('mip-org/core/testpkg', '--sticky');
@@ -314,6 +339,15 @@ classdef TestLoadPackage < matlab.unittest.TestCase
                 'depA must not be pruned: it was directly loaded');
         end
 
+    end
+end
+
+function idx = pathIndex(dir)
+%PATHINDEX   1-based position of dir in the MATLAB path (Inf if absent).
+    dirs = strsplit(path, pathsep);
+    idx = find(strcmp(dirs, dir), 1);
+    if isempty(idx)
+        idx = Inf;
     end
 end
 
