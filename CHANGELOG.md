@@ -7,9 +7,14 @@
   path envs like `./.mip` (venv-style) — and `mip activate` /
   `mip deactivate` (aliases for `mip env activate/deactivate`) point the
   session at one. Activation swaps the session's load state (sticky
-  packages included; mip excepted) and moves `MIP_ROOT`; deactivation
-  restores the prior root and package set. Session commands act on the
-  active env, printing a leading `environment:` line while one is active.
+  packages included; the running mip excepted) and moves `MIP_ROOT`;
+  deactivation restores the prior root and package set. Session commands
+  act on the active env, printing a leading `environment:` line while one
+  is active. Bulk unloads (`unload --all [--force]`, `reset`, the
+  activation swap, pruning) never unload the package providing the
+  running mip — so a loaded preview build of mip (e.g.
+  `mip-org/labs/mip`) survives activation; explicitly unloading it still
+  works.
   The self flows (`mip uninstall mip`, `mip update mip`) now trigger only
   when the active root is the root mip runs from; elsewhere the identity
   is an ordinary, inert package.

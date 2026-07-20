@@ -9,9 +9,12 @@ function activate(varargin)
 %
 % Activation moves the single session-wide root pointer (MIP_ROOT, saved
 % and restored by mip deactivate) and swaps the session's load state with
-% it: everything loaded — including sticky packages, mip excepted — is
-% unloaded via the normal unload machinery, and the session starts cold
-% in the new environment. Child processes spawned from the session
+% it: everything loaded — including sticky packages — is unloaded via the
+% normal unload machinery, and the session starts cold in the new
+% environment. Only the running mip stays: gh/mip-org/core/mip, plus the
+% loaded package actually providing the running mip code when that is a
+% different one, e.g. a preview build loaded over the released mip (see
+% mip.self.running_mip_fqn). Child processes spawned from the session
 % inherit the active environment.
 %
 % Activation is exclusive (one env at a time; activating another env
@@ -75,23 +78,27 @@ if ~isempty(s)
 end
 
 % Save the session state, then swap: unload everything including sticky
-% packages (only gh/mip-org/core/mip stays) while the old root is still
-% in effect, so path entries and MEX binaries resolve against the root
-% they were loaded from (no DLL from another root stays locked).
+% packages (only the running mip stays) while the old root is still in
+% effect, so path entries and MEX binaries resolve against the root they
+% were loaded from (no DLL from another root stays locked). The running
+% mip is detected now — against the root it was loaded from — and carried
+% in the saved state, so deactivation (and any bulk unload while the env
+% is active) spares it too.
 saved = struct( ...
     'root', targetAbs, ...
     'name', name, ...
+    'running_mip', mip.self.running_mip_fqn(), ...
     'saved_mip_root', getenv('MIP_ROOT'), ...
     'saved_loaded', {mip.state.key_value_get('MIP_LOADED_PACKAGES')}, ...
     'saved_direct', {mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES')}, ...
     'saved_sticky', {mip.state.key_value_get('MIP_STICKY_PACKAGES')});
 
-if has_loaded_besides_mip(saved.saved_loaded)
+if any_swappable(saved.saved_loaded, saved.running_mip)
     mip.unload('--all', '--force');
 end
 
 setenv('MIP_ROOT', targetAbs);
-reset_session_baseline();
+ensure_session_baseline();
 mip.state.key_value_set('MIP_ENV_STATE', saved);
 
 fprintf('Activated environment: %s\n', mip.env.describe(saved));
@@ -102,15 +109,21 @@ end
 
 end
 
-function tf = has_loaded_besides_mip(loaded)
-    tf = any(~strcmp(loaded, 'gh/mip-org/core/mip'));
+function tf = any_swappable(loaded, runningMip)
+% True if anything besides the running mip is loaded.
+    other = ~strcmp(loaded, 'gh/mip-org/core/mip');
+    if ~isempty(runningMip)
+        other = other & ~strcmp(loaded, runningMip);
+    end
+    tf = any(other);
 end
 
-function reset_session_baseline()
-% The usual session baseline: mip always loaded and sticky, nothing else.
-    mip.state.key_value_set('MIP_LOADED_PACKAGES', {'gh/mip-org/core/mip'});
-    mip.state.key_value_set('MIP_DIRECTLY_LOADED_PACKAGES', {});
-    mip.state.key_value_set('MIP_STICKY_PACKAGES', {'gh/mip-org/core/mip'});
+function ensure_session_baseline()
+% The usual session baseline: mip always loaded and sticky. The swap
+% above already reduced the lists to the running mip with its flags
+% preserved, so only the core identity needs ensuring here.
+    mip.state.key_value_append('MIP_LOADED_PACKAGES', 'gh/mip-org/core/mip');
+    mip.state.key_value_append('MIP_STICKY_PACKAGES', 'gh/mip-org/core/mip');
 end
 
 function load_env_packages()

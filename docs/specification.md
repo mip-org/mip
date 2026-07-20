@@ -586,26 +586,29 @@ When multiple loaded packages share the same bare name:
 
 ### 5.3 Unload All (`mip unload --all`)
 
-1. Find all loaded packages that are **not** in `MIP_STICKY_PACKAGES`.
+1. Find all loaded packages that are **not** in `MIP_STICKY_PACKAGES` and not the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)).
 2. Remove the `mip.json` `paths` entries for each.
-3. Update state: `MIP_LOADED_PACKAGES` is set to just the sticky packages.
-4. `MIP_DIRECTLY_LOADED_PACKAGES` is filtered to only those that are also sticky.
+3. Update state: the surviving packages keep their load order and their direct/sticky flags (`MIP_LOADED_PACKAGES` is filtered to the survivors, `MIP_DIRECTLY_LOADED_PACKAGES` to the surviving subset).
 
 ### 5.4 Unload All Force (`mip unload --all --force`)
 
-1. Find all loaded packages **except** `mip-org/core/mip`.
+1. Find all loaded packages **except** the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)).
 2. Remove the `mip.json` `paths` entries for each.
-3. Reset state:
-   - `MIP_LOADED_PACKAGES` = `{'mip-org/core/mip'}`
+3. Reset state: the survivors keep their load order and direct/sticky flags, and `gh/mip-org/core/mip` is ensured present in `MIP_LOADED_PACKAGES` and `MIP_STICKY_PACKAGES`. With no shadowing preview build loaded this is exactly:
+   - `MIP_LOADED_PACKAGES` = `{'gh/mip-org/core/mip'}`
    - `MIP_DIRECTLY_LOADED_PACKAGES` = `{}`
-   - `MIP_STICKY_PACKAGES` = `{'mip-org/core/mip'}`
+   - `MIP_STICKY_PACKAGES` = `{'gh/mip-org/core/mip'}`
+
+#### 5.4.1 The Running mip Is Never Bulk-Unloaded
+
+Bulk unloads never pull the running mip off the path. The running mip is `gh/mip-org/core/mip`, **plus** the loaded package actually providing the running `mip` code when that is a different one — e.g. a preview build (`gh/mip-org/labs/mip`) installed and loaded over the released mip. Detection is via [`mip.self.running_mip_fqn`](../+mip/+self/running_mip_fqn.m): a loaded package provides the running mip when one of the `which('mip', '-all')` locations lies in its source tree; while an environment is active, the value detected at activation time is used ([§14.4](#144-activation-mip-activate--mip-deactivate)). The exemption covers `mip unload --all` (both forms), `mip reset`, the environment activation/deactivation swap, and dependency pruning ([§5.5](#55-dependency-pruning-after-unload)). Explicitly naming a preview build (`mip unload mip-org/labs/mip`) still unloads it — that is how a preview is exited. Only the core identity gets the stronger protections (cannot be unloaded at all, always sticky).
 
 ### 5.5 Dependency Pruning After Unload
 
 After unloading one or more packages, the system prunes dependencies that are no longer needed:
 
 1. Build the set of "needed" packages: all directly loaded packages plus their transitive dependencies.
-2. For each loaded package not in the needed set (and not `mip-org/core/mip`):
+2. For each loaded package not in the needed set (and not the running mip, [§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)):
    - Remove the `mip.json` `paths` entries.
    - Remove from `MIP_LOADED_PACKAGES`.
 3. After pruning, check for broken dependencies (warn if any loaded package's dependency is no longer loaded).
@@ -983,7 +986,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 | `MIP_DIRECTLY_LOADED_PACKAGES` | Cell array of FQNs | Only packages explicitly loaded by the user |
 | `MIP_STICKY_PACKAGES` | Cell array of FQNs | Packages that survive `mip unload --all` |
 | `MIP_TEST_CONTEXT` | FQN of the package currently under `mip test` | Set for the duration of a `mip test` run so the running test script can self-identify via [`mip.test.get_fqn`](#97-mip-test-package) (and from there query `mip.build.effective_arch` / `mip.build.has_mex`); cleared when the run ends. See [`+mip/test.m`](../+mip/test.m). |
-| `MIP_ENV_STATE` | Struct (or empty when none) | The active environment and the saved pre-activation session: env root and name, prior `MIP_ROOT`, and the prior loaded / directly-loaded / sticky lists. See [§14.4](#144-activation-mip-activate--mip-deactivate) and [`mip.env.active`](../+mip/+env/active.m). |
+| `MIP_ENV_STATE` | Struct (or empty when none) | The active environment and the saved pre-activation session: env root and name, prior `MIP_ROOT`, the prior loaded / directly-loaded / sticky lists, and the running-mip package detected at activation ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)). See [§14.4](#144-activation-mip-activate--mip-deactivate) and [`mip.env.active`](../+mip/+env/active.m). |
 
 ### 10.2 File-Based State (Persistent)
 
@@ -1394,12 +1397,12 @@ Activation is session state ([§10](#10-state-management), key `MIP_ENV_STATE`):
 `mip activate [name|path]` (no argument → `./.mip` in the current directory, exactly — no walking) requires the target to be an environment; otherwise it raises `mip:env:notAnEnvironment` with a `mip env create` hint. Activation is exclusive and disk-read-only with respect to the environment (it never installs and never executes package code):
 
 1. If the same environment is already active: print "already active" and stop (`--load` still performs its load pass). If a different one is active: run the full `mip deactivate` first — so the saved state is always the baseline session's; there is no activation stack.
-2. Save the session state: the current `MIP_ROOT` value and the loaded / directly-loaded / sticky lists.
-3. Unload every loaded package **including sticky ones** (only `gh/mip-org/core/mip` stays) via the normal unload machinery — path entries removed, MEX binaries cleared.
-4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky).
+2. Save the session state: the current `MIP_ROOT` value, the loaded / directly-loaded / sticky lists, and the running-mip package ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) detected against the root it was loaded from.
+3. Unload every loaded package **including sticky ones** via the normal unload machinery — path entries removed, MEX binaries cleared. Only the running mip stays: `gh/mip-org/core/mip`, plus a loaded preview build of mip when one is shadowing it.
+4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky; a spared preview build keeps its flags).
 5. With `--load`: load each of the env's directly installed packages as a direct load (dependencies transitively), best-effort — each failure prints the error, and the command ends with a `Loaded N package(s)[, M failed]` summary. The env stays active regardless. Without `--load`, activation is pointer-only: nothing is on the path until `mip load`.
 
-`mip deactivate` restores the prior session: it unloads everything except mip (sweeping any remaining path entries under the environment root, so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
+`mip deactivate` restores the prior session: it unloads everything except the running mip (sweeping any remaining path entries under the environment root, so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
 
 Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (as with the global root, [§15.7](#157-concurrent-matlab-sessions)), load state is per-session.
 
@@ -1422,6 +1425,8 @@ environment: scratch (~/Documents/MATLAB/mip/envs/scratch)
 mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment.
 
 The self flows key on which root is active: self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)) and self-update ([§7.7](#77-self-update-mip-update-mip)) trigger **only when the active root is the root mip actually runs from**, as determined by [`mip.self.is_own_root`](../+mip/+self/is_own_root.m): the active root's `gh/mip-org/core/mip` source directory must be among the locations of `mip.m` on the MATLAB path (`which('mip', '-all')`). While an environment is active, `gh/mip-org/core/mip` is an ordinary package there — `mip install mip-org/core/mip` installs an inert copy into the environment, `mip uninstall mip` removes that copy or reports "not installed", and `mip update mip` updates it via the normal staging replace. The running mip is untouched, and `mip load mip` keeps its "always loaded" no-op, so an environment copy can never shadow the running one. This guarantees the self-uninstall flow can never delete an environment root out from under the user.
+
+The running mip need not be the core identity: a preview build of mip (e.g. `gh/mip-org/labs/mip`) can be installed and loaded over the released one, and the loaded package providing the running `mip` code is spared by every implicit unload ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) — so a loaded preview survives `mip activate` / `mip deactivate`. Unlike the core identity it can still be unloaded explicitly, which is how the preview is exited.
 
 ---
 
