@@ -31,6 +31,16 @@ function unload(varargin)
         error('mip:noPackage', 'No package name specified for unload command.');
     end
 
+    % Detect the running-mip provider up front, while its code is still on
+    % the path: explicitly unloading a loaded preview build removes the
+    % very code executing this command, after which mip.* calls resolve
+    % against the released mip — which may not have newer functions like
+    % mip.self.running_mip_fqn. Everything that runs after the rmpath must
+    % therefore only use these captured values (and long-stable mip.*
+    % functions).
+    runningMip = mip.self.running_mip_fqn();
+    envIsActive = ~isempty(mip.env.active());
+
     % Unload each package
     for k = 1:length(packageArgs)
         packageArg = packageArgs{k};
@@ -51,6 +61,16 @@ function unload(varargin)
             continue
         end
 
+        % Unloading the preview build while an environment is active
+        % leaves the session on the released mip, which has no environment
+        % commands to deactivate with.
+        if ~isempty(runningMip) && strcmp(fqn, runningMip) && envIsActive
+            warning('mip:unload:runningMipWhileEnvActive', ...
+                    ['"%s" provides the running mip and an environment is ' ...
+                     'still active. Run "mip deactivate" first to restore ' ...
+                     'your session.'], displayFqn);
+        end
+
         % Get package directory
         r = mip.parse.parse_package_arg(fqn);
         if r.is_fqn
@@ -68,8 +88,9 @@ function unload(varargin)
         fprintf('Unloaded package "%s"\n', displayFqn);
     end
 
-    % Prune packages that are no longer needed (once, after all unloads)
-    pruneUnusedPackages();
+    % Prune packages that are no longer needed (once, after all unloads).
+    % runningMip was captured before any paths were removed — see above.
+    pruneUnusedPackages(runningMip);
 end
 
 function fqn = resolveLoadedFqn(packageArg)
@@ -206,8 +227,11 @@ function sweepPathEntries(packageDir, fqn, pkgInfo)
     end
 end
 
-function pruneUnusedPackages()
-% Prune packages that are no longer needed.
+function pruneUnusedPackages(runningMip)
+% Prune packages that are no longer needed. runningMip is passed in by
+% the caller, captured before any unload removed path entries: this
+% function may run after the code of a loaded preview mip left the path,
+% at which point mip.self.running_mip_fqn would no longer resolve.
 
     MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
@@ -220,7 +244,6 @@ function pruneUnusedPackages()
     % The package providing the running mip is never pruned (like the core
     % identity, which find_orphans already exempts).
     packagesToPrune = mip.dependency.find_orphans(MIP_DIRECTLY_LOADED_PACKAGES, MIP_LOADED_PACKAGES);
-    runningMip = mip.self.running_mip_fqn();
     if ~isempty(runningMip)
         packagesToPrune = packagesToPrune(~strcmp(packagesToPrune, runningMip));
     end
