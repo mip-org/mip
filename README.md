@@ -58,8 +58,11 @@ channel layout — see [mip.sh/docs](https://mip.sh/docs).
 
 ## Publishing a package or channel
 
-See [mip.sh/docs](https://mip.sh/docs). Starting point for a new channel:
-[mip-channel-template](https://github.com/mip-org/mip-channel-template).
+See [Hosting a Channel](https://mip.sh/docs/hosting-a-channel). The easiest way
+to start a new channel is to copy a maintained example —
+[mip-example](https://github.com/mip-org/mip-example) (a single package) or
+[mip-hello](https://github.com/mip-org/mip-hello) (a few packages) — both kept
+current with the build system.
 
 ## Authors
 
