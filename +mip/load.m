@@ -177,9 +177,22 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
                 fprintf('Package "%s" is now sticky\n', displayFqn);
             end
         end
+        % Re-apply the package's own mip.json paths so the physical
+        % MATLAB path tracks the refreshed recency above. addpath
+        % de-dupes: re-adding a folder already on the path moves it to
+        % the front rather than duplicating it, so "most recently loaded
+        % wins" now holds for function shadowing too, not just the state
+        % lists (issue #345). Scoped to this package's own paths -- its
+        % transitive dependencies keep their place unless separately
+        % re-loaded.
+        reloadConfig = mip.config.read_package_json(packageDir);
+        if isfield(reloadConfig, 'paths')
+            applyMipJsonPaths(packageDir, reloadConfig);
+        end
         % Apply --addpath/--rmpath/--with even when already loaded so
         % the user can adjust the path of an existing load without
-        % re-loading.
+        % re-loading. Order matches a fresh load (mip.json paths, then
+        % --addpath/--rmpath, then --with) so path precedence is identical.
         applyPathAdjustments(packageDir, addPathRels, rmPathRels);
         matched = applyExtraPaths(packageDir, withGroups);
         return
