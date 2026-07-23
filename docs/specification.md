@@ -1376,7 +1376,7 @@ Every root is fully self-contained ([§11](#11-filesystem-layout)): package tree
 
 **The base root** is the root the session uses when no environment is active: the externally set `MIP_ROOT` if any, otherwise the root derived from mip's install location ([`mip.paths.root('derived')`](../+mip/+paths/root.m)). Activation never moves the base root — `mip deactivate` always returns to it — and the named-env store lives at `<base root>/envs/` ([`mip.paths.root('base')`](../+mip/+paths/root.m)). Named env operations (`create <name>`, `list`, `delete <name>`, `activate <name>`) always resolve against the base store, even while some other environment is active.
 
-**Argument disambiguation is syntactic, never guessed**: a bare word is a name (resolved in the base `envs/` store only, no fallback to a local path); anything containing a path separator (`/`, or `\` on Windows) is a path ([`mip.parse.is_path`](../+mip/+parse/is_path.m)). Names are validated with `mip.name.is_valid` and compared exactly as typed.
+**Argument disambiguation is syntactic, never guessed**: a bare word is a name (resolved in the base `envs/` store only, no fallback to a local path); anything written explicitly as a path (`~`, `.`, `/`, or a drive-letter prefix — [`mip.parse.is_explicit_path`](../+mip/+parse/is_explicit_path.m)) or containing a path separator (`/`, or `\` on Windows) anywhere is a path ([`mip.parse.is_path`](../+mip/+parse/is_path.m)) — so `foo/bar` and `.mip` are both paths. Names are validated with `mip.name.is_valid` and compared exactly as typed.
 
 ### 14.2 `mip env create`
 

@@ -4,8 +4,11 @@ function tf = is_path(arg)
 % Usage:
 %   tf = mip.parse.is_path(arg)
 %
-% A bare word is a name; anything containing a path separator ('/', or
-% '\' on Windows) is a path. The two are never guessed between.
+% An argument is a path when it is written explicitly as one ('~', '.',
+% '/', or a drive-letter prefix; see mip.parse.is_explicit_path) or when
+% it contains a path separator ('/', or '\' on Windows) anywhere — so
+% relative paths like 'foo/bar' and '.mip' are both paths. Anything else
+% is a name. The two are never guessed between.
 %
 % Only meaningful for arguments whose names can never contain a
 % separator (e.g. environment names). Package arguments use slashes in
@@ -16,6 +19,6 @@ function tf = is_path(arg)
 if isstring(arg)
     arg = char(arg);
 end
-tf = contains(arg, '/') || (ispc && contains(arg, '\'));
+tf = mip.parse.is_explicit_path(arg) || contains(arg, '/') || (ispc && contains(arg, '\'));
 
 end

@@ -68,6 +68,20 @@ classdef TestEnvActivate < matlab.unittest.TestCase
             testCase.verifyEmpty(s.name, 'A path env has no name');
         end
 
+        function testActivateDotMipIsPathArg(testCase)
+            % '.mip' is a path argument (explicitly written as a path,
+            % though it has no separator), equivalent to no-arg activate.
+            cd(testCase.WorkDir);
+            evalc('mip.env(''create'')');
+            evalc('mip.env(''activate'', ''.mip'')');
+
+            expected = mip.paths.get_absolute_path( ...
+                fullfile(testCase.WorkDir, '.mip'));
+            testCase.verifyEqual(getenv('MIP_ROOT'), expected);
+            testCase.verifyEmpty(mip.state.get_env_state().name, ...
+                'A path env has no name');
+        end
+
         function testActivateRefusesNonEnv(testCase)
             testCase.verifyError(@() mip.env('activate', 'ghost'), ...
                 'mip:env:notAnEnvironment');

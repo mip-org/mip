@@ -75,6 +75,14 @@ classdef TestEnvCreate < matlab.unittest.TestCase
                 '.mip must not be created when mip.lock is present');
         end
 
+        function testCreateDotMipIsPathArg(testCase)
+            % '.mip' has no separator but is written explicitly as a
+            % path, so it is a path argument, not an (invalid) name.
+            cd(testCase.WorkDir);
+            evalc('mip.env(''create'', ''.mip'')');
+            testCase.verifyTrue(isfolder(fullfile(testCase.WorkDir, '.mip', 'packages')));
+        end
+
         function testCreatePathTarget(testCase)
             target = fullfile(testCase.WorkDir, 'myenv');
             evalc('mip.env(''create'', target)');
