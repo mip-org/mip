@@ -37,13 +37,13 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         function testDetectionFindsLoadedPreview(testCase)
             testCase.verifyEmpty(mip.self.running_mip_fqn(), ...
                 'No loaded package provides mip yet');
-            srcDir = testCase.loadPreviewMip();
+            srcDir = testCase.loadPreviewMip('labs');
             testCase.verifyEqual(mip.self.running_mip_fqn(), 'gh/mip-org/labs/mip');
             testCase.verifyTrue(ismember(srcDir, strsplit(path, pathsep)));
         end
 
         function testUnloadAllForceSparesPreview(testCase)
-            srcDir = testCase.loadPreviewMip();
+            srcDir = testCase.loadPreviewMip('labs');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'other');
             evalc('mip.load(''other'', ''--sticky'')');
 
@@ -60,7 +60,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         function testUnloadAllSparesNonStickyPreview(testCase)
             % The preview is loaded without --sticky; plain unload --all
             % must spare it anyway.
-            testCase.loadPreviewMip();
+            testCase.loadPreviewMip('labs');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'other');
             evalc('mip.load(''other'')');
 
@@ -71,7 +71,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         end
 
         function testExplicitUnloadStillWorks(testCase)
-            srcDir = testCase.loadPreviewMip();
+            srcDir = testCase.loadPreviewMip('labs');
             evalc('mip.unload(''mip-org/labs/mip'')');
             testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
                 'Explicit unload is the preview exit ramp and must work');
@@ -81,7 +81,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         function testPruneSparesTransitivelyLoadedPreview(testCase)
             % Even loaded as a transitive dep (no direct flag), the
             % preview is not pruned as an orphan.
-            testCase.loadPreviewMip('--transitive');
+            testCase.loadPreviewMip('labs', '--transitive');
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'other');
             evalc('mip.load(''other'')');
 
@@ -91,8 +91,28 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
                 'Pruning must never drop the running mip');
         end
 
+        function testNewestLoadedPreviewWins(testCase)
+            % With two preview builds loaded, the most recently loaded
+            % copy wins path precedence and is the mip actually running:
+            % detection must return it — not the oldest match in load
+            % order — and bulk unloads must spare it, not the stale one.
+            src1 = testCase.loadPreviewMip('labs1');
+            src2 = testCase.loadPreviewMip('labs2');
+
+            testCase.verifyEqual(mip.self.running_mip_fqn(), 'gh/mip-org/labs2/mip', ...
+                'Detection must pick the copy that wins path precedence');
+
+            evalc('mip.unload(''--all'', ''--force'')');
+            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs2/mip'), ...
+                'The running preview must survive the bulk unload');
+            testCase.verifyTrue(ismember(src2, strsplit(path, pathsep)));
+            testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/labs1/mip'), ...
+                'The stale preview is an ordinary package and unloads');
+            testCase.verifyFalse(ismember(src1, strsplit(path, pathsep)));
+        end
+
         function testPreviewSurvivesActivationRoundTrip(testCase)
-            srcDir = testCase.loadPreviewMip();
+            srcDir = testCase.loadPreviewMip('labs');
             pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'other');
             otherSrc = fullfile(pkgDir, 'other');
             evalc('mip.load(''other'', ''--sticky'')');
@@ -127,7 +147,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         end
 
         function testPreviewSurvivesDeletedEnvDeactivate(testCase)
-            srcDir = testCase.loadPreviewMip();
+            srcDir = testCase.loadPreviewMip('labs');
             evalc('mip.env(''create'', ''doomed'')');
             evalc('mip.env(''activate'', ''doomed'')');
             envRoot = mip.state.get_env_state().root;
@@ -143,16 +163,16 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
     end
 
     methods
-        function srcDir = loadPreviewMip(testCase, varargin)
-            % Seed gh/mip-org/labs/mip whose source dir ships a stub
+        function srcDir = loadPreviewMip(testCase, channel, varargin)
+            % Seed gh/mip-org/<channel>/mip whose source dir ships a stub
             % mip.m, and load it — from the session's point of view this
             % package now provides the running mip.
-            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'labs', 'mip');
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', channel, 'mip');
             srcDir = fullfile(pkgDir, 'mip');
             fid = fopen(fullfile(srcDir, 'mip.m'), 'w');
             fprintf(fid, 'function varargout = mip(varargin) %%#ok<STOUT,VANUS>\nend\n');
             fclose(fid);
-            evalc('mip.load(''mip-org/labs/mip'', varargin{:})');
+            evalc(sprintf('mip.load(''mip-org/%s/mip'', varargin{:})', channel));
         end
     end
 end

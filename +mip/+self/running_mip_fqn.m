@@ -17,11 +17,15 @@ function fqn = running_mip_fqn()
 % While an environment is active, the value detected at activation time
 % (against the root the package was loaded from) is used: the package is
 % not installed in the environment, so live detection there would fail.
-% Otherwise, a loaded package provides the running mip when one of the
-% mip.m locations reported by which('mip', '-all') lies in its source
-% tree — membership, like mip.self.is_own_root, so the check is robust
-% to shadowing by e.g. the user's current folder. Never returns the core
-% identity itself.
+% Otherwise, the mip.m locations reported by which('mip', '-all') are
+% walked in path (precedence) order, and the first one lying inside a
+% loaded package's source tree identifies that package as the provider —
+% so when several loaded packages ship a mip.m, the copy that wins
+% shadowing (the most recently loaded) is the one returned. Locations
+% belonging to no loaded package (e.g. a mip.m in the user's current
+% folder, or the installed core mip) are skipped, which keeps the check
+% robust to stray shadowing, like mip.self.is_own_root's membership
+% test. Never returns the core identity itself.
 
 s = mip.state.get_env_state();
 if ~isempty(s)
@@ -47,6 +51,9 @@ for i = 1:numel(candidates)
     candDirs{i} = strip_trailing_sep(fileparts(candidates{i}));
 end
 
+% Resolve each loaded package's source directory once (a package whose
+% source cannot be resolved keeps an empty entry and never matches).
+srcDirs = cell(1, numel(loaded));
 for i = 1:numel(loaded)
     try
         pkgDir = mip.paths.get_package_dir(loaded{i});
@@ -58,9 +65,16 @@ for i = 1:numel(loaded)
     catch
         continue
     end
-    srcDir = strip_trailing_sep(srcDir);
-    for k = 1:numel(candDirs)
-        if path_is_under(candDirs{k}, srcDir)
+    srcDirs{i} = strip_trailing_sep(srcDir);
+end
+
+% Walk the mip.m locations in path (precedence) order: the first one
+% belonging to a loaded package is the copy that wins shadowing — the
+% mip actually running. Locations under no loaded package (the user's
+% current folder, the installed core mip) are skipped.
+for k = 1:numel(candDirs)
+    for i = 1:numel(loaded)
+        if ~isempty(srcDirs{i}) && path_is_under(candDirs{k}, srcDirs{i})
             fqn = loaded{i};
             return
         end
