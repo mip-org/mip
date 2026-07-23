@@ -141,11 +141,16 @@ end
 
 
 function showMipSelfInfo()
-% Display info about mip itself: version, root directory, and architecture.
+% Display info about mip itself: version, root directory, architecture,
+% and the active environment (if any).
     fprintf('\n');
     fprintf('  Version:      %s\n', mip.version());
     fprintf('  Root:         %s\n', mip.paths.root());
     fprintf('  Architecture: %s\n', mip.build.arch());
+    s = mip.state.get_env_state();
+    if ~isempty(s)
+        fprintf('  Environment:  %s\n', mip.env.display_env(s));
+    end
     fprintf('\n');
 end
 

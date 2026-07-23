@@ -42,6 +42,17 @@ mip install ./my-package               % local install
 mip install -e ./my-package            % editable install (pip -e style)
 ```
 
+Give a project or an experiment its own isolated package set with an
+environment (like a Python venv or a conda env):
+
+```matlab
+mip env create scratch       % create a named environment
+mip activate scratch         % point the session at it
+mip install chebfun          % installs into the active environment
+mip deactivate               % back to the global root
+mip env create               % or: create a local ./.mip environment
+```
+
 Run `mip help` for the full command list, or see
 [mip.sh/docs](https://mip.sh/docs).
 

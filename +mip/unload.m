@@ -11,6 +11,12 @@ function unload(varargin)
 % Accepts both bare package names and fully qualified names.
 % Use --all to unload all non-sticky packages.
 % Use --all --force to unload all packages including sticky ones.
+%
+% Bulk unloads never unload the running mip: gh/mip-org/core/mip, plus
+% the loaded package actually providing the running mip code when that
+% is a different one (e.g. a preview build loaded over the released mip;
+% see mip.self.running_mip_fqn). Explicitly naming a preview build still
+% unloads it — that is how a preview is exited.
 
     % Check for --all and --force flags
     [opts, packageArgs] = mip.parse.flags(varargin, struct('all', false, 'force', false));
@@ -24,6 +30,16 @@ function unload(varargin)
     if isempty(packageArgs)
         error('mip:noPackage', 'No package name specified for unload command.');
     end
+
+    % Detect the running-mip provider up front, while its code is still on
+    % the path: explicitly unloading a loaded preview build removes the
+    % very code executing this command, after which mip.* calls resolve
+    % against the released mip — which may not have newer functions like
+    % mip.self.running_mip_fqn. Everything that runs after the rmpath must
+    % therefore only use these captured values (and long-stable mip.*
+    % functions).
+    runningMip = mip.self.running_mip_fqn();
+    envIsActive = ~isempty(mip.state.get_env_state());
 
     % Unload each package
     for k = 1:length(packageArgs)
@@ -45,6 +61,16 @@ function unload(varargin)
             continue
         end
 
+        % Unloading the preview build while an environment is active
+        % leaves the session on the released mip, which has no environment
+        % commands to deactivate with.
+        if ~isempty(runningMip) && strcmp(fqn, runningMip) && envIsActive
+            warning('mip:unload:runningMipWhileEnvActive', ...
+                    ['"%s" provides the running mip and an environment is ' ...
+                     'still active. Run "mip deactivate" first to restore ' ...
+                     'your session.'], displayFqn);
+        end
+
         % Get package directory
         r = mip.parse.parse_package_arg(fqn);
         if r.is_fqn
@@ -62,8 +88,9 @@ function unload(varargin)
         fprintf('Unloaded package "%s"\n', displayFqn);
     end
 
-    % Prune packages that are no longer needed (once, after all unloads)
-    pruneUnusedPackages();
+    % Prune packages that are no longer needed (once, after all unloads).
+    % runningMip was captured before any paths were removed — see above.
+    pruneUnusedPackages(runningMip);
 end
 
 function fqn = resolveLoadedFqn(packageArg)
@@ -200,8 +227,11 @@ function sweepPathEntries(packageDir, fqn, pkgInfo)
     end
 end
 
-function pruneUnusedPackages()
-% Prune packages that are no longer needed.
+function pruneUnusedPackages(runningMip)
+% Prune packages that are no longer needed. runningMip is passed in by
+% the caller, captured before any unload removed path entries: this
+% function may run after the code of a loaded preview mip left the path,
+% at which point mip.self.running_mip_fqn would no longer resolve.
 
     MIP_LOADED_PACKAGES          = mip.state.key_value_get('MIP_LOADED_PACKAGES');
     MIP_DIRECTLY_LOADED_PACKAGES = mip.state.key_value_get('MIP_DIRECTLY_LOADED_PACKAGES');
@@ -210,8 +240,13 @@ function pruneUnusedPackages()
         return
     end
 
-    % Find loaded packages no longer needed by any directly-loaded package
+    % Find loaded packages no longer needed by any directly-loaded package.
+    % The package providing the running mip is never pruned (like the core
+    % identity, which find_orphans already exempts).
     packagesToPrune = mip.dependency.find_orphans(MIP_DIRECTLY_LOADED_PACKAGES, MIP_LOADED_PACKAGES);
+    if ~isempty(runningMip)
+        packagesToPrune = packagesToPrune(~strcmp(packagesToPrune, runningMip));
+    end
 
     % Prune each unnecessary package
     if ~isempty(packagesToPrune)
@@ -240,19 +275,24 @@ function unloadAll(forceUnload)
         return
     end
 
-    % Find packages to unload (never unload mip itself)
+    % Find packages to unload. The running mip is never unloaded here:
+    % gh/mip-org/core/mip, plus the loaded package actually providing the
+    % running mip code when that is a different one (a preview build
+    % loaded over the released mip). Explicit `mip unload <pkg>` of a
+    % preview build still works — only the bulk forms spare it.
+    runningMip = mip.self.running_mip_fqn();
     packagesToUnload = {};
     if forceUnload
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~strcmp(pkg, 'gh/mip-org/core/mip')
+            if ~isRunningMip(pkg, runningMip)
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
     else
         for i = 1:length(MIP_LOADED_PACKAGES)
             pkg = MIP_LOADED_PACKAGES{i};
-            if ~ismember(pkg, MIP_STICKY_PACKAGES)
+            if ~ismember(pkg, MIP_STICKY_PACKAGES) && ~isRunningMip(pkg, runningMip)
                 packagesToUnload{end+1} = pkg; %#ok<AGROW>
             end
         end
@@ -286,16 +326,21 @@ function unloadAll(forceUnload)
         fprintf('  Unloaded package "%s"\n', mip.parse.display_fqn(pkg));
     end
 
-    % Update global variables (mip always remains)
+    % Update global variables: the survivors keep their load order and
+    % their direct/sticky flags (mip itself always remains loaded and
+    % sticky).
+    survivors = MIP_LOADED_PACKAGES(~ismember(MIP_LOADED_PACKAGES, packagesToUnload));
+    MIP_LOADED_PACKAGES = survivors;
+    MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES( ...
+        ismember(MIP_DIRECTLY_LOADED_PACKAGES, survivors));
     if forceUnload
-        MIP_LOADED_PACKAGES = {'gh/mip-org/core/mip'};
-        MIP_DIRECTLY_LOADED_PACKAGES = {};
-        MIP_STICKY_PACKAGES = {'gh/mip-org/core/mip'};
-    else
-        MIP_LOADED_PACKAGES = MIP_STICKY_PACKAGES;
-        MIP_DIRECTLY_LOADED_PACKAGES = MIP_DIRECTLY_LOADED_PACKAGES(    ...
-            ismember(MIP_DIRECTLY_LOADED_PACKAGES, MIP_STICKY_PACKAGES) ...
-        );
+        MIP_STICKY_PACKAGES = MIP_STICKY_PACKAGES(ismember(MIP_STICKY_PACKAGES, survivors));
+        if ~ismember('gh/mip-org/core/mip', MIP_LOADED_PACKAGES)
+            MIP_LOADED_PACKAGES{end+1} = 'gh/mip-org/core/mip';
+        end
+        if ~ismember('gh/mip-org/core/mip', MIP_STICKY_PACKAGES)
+            MIP_STICKY_PACKAGES{end+1} = 'gh/mip-org/core/mip';
+        end
     end
 
     mip.state.key_value_set('MIP_LOADED_PACKAGES', MIP_LOADED_PACKAGES);
@@ -303,4 +348,9 @@ function unloadAll(forceUnload)
     mip.state.key_value_set('MIP_STICKY_PACKAGES', MIP_STICKY_PACKAGES);
 
     mip.state.check_broken_dependencies('loaded');
+end
+
+function tf = isRunningMip(pkg, runningMip)
+    tf = strcmp(pkg, 'gh/mip-org/core/mip') || ...
+         (~isempty(runningMip) && strcmp(pkg, runningMip));
 end

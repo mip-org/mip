@@ -52,6 +52,9 @@ classdef TestInstallSelf < matlab.unittest.TestCase
             % but the version never matches anything real in the channel.
             pkgDir = createTestPackage(testCase.TestRoot, ...
                 'mip-org', 'core', 'mip', 'version', '0.0.0');
+            % The hot swap only triggers when the seeded package looks
+            % like the running mip (MEP 8 self-flow guard).
+            plantStubMip(pkgDir);
             info1 = mip.config.read_package_json(pkgDir);
             testCase.verifyEqual(info1.version, '0.0.0');
 

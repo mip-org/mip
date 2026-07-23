@@ -30,8 +30,13 @@ function wasLoaded = replace_installed(fqn, pkgDir, latestInfo)
     stagingDir = fullfile(tempDir, 'staging');
     mip.channel.extract_mhl(mhlPath, stagingDir);
 
-    % Download succeeded — now it is safe to unload and swap.
-    wasLoaded = mip.state.is_loaded(fqn);
+    % Download succeeded — now it is safe to unload and swap. The self
+    % identity gh/mip-org/core/mip is always "loaded" as session state,
+    % but when this path runs for it the copy being replaced belongs to a
+    % root mip does not run from (own-root replacements go through
+    % mip.self.hot_swap), so there is nothing on the path to unload — and
+    % mip.unload would refuse the identity anyway.
+    wasLoaded = mip.state.is_loaded(fqn) && ~strcmp(fqn, 'gh/mip-org/core/mip');
     if wasLoaded
         mip.unload(fqn);
     end

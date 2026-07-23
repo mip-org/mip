@@ -42,10 +42,15 @@ function installedFqns = from_repository(repoPackages, channel, markDirectlyInst
     % the remaining packages install normally. Same-version or versionless
     % requests fall through untouched — the generic path below correctly
     % reports "already installed" without attempting to unload mip.
+    % The hot swap only applies when the active root is the root mip
+    % actually runs from; in any other root (an activated environment, or
+    % an external MIP_ROOT) the identity is an ordinary, inert package and
+    % the generic replace path below handles a version switch.
     keepPackage = true(1, length(resolvedPackages));
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
-        if ~strcmp(s.fqn, 'gh/mip-org/core/mip') || isempty(s.requested_version)
+        if ~strcmp(s.fqn, 'gh/mip-org/core/mip') || isempty(s.requested_version) ...
+                || ~mip.self.is_own_root()
             continue
         end
         selfPkgDir = mip.paths.get_package_dir(s.fqn);
