@@ -115,7 +115,7 @@ function install(varargin)
             urlSources{end+1} = pkg; %#ok<AGROW>
         elseif endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
             mhlSources{end+1} = pkg; %#ok<AGROW>
-        elseif mip.install.is_local_path(pkg)
+        elseif mip.parse.is_explicit_path(pkg)
             localPaths{end+1} = pkg; %#ok<AGROW>
         else
             try

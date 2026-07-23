@@ -25,7 +25,7 @@ if length(args) > 1
 end
 
 arg = char(args{1});
-if mip.env.is_path_arg(arg)
+if mip.parse.is_path(arg)
     error('mip:env:pathDelete', ...
           ['Path environments are self-managed — delete the directory ' ...
            'yourself.']);
@@ -37,12 +37,12 @@ if ~mip.name.is_valid(arg)
            'with a letter or digit.'], arg);
 end
 
-target = fullfile(mip.env.store_dir(), arg);
+target = fullfile(mip.paths.get_envs_dir(), arg);
 if ~isfolder(target)
     error('mip:env:notFound', ...
           'No environment named "%s". Run "mip env list" to see named environments.', arg);
 end
-if ~mip.paths.is_root(target)
+if ~mip.paths.is_valid_root(target)
     error('mip:env:notAnEnvironment', ...
           ['"%s" is not a mip environment (it has no packages/ ' ...
            'subtree); not deleting it.'], target);
@@ -50,7 +50,7 @@ end
 
 targetAbs = mip.paths.get_absolute_path(target);
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if ~isempty(s) && strcmp(s.root, targetAbs)
     error('mip:env:deleteActive', ...
           'Environment "%s" is active. Run "mip deactivate" first.', arg);

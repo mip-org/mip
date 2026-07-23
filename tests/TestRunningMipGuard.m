@@ -107,7 +107,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
                 'Everything else still swaps out');
             testCase.verifyFalse(ismember(otherSrc, strsplit(path, pathsep)));
 
-            s = mip.env.active();
+            s = mip.state.get_env_state();
             testCase.verifyEqual(s.running_mip, 'gh/mip-org/labs/mip');
 
             % A bulk unload inside the env also spares it (detection uses
@@ -130,7 +130,7 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
             srcDir = testCase.loadPreviewMip();
             evalc('mip.env(''create'', ''doomed'')');
             evalc('mip.env(''activate'', ''doomed'')');
-            envRoot = mip.env.active().root;
+            envRoot = mip.state.get_env_state().root;
 
             rmdir(envRoot, 's');
             evalc('mip.env(''deactivate'')');

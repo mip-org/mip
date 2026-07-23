@@ -23,7 +23,7 @@ function fqn = running_mip_fqn()
 % to shadowing by e.g. the user's current folder. Never returns the core
 % identity itself.
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if ~isempty(s)
     if isfield(s, 'running_mip')
         fqn = s.running_mip;

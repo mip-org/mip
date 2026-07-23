@@ -39,7 +39,7 @@ function unload(varargin)
     % therefore only use these captured values (and long-stable mip.*
     % functions).
     runningMip = mip.self.running_mip_fqn();
-    envIsActive = ~isempty(mip.env.active());
+    envIsActive = ~isempty(mip.state.get_env_state());
 
     % Unload each package
     for k = 1:length(packageArgs)

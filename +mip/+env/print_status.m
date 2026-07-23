@@ -1,12 +1,12 @@
-function status()
-%STATUS   Show the active environment, or that none is active.
+function print_status()
+%PRINT_STATUS   Show the active environment, or that none is active.
 %
 % Usage:
 %   mip env
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if ~isempty(s)
-    fprintf('active environment: %s\n', mip.env.describe(s));
+    fprintf('active environment: %s\n', mip.env.display_env(s));
     return
 end
 

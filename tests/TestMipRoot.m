@@ -62,6 +62,28 @@ classdef TestMipRoot < matlab.unittest.TestCase
             testCase.verifyFalse(isfolder(fullfile(testCase.TestRoot, 'packages')));
         end
 
+        function testActiveModeIsTheDefault(testCase)
+            % root('active') is an explicit spelling of the no-arg form.
+            mkdir(testCase.TestRoot);
+            mkdir(fullfile(testCase.TestRoot, 'packages'));
+            setenv('MIP_ROOT', testCase.TestRoot);
+            testCase.verifyEqual(mip.paths.root('active'), mip.paths.root());
+        end
+
+        function testBaseModeEqualsActiveWhenNoEnv(testCase)
+            % With no environment active, the base root is the active root.
+            clearMipState();
+            mkdir(testCase.TestRoot);
+            mkdir(fullfile(testCase.TestRoot, 'packages'));
+            setenv('MIP_ROOT', testCase.TestRoot);
+            testCase.verifyEqual(mip.paths.root('base'), mip.paths.root());
+        end
+
+        function testInvalidKindErrors(testCase)
+            testCase.verifyError(@() mip.paths.root('bogus'), ...
+                'mip:invalidRootKind');
+        end
+
         function testEmptyStringTreatedAsUnset(testCase)
             % MIP_ROOT="" should behave the same as unset (fall through to
             % path-based detection). We can't easily verify the resulting

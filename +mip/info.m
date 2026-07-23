@@ -147,9 +147,9 @@ function showMipSelfInfo()
     fprintf('  Version:      %s\n', mip.version());
     fprintf('  Root:         %s\n', mip.paths.root());
     fprintf('  Architecture: %s\n', mip.build.arch());
-    s = mip.env.active();
+    s = mip.state.get_env_state();
     if ~isempty(s)
-        fprintf('  Environment:  %s\n', mip.env.describe(s));
+        fprintf('  Environment:  %s\n', mip.env.display_env(s));
     end
     fprintf('\n');
 end

@@ -1,5 +1,5 @@
 function deactivate(varargin)
-%DEACTIVATE   Point the session back at the baseline root (alias for "mip env deactivate").
+%DEACTIVATE   Point the session back at the base root (alias for "mip env deactivate").
 %
 % Usage:
 %   mip deactivate

@@ -9,10 +9,10 @@ function print_banner()
 % environment is active. Prints nothing when no environment is active:
 % the global root is a first-class default target, not a mistake.
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if isempty(s)
     return
 end
-fprintf('environment: %s\n', mip.env.describe(s));
+fprintf('environment: %s\n', mip.env.display_env(s));
 
 end

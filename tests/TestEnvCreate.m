@@ -40,11 +40,11 @@ classdef TestEnvCreate < matlab.unittest.TestCase
 
     methods (Test)
 
-        function testCreateNamedGoesToBaselineStore(testCase)
+        function testCreateNamedGoesToBaseStore(testCase)
             output = evalc('mip.env(''create'', ''scratch'')');
             envDir = fullfile(testCase.TestRoot, 'envs', 'scratch');
             testCase.verifyTrue(isfolder(fullfile(envDir, 'packages')), ...
-                'Named env should be created in <baseline root>/envs/ with a packages/ subtree');
+                'Named env should be created in <base root>/envs/ with a packages/ subtree');
             testCase.verifyTrue(contains(output, 'Created environment'), ...
                 'Should print the created path');
             testCase.verifyTrue(contains(output, 'mip activate scratch'), ...
@@ -104,8 +104,8 @@ classdef TestEnvCreate < matlab.unittest.TestCase
             testCase.verifyTrue(isfolder(fullfile(target, 'packages')));
         end
 
-        function testCreateNamedWhileEnvActiveUsesBaselineStore(testCase)
-            % Named env operations always resolve against the baseline
+        function testCreateNamedWhileEnvActiveUsesBaseStore(testCase)
+            % Named env operations always resolve against the base
             % store, even while another env is active.
             evalc('mip.env(''create'', ''first'')');
             evalc('mip.env(''activate'', ''first'')');
@@ -114,7 +114,7 @@ classdef TestEnvCreate < matlab.unittest.TestCase
             evalc('mip.env(''create'', ''second'')');
             testCase.verifyTrue(isfolder(fullfile(testCase.TestRoot, ...
                 'envs', 'second', 'packages')), ...
-                'Named create while active must anchor to the baseline store');
+                'Named create while active must anchor to the base store');
             testCase.verifyFalse(isfolder(fullfile(testCase.TestRoot, ...
                 'envs', 'first', 'envs')), ...
                 'The active env must not grow its own envs/ store');

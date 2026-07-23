@@ -51,7 +51,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
             testCase.verifyEqual(mip.paths.root(), expected, ...
                 'mip.paths.root() must resolve to the active env');
 
-            s = mip.env.active();
+            s = mip.state.get_env_state();
             testCase.verifyEqual(s.name, 'scratch');
             testCase.verifyEqual(s.root, expected);
         end
@@ -64,7 +64,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
             expected = mip.paths.get_absolute_path( ...
                 fullfile(testCase.WorkDir, '.mip'));
             testCase.verifyEqual(getenv('MIP_ROOT'), expected);
-            s = mip.env.active();
+            s = mip.state.get_env_state();
             testCase.verifyEmpty(s.name, 'A path env has no name');
         end
 
@@ -80,7 +80,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
         end
 
         function testActivateSwapsAndDeactivateRestores(testCase)
-            % Load a package (sticky) in the baseline root, activate an
+            % Load a package (sticky) in the base root, activate an
             % env (full swap: everything unloads, sticky included), then
             % deactivate (saved set restored with its flags).
             pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkga');
@@ -136,14 +136,14 @@ classdef TestEnvActivate < matlab.unittest.TestCase
             evalc('mip.env(''activate'', ''one'')');
             evalc('mip.env(''activate'', ''two'')');
 
-            s = mip.env.active();
+            s = mip.state.get_env_state();
             testCase.verifyEqual(s.name, 'two');
             testCase.verifyEqual(s.saved_mip_root, testCase.TestRoot, ...
-                'The saved state must be the baseline session''s, not env one''s');
+                'The saved state must be the base session''s, not env one''s');
 
             evalc('mip.env(''deactivate'')');
             testCase.verifyEqual(getenv('MIP_ROOT'), testCase.TestRoot);
-            testCase.verifyEmpty(mip.env.active());
+            testCase.verifyEmpty(mip.state.get_env_state());
         end
 
         function testReactivateSameEnvIsNoOp(testCase)
@@ -179,7 +179,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
                 strsplit(path, pathsep)));
             testCase.verifyTrue(contains(output, 'Loaded 1 package(s), 1 failed'), ...
                 'The load pass is best-effort and ends with a summary');
-            testCase.verifyNotEmpty(mip.env.active(), ...
+            testCase.verifyNotEmpty(mip.state.get_env_state(), ...
                 'The env stays active regardless of load failures');
 
             evalc('mip.env(''deactivate'')');
@@ -208,7 +208,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
                 'Deactivation must work after the env dir is gone');
             testCase.verifyFalse(ismember(srcDir, strsplit(path, pathsep)), ...
                 'Path entries under the deleted env must be swept');
-            testCase.verifyEmpty(mip.env.active());
+            testCase.verifyEmpty(mip.state.get_env_state());
         end
 
         function testEnvStatusReportsActiveEnv(testCase)
@@ -242,7 +242,7 @@ classdef TestEnvActivate < matlab.unittest.TestCase
 
         function testSessionCommandsTargetActiveEnv(testCase)
             % Install state is per-root: a package installed in the
-            % baseline is invisible while an env is active.
+            % base root is invisible while an env is active.
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'basepkg');
             testCase.verifyTrue(mip.state.is_installed('gh/mip-org/core/basepkg'));
 

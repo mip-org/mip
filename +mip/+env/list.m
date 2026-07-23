@@ -4,7 +4,7 @@ function list(varargin)
 % Usage:
 %   mip env list
 %
-% Reads <baseline root>/envs/ and lists each subdirectory that is an
+% Reads <base root>/envs/ and lists each subdirectory that is an
 % environment (has a packages/ subtree); other entries are ignored. The
 % active environment, if named, is marked with an asterisk. Path
 % environments do not appear; mip keeps no inventory of them.
@@ -13,7 +13,7 @@ if ~isempty(varargin)
     error('mip:env:tooManyArgs', '"mip env list" takes no arguments.');
 end
 
-store = mip.env.store_dir();
+store = mip.paths.get_envs_dir();
 
 names = {};
 if isfolder(store)
@@ -23,7 +23,7 @@ if isfolder(store)
         if ~e.isdir || ismember(e.name, {'.', '..'})
             continue
         end
-        if mip.paths.is_root(fullfile(store, e.name))
+        if mip.paths.is_valid_root(fullfile(store, e.name))
             names{end+1} = e.name; %#ok<AGROW>
         end
     end
@@ -39,7 +39,7 @@ end
 % Resolve the active env once so the marker survives activation by path
 % (a named env activated via its full path still gets marked).
 activeRoot = '';
-s = mip.env.active();
+s = mip.state.get_env_state();
 if ~isempty(s)
     activeRoot = s.root;
 end

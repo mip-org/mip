@@ -1,8 +1,8 @@
-function d = describe(s)
-%DESCRIBE   One-line display form of an environment state struct.
+function d = display_env(s)
+%DISPLAY_ENV   One-line display form of an environment state struct.
 %
 % Usage:
-%   d = mip.env.describe(s)
+%   d = mip.env.display_env(s)
 %
 % Named envs display as 'name (path)'; path envs as the path alone.
 

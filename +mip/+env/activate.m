@@ -2,7 +2,7 @@ function activate(varargin)
 %ACTIVATE   Point the session at an environment.
 %
 % Usage:
-%   mip activate <name>            - Activate <baseline root>/envs/<name>
+%   mip activate <name>            - Activate <base root>/envs/<name>
 %   mip activate <path>            - Activate the environment at a path
 %   mip activate                   - Activate ./.mip in the current directory
 %   mip activate ... --load        - Also load the env's directly installed packages
@@ -39,7 +39,7 @@ if isempty(args)
     createHint = 'mip env create';
 else
     arg = char(args{1});
-    if mip.env.is_path_arg(arg)
+    if mip.parse.is_path(arg)
         target = arg;
         createHint = sprintf('mip env create %s', arg);
     else
@@ -50,21 +50,21 @@ else
                    'start and end with a letter or digit.'], arg);
         end
         name = arg;
-        target = fullfile(mip.env.store_dir(), arg);
+        target = fullfile(mip.paths.get_envs_dir(), arg);
         createHint = sprintf('mip env create %s', arg);
     end
 end
 
-if ~mip.paths.is_root(target)
+if ~mip.paths.is_valid_root(target)
     error('mip:env:notAnEnvironment', ...
           '"%s" is not a mip environment — create one with "%s".', ...
           target, createHint);
 end
 targetAbs = mip.paths.get_absolute_path(target);
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if ~isempty(s) && strcmp(s.root, targetAbs)
-    fprintf('Environment %s is already active\n', mip.env.describe(s));
+    fprintf('Environment %s is already active\n', mip.env.display_env(s));
     if opts.load
         load_env_packages();
     end
@@ -72,8 +72,8 @@ if ~isempty(s) && strcmp(s.root, targetAbs)
 end
 if ~isempty(s)
     % Exclusive activation: fully deactivate the current environment
-    % (restoring the baseline session) before activating the new one, so
-    % the state saved below is always the baseline session's.
+    % (restoring the base session) before activating the new one, so
+    % the state saved below is always the base session's.
     mip.env.deactivate();
 end
 
@@ -101,7 +101,7 @@ setenv('MIP_ROOT', targetAbs);
 ensure_session_baseline();
 mip.state.key_value_set('MIP_ENV_STATE', saved);
 
-fprintf('Activated environment: %s\n', mip.env.describe(saved));
+fprintf('Activated environment: %s\n', mip.env.display_env(saved));
 
 if opts.load
     load_env_packages();

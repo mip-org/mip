@@ -1,8 +1,8 @@
-function tf = is_root(candidate)
-%IS_ROOT   Check whether a directory is a mip root.
+function tf = is_valid_root(candidate)
+%IS_VALID_ROOT   Check whether a directory is a valid mip root.
 %
 % Usage:
-%   tf = mip.paths.is_root(candidate)
+%   tf = mip.paths.is_valid_root(candidate)
 %
 % A directory is a mip root exactly when it exists and contains a
 % 'packages' subdirectory. This is the same signal mip.paths.root uses to

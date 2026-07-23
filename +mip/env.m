@@ -5,7 +5,7 @@ function env(varargin)
 % exactly like the global root — that the session can point its commands
 % at. Environments come in three kinds: the global root (where mip is
 % installed; the default), named environments in the central store
-% (<baseline root>/envs/<name>), and local path environments (./.mip,
+% (<base root>/envs/<name>), and local path environments (./.mip,
 % or any directory you choose).
 %
 % Usage:
@@ -17,7 +17,7 @@ function env(varargin)
 %   mip env activate [name|path] [--load]
 %                                  - Point the session at an environment
 %                                    (alias: mip activate)
-%   mip env deactivate             - Point the session back at the baseline root
+%   mip env deactivate             - Point the session back at the base root
 %                                    (alias: mip deactivate)
 %
 % A bare word is an environment name, resolved in the central store only;
@@ -34,7 +34,7 @@ function env(varargin)
 % setting the MIP_ROOT environment variable instead.
 
 if isempty(varargin)
-    mip.env.status();
+    mip.env.print_status();
     return
 end
 

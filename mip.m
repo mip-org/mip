@@ -41,7 +41,7 @@ function varargout = mip(command, varargin)
 %   mip env list                                    - List named environments
 %   mip env delete <name>                           - Delete a named environment (confirms)
 %   mip activate [name|path] [--load]               - Point the session at an environment
-%   mip deactivate                                  - Point the session back at the baseline root
+%   mip deactivate                                  - Point the session back at the base root
 %   mip channel add <channel>                       - Subscribe at highest priority
 %   mip channel append <channel>                    - Subscribe at lowest priority
 %   mip channel remove <channel>                    - Unsubscribe from a channel

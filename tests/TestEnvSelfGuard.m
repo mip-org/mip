@@ -59,7 +59,7 @@ classdef TestEnvSelfGuard < matlab.unittest.TestCase
             evalc('mip.env(''create'', ''scratch'')');
             evalc('mip.env(''activate'', ''scratch'')');
             testCase.addTeardown(@() evalc('mip.env(''deactivate'')'));
-            envRoot = mip.env.active().root;
+            envRoot = mip.state.get_env_state().root;
 
             mipCopyDir = createTestPackage(envRoot, 'mip-org', 'core', 'mip');
             mip.state.add_directly_installed('gh/mip-org/core/mip');
@@ -69,7 +69,7 @@ classdef TestEnvSelfGuard < matlab.unittest.TestCase
 
             testCase.verifyFalse(exist(mipCopyDir, 'dir') > 0, ...
                 'The env copy of mip should be uninstalled like any package');
-            testCase.verifyTrue(mip.paths.is_root(envRoot), ...
+            testCase.verifyTrue(mip.paths.is_valid_root(envRoot), ...
                 'The env root must survive');
         end
 
@@ -79,11 +79,11 @@ classdef TestEnvSelfGuard < matlab.unittest.TestCase
             evalc('mip.env(''create'', ''scratch'')');
             evalc('mip.env(''activate'', ''scratch'')');
             testCase.addTeardown(@() evalc('mip.env(''deactivate'')'));
-            envRoot = mip.env.active().root;
+            envRoot = mip.state.get_env_state().root;
 
             output = evalc('mip.uninstall(''mip'')');
             testCase.verifyTrue(contains(output, 'not installed'));
-            testCase.verifyTrue(mip.paths.is_root(envRoot));
+            testCase.verifyTrue(mip.paths.is_valid_root(envRoot));
         end
 
     end

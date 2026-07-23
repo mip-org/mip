@@ -987,7 +987,7 @@ Stored via `setappdata(0, key, value)`. Survives `clear all` but not MATLAB rest
 | `MIP_DIRECTLY_LOADED_PACKAGES` | Cell array of FQNs | Only packages explicitly loaded by the user |
 | `MIP_STICKY_PACKAGES` | Cell array of FQNs | Packages that survive `mip unload --all` |
 | `MIP_TEST_CONTEXT` | FQN of the package currently under `mip test` | Set for the duration of a `mip test` run so the running test script can self-identify via [`mip.test.get_fqn`](#97-mip-test-package) (and from there query `mip.build.effective_arch` / `mip.build.has_mex`); cleared when the run ends. See [`+mip/test.m`](../+mip/test.m). |
-| `MIP_ENV_STATE` | Struct (or empty when none) | The active environment and the saved pre-activation session: env root and name, prior `MIP_ROOT`, the prior loaded / directly-loaded / sticky lists, and the running-mip package detected at activation ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)). See [§14.4](#144-activation-mip-activate--mip-deactivate) and [`mip.env.active`](../+mip/+env/active.m). |
+| `MIP_ENV_STATE` | Struct (or empty when none) | The active environment and the saved pre-activation session: env root and name, prior `MIP_ROOT`, the prior loaded / directly-loaded / sticky lists, and the running-mip package detected at activation ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)). See [§14.4](#144-activation-mip-activate--mip-deactivate) and [`mip.state.get_env_state`](../+mip/+state/get_env_state.m). |
 
 ### 10.2 File-Based State (Persistent)
 
@@ -1154,7 +1154,7 @@ After removing a package, empty channel and user directories are cleaned up:
 
 The `MIP_ROOT` environment variable overrides the location of the mip root directory. When set, it is validated by [`mip.paths.root()`](../+mip/+paths/root.m) according to these rules:
 
-- **Unset**: `mip.paths.root()` falls back to path-based detection ([`mip.paths.default_root`](../+mip/+paths/default_root.m), navigating up from the installed `+mip/+paths/` location, assuming `<root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where the detection resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
+- **Unset**: `mip.paths.root()` falls back to path-based detection ([`mip.paths.root('derived')`](../+mip/+paths/root.m), navigating up from the installed `+mip/+paths/` location, assuming `<root>/packages/gh/mip-org/core/mip/mip/+mip/+paths/`). If the inferred root has no `packages/` subdir (typical for an editable source checkout, where the detection resolves to the working tree rather than an installed location), it falls back to `<userpath>/mip`. If **that** also lacks a `packages/` subdir, `mip.paths.root()` raises `mip:rootNotFound` with a hint suggesting the user `setenv('MIP_ROOT', ...)` explicitly.
 - **Set to empty string** (`""`): treated the same as unset. `getenv` returns `''` for both unset and empty values, and `mip.paths.root()` makes no attempt to distinguish them.
 - **Set to a path that does not exist or is not a directory**: raises `mip:rootInvalid`.
 - **Set to an existing directory that does not contain a `packages/` subdirectory**: raises `mip:rootInvalid`. `mip.paths.root()` does **not** auto-create `packages/`. The use case for `MIP_ROOT` is pointing at an existing mip installation, so a missing `packages/` indicates a misconfiguration rather than a fresh setup.
@@ -1293,6 +1293,7 @@ Noise control and robustness:
 | `mip:invalidPackageFormat` | Package argument has a structurally invalid format (distinct from §2.1 spec violations) |
 | `mip:invalidFqn` | A bare (non-FQN) name was passed where a fully qualified name is required (e.g. to `mip.paths.get_package_dir` or `mip.build.effective_arch`) |
 | `mip:rootNotFound` | `MIP_ROOT` unset and both path-based detection and the `<userpath>/mip` fallback lack a `packages/` subdir (see [§11.5](#115-mip_root-environment-variable)) |
+| `mip:invalidRootKind` | Unknown kind argument passed to [`mip.paths.root`](../+mip/+paths/root.m) (valid: `'active'`, `'base'`, `'derived'`) |
 | `mip:env:invalidName` | Environment name fails `mip.name.is_valid` (see [§14.1](#141-what-an-environment-is)) |
 | `mip:env:alreadyExists` | `mip env create` target is already an environment |
 | `mip:env:directoryNotEmpty` | `mip env create` target is an existing non-empty non-environment directory |
@@ -1363,31 +1364,31 @@ mip has first-class **environments**: addressable package roots the user creates
 
 ### 14.1 What an Environment Is
 
-An environment is a mip root — a directory with a `packages/` subtree, cache, and install state, exactly like the global root. A directory *is* an environment exactly when it exists and holds a `packages/` subtree ([`mip.paths.is_root`](../+mip/+paths/is_root.m)) — the same signal `mip.paths.root()` keys on. There is no separate marker file. There are three kinds:
+An environment is a mip root — a directory with a `packages/` subtree, cache, and install state, exactly like the global root. A directory *is* an environment exactly when it exists and holds a `packages/` subtree ([`mip.paths.is_valid_root`](../+mip/+paths/is_valid_root.m)) — the same signal `mip.paths.root()` keys on. There is no separate marker file. There are three kinds:
 
 | Kind       | Location                          | Created by              | Inventoried? |
 |------------|-----------------------------------|-------------------------|--------------|
 | **global** | where mip is installed (default `<userpath>/mip`) | bootstrap | n/a (always) |
-| **named**  | `<baseline root>/envs/<name>`     | `mip env create <name>` | yes (`mip env list`) |
+| **named**  | `<base root>/envs/<name>`     | `mip env create <name>` | yes (`mip env list`) |
 | **local**  | `./.mip` (or any path)            | `mip env create [path]` | no (self-managed) |
 
 Every root is fully self-contained ([§11](#11-filesystem-layout)): package tree, `directly_installed.txt`, pins, channel subscriptions, and the channel index cache are all per-root. A fresh environment starts with no subscribed channels, no pins, and a cold index cache.
 
-**The baseline root** is the root the session uses when no environment is active: the externally set `MIP_ROOT` if any, otherwise the root derived from mip's install location ([`mip.paths.default_root`](../+mip/+paths/default_root.m)). Activation never moves the baseline — `mip deactivate` always returns to it — and the named-env store lives at `<baseline root>/envs/` ([`mip.env.baseline_root`](../+mip/+env/baseline_root.m)). Named env operations (`create <name>`, `list`, `delete <name>`, `activate <name>`) always resolve against the baseline store, even while some other environment is active.
+**The base root** is the root the session uses when no environment is active: the externally set `MIP_ROOT` if any, otherwise the root derived from mip's install location ([`mip.paths.root('derived')`](../+mip/+paths/root.m)). Activation never moves the base root — `mip deactivate` always returns to it — and the named-env store lives at `<base root>/envs/` ([`mip.paths.root('base')`](../+mip/+paths/root.m)). Named env operations (`create <name>`, `list`, `delete <name>`, `activate <name>`) always resolve against the base store, even while some other environment is active.
 
-**Argument disambiguation is syntactic, never guessed**: a bare word is a name (resolved in the baseline `envs/` store only, no fallback to a local path); anything containing a path separator (`/`, or `\` on Windows) is a path ([`mip.env.is_path_arg`](../+mip/+env/is_path_arg.m)). Names are validated with `mip.name.is_valid` and compared exactly as typed.
+**Argument disambiguation is syntactic, never guessed**: a bare word is a name (resolved in the base `envs/` store only, no fallback to a local path); anything containing a path separator (`/`, or `\` on Windows) is a path ([`mip.parse.is_path`](../+mip/+parse/is_path.m)). Names are validated with `mip.name.is_valid` and compared exactly as typed.
 
 ### 14.2 `mip env create`
 
 - No argument → creates `./.mip` in the current directory (no walking). Errors with `mip:env:lockfilePresent` if a `mip.lock` is present in the current directory (that directory is managed declaratively — MEP 9).
-- Bare name → creates `<baseline root>/envs/<name>`; invalid names raise `mip:env:invalidName`.
+- Bare name → creates `<base root>/envs/<name>`; invalid names raise `mip:env:invalidName`.
 - Path → creates that directory.
 
 Creation materializes exactly one thing: an empty `packages/` subtree; everything else in a root is created lazily by the existing machinery. Creation is strict: an existing environment raises `mip:env:alreadyExists`; an existing non-empty non-environment directory raises `mip:env:directoryNotEmpty`; an empty or missing directory is created. On success the created path and an activation hint are printed. A local `./.mip` should normally be gitignored; mip does not edit user files.
 
 ### 14.3 `mip env list` and `mip env delete`
 
-`mip env list` reads `<baseline root>/envs/` and lists each subdirectory that is an environment (entries without a `packages/` subtree are ignored), marking the active one with `*`. Path environments never appear.
+`mip env list` reads `<base root>/envs/` and lists each subdirectory that is an environment (entries without a `packages/` subtree are ignored), marking the active one with `*`. Path environments never appear.
 
 `mip env delete <name>` is the only data-destroying verb in the env group and always confirms (`--yes` skips; `MIP_CONFIRM` is honored for non-interactive use). It takes names only — a path argument raises `mip:env:pathDelete` ("path envs are self-managed"). It raises `mip:env:notFound` for an unknown name, `mip:env:notAnEnvironment` for a store entry with no `packages/` subtree, and `mip:env:deleteActive` for the active environment (run `mip deactivate` first).
 
@@ -1397,13 +1398,13 @@ Activation is session state ([§10](#10-state-management), key `MIP_ENV_STATE`):
 
 `mip activate [name|path]` (no argument → `./.mip` in the current directory, exactly — no walking) requires the target to be an environment; otherwise it raises `mip:env:notAnEnvironment` with a `mip env create` hint. Activation is exclusive and disk-read-only with respect to the environment (it never installs and never executes package code):
 
-1. If the same environment is already active: print "already active" and stop (`--load` still performs its load pass). If a different one is active: run the full `mip deactivate` first — so the saved state is always the baseline session's; there is no activation stack.
+1. If the same environment is already active: print "already active" and stop (`--load` still performs its load pass). If a different one is active: run the full `mip deactivate` first — so the saved state is always the base session's; there is no activation stack.
 2. Save the session state: the current `MIP_ROOT` value, the loaded / directly-loaded / sticky lists, and the running-mip package ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) detected against the root it was loaded from.
 3. Unload every loaded package **including sticky ones** via the normal unload machinery — path entries removed, MEX binaries cleared. Only the running mip stays: `gh/mip-org/core/mip`, plus a loaded preview build of mip when one is shadowing it.
 4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky; a spared preview build keeps its flags).
 5. With `--load`: load each of the env's directly installed packages as a direct load (dependencies transitively), best-effort — each failure prints the error, and the command ends with a `Loaded N package(s)[, M failed]` summary. The env stays active regardless. Without `--load`, activation is pointer-only: nothing is on the path until `mip load`.
 
-`mip deactivate` restores the prior session: it unloads everything except the running mip — the mip captured at activation time ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)), not whatever is providing `mip` on the path when `mip deactivate` runs, so a preview build installed into the env and loaded after activating is unloaded here and the session returns to the baseline mip. It sweeps any remaining path entries under the environment root (so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. The saved state is the load-order lists, not a snapshot of the MATLAB path, so this reproduces the pre-activation path only because mip keeps `path == reverse(MIP_LOADED_PACKAGES)` true at all times, including after a re-load ([§4.1](#41-basic-load-mip-load-package) step 5); replaying the saved order therefore rebuilds the exact path and shadowing that existed before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
+`mip deactivate` restores the prior session: it unloads everything except the running mip — the mip captured at activation time ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)), not whatever is providing `mip` on the path when `mip deactivate` runs, so a preview build installed into the env and loaded after activating is unloaded here and the session returns to the base mip. It sweeps any remaining path entries under the environment root (so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. The saved state is the load-order lists, not a snapshot of the MATLAB path, so this reproduces the pre-activation path only because mip keeps `path == reverse(MIP_LOADED_PACKAGES)` true at all times, including after a re-load ([§4.1](#41-basic-load-mip-load-package) step 5); replaying the saved order therefore rebuilds the exact path and shadowing that existed before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
 
 Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (as with the global root, [§15.7](#157-concurrent-matlab-sessions)), load state is per-session.
 
@@ -1427,7 +1428,7 @@ mip always runs from the root it was bootstrapped into — activating an environ
 
 The self flows key on which root is active: self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)) and self-update ([§7.7](#77-self-update-mip-update-mip)) trigger **only when the active root is the root mip actually runs from**, as determined by [`mip.self.is_own_root`](../+mip/+self/is_own_root.m): the active root's `gh/mip-org/core/mip` source directory must be among the locations of `mip.m` on the MATLAB path (`which('mip', '-all')`). While an environment is active, `gh/mip-org/core/mip` is an ordinary package there — `mip install mip-org/core/mip` installs an inert copy into the environment, `mip uninstall mip` removes that copy or reports "not installed", and `mip update mip` updates it via the normal staging replace. The running mip is untouched, and `mip load mip` keeps its "always loaded" no-op, so an environment copy can never shadow the running one. This guarantees the self-uninstall flow can never delete an environment root out from under the user.
 
-The running mip need not be the core identity: a preview build of mip (e.g. `gh/mip-org/labs/mip`) can be installed and loaded over the released one, and the loaded package providing the running `mip` code is spared by every implicit unload ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) — so a loaded preview survives `mip activate` / `mip deactivate`. Unlike the core identity it can still be unloaded explicitly, which is how the preview is exited. The spared mip is fixed at activation time: a preview loaded over the baseline mip *before* activating survives the swap and the later `mip deactivate`, whereas a preview installed into the environment and loaded only after activating is an ordinary env package that deactivation unloads, returning the session to the baseline mip.
+The running mip need not be the core identity: a preview build of mip (e.g. `gh/mip-org/labs/mip`) can be installed and loaded over the released one, and the loaded package providing the running `mip` code is spared by every implicit unload ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) — so a loaded preview survives `mip activate` / `mip deactivate`. Unlike the core identity it can still be unloaded explicitly, which is how the preview is exited. The spared mip is fixed at activation time: a preview loaded over the base mip *before* activating survives the swap and the later `mip deactivate`, whereas a preview installed into the environment and loaded only after activating is an ordinary env package that deactivation unloads, returning the session to the base mip.
 
 ---
 

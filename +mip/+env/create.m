@@ -3,7 +3,7 @@ function create(varargin)
 %
 % Usage:
 %   mip env create              - Create ./.mip in the current directory
-%   mip env create <name>       - Create <baseline root>/envs/<name>
+%   mip env create <name>       - Create <base root>/envs/<name>
 %   mip env create <path>       - Create the given directory
 %
 % A bare word is a name in the central store; anything containing a path
@@ -41,7 +41,7 @@ if isempty(args)
     activateHint = 'mip activate';
 else
     arg = char(args{1});
-    if mip.env.is_path_arg(arg)
+    if mip.parse.is_path(arg)
         target = arg;
         activateHint = sprintf('mip activate %s', arg);
     else
@@ -53,12 +53,12 @@ else
                    'environment at a path, include a path separator ' ...
                    '(e.g. ./%s).'], arg, arg);
         end
-        target = fullfile(mip.env.store_dir(), arg);
+        target = fullfile(mip.paths.get_envs_dir(), arg);
         activateHint = sprintf('mip activate %s', arg);
     end
 end
 
-if mip.paths.is_root(target)
+if mip.paths.is_valid_root(target)
     error('mip:env:alreadyExists', ...
           'Environment already exists: %s', target);
 end

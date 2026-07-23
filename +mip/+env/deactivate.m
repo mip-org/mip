@@ -1,5 +1,5 @@
 function deactivate(varargin)
-%DEACTIVATE   Point the session back at the baseline root.
+%DEACTIVATE   Point the session back at the base root.
 %
 % Usage:
 %   mip deactivate
@@ -23,7 +23,7 @@ if ~isempty(varargin)
     error('mip:env:tooManyArgs', '"mip deactivate" takes no arguments.');
 end
 
-s = mip.env.active();
+s = mip.state.get_env_state();
 if isempty(s)
     fprintf('No environment is active\n');
     return
@@ -41,7 +41,7 @@ end
 % including the case where the environment was deleted out from under the
 % session.
 loaded = mip.state.key_value_get('MIP_LOADED_PACKAGES');
-if mip.paths.is_root(s.root) && any_swappable(loaded, runningMip)
+if mip.paths.is_valid_root(s.root) && any_swappable(loaded, runningMip)
     mip.unload('--all', '--force');
 end
 sweep_env_path_entries(s.root);
@@ -52,11 +52,11 @@ sweep_env_path_entries(s.root);
 reset_to_baseline(runningMip);
 
 % Restore the pointer and clear the activation state before reloading the
-% saved package set, so those loads resolve against the baseline root.
+% saved package set, so those loads resolve against the base root.
 setenv('MIP_ROOT', s.saved_mip_root);
 mip.state.key_value_set('MIP_ENV_STATE', []);
 
-fprintf('Deactivated environment: %s\n', mip.env.describe(s));
+fprintf('Deactivated environment: %s\n', mip.env.display_env(s));
 
 restore_saved_packages(s);
 
