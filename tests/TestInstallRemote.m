@@ -152,6 +152,31 @@ classdef TestInstallRemote < matlab.unittest.TestCase
                 'chebfun should be installed from core as bare-name dependency');
         end
 
+        %% --- Local install auto-installs missing channel deps (MEP 8 / #161) ---
+
+        function testInstallLocal_AutoInstallsChannelDeps(testCase)
+            % A local (editable) install whose mip.yaml declares a channel
+            % dependency auto-installs it, like remote installs do, as a
+            % transitive dependency (not directly installed).
+            srcParent = [tempname '_mip_localdep_src'];
+            mkdir(srcParent);
+            testCase.addTeardown(@() rmdir(srcParent, 's'));
+            srcDir = createTestSourcePackage(srcParent, 'localwithdep', ...
+                'dependencies', {'mip-org/test-channel1/alpha'});
+
+            mip.install('-e', srcDir);
+
+            alphaDir = fullfile(testCase.TestRoot, 'packages', ...
+                'gh', 'mip-org', 'test-channel1', 'alpha');
+            testCase.verifyTrue(exist(alphaDir, 'dir') > 0, ...
+                'alpha should be auto-installed as a dependency of the local package');
+            testCase.verifyTrue(mip.state.is_installed('local/localwithdep'));
+            directs = mip.state.get_directly_installed();
+            testCase.verifyTrue(ismember('local/localwithdep', directs));
+            testCase.verifyFalse(ismember('gh/mip-org/test-channel1/alpha', directs), ...
+                'The auto-installed dep must be transitive, not directly installed');
+        end
+
         %% --- Load from non-core channel ---
 
         function testLoadFromChannel_Basic(testCase)

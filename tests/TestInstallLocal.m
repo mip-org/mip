@@ -224,11 +224,60 @@ classdef TestInstallLocal < matlab.unittest.TestCase
             testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
         end
 
-        function testInstallLocal_MissingDependencyErrors(testCase)
+        function testInstallLocal_MissingNonChannelDependencyErrors(testCase)
+            % Missing channel deps are auto-installed (see the auto-dep
+            % tests below), but a non-channel dep (local/fex/web) cannot
+            % be fetched from a channel, so it still errors.
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'local/nonexistent_dep'});
+            testCase.verifyError(@() mip.install('-e', srcDir), ...
+                'mip:dependencyNotFound');
+        end
+
+        function testInstallLocal_MissingChannelDepNotInIndexErrors(testCase)
+            % A missing channel dep is resolved against the channel index;
+            % if the channel does not publish it, the install fails with
+            % the standard not-found error (and the package is not
+            % installed). Uses a synthetic empty core index so no network
+            % access happens.
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
             srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
                 'dependencies', {'nonexistent_dep'});
             testCase.verifyError(@() mip.install('-e', srcDir), ...
-                'mip:dependencyNotFound');
+                'mip:packageNotFound');
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            testCase.verifyFalse(exist(pkgDir, 'dir') > 0, ...
+                'Package must not be installed when its dep cannot be resolved');
+        end
+
+        function testInstallLocal_MissingChannelDepDownloadFailureErrors(testCase)
+            % The dep exists in the index but its download fails: the
+            % install errors and the local package is not installed.
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', { ...
+                struct('name', 'depx', ...
+                       'mhl_url', 'https://example.invalid/depx-1.0.0.mhl')});
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depx'});
+            testCase.verifyError(@() mip.install('-e', srcDir), ...
+                ?MException);
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            testCase.verifyFalse(exist(pkgDir, 'dir') > 0, ...
+                'Package must not be installed when its dep download fails');
+        end
+
+        function testInstallLocal_InstalledDepsNotReinstalled(testCase)
+            % Deps that are already installed are left alone: no channel
+            % index is consulted (an empty synthetic index would make any
+            % resolution attempt fail loudly here).
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'depA');
+            writeChannelIndex(testCase.TestRoot, 'mip-org/core', {});
+            srcDir = createTestSourcePackage(testCase.SourceDir, 'mypkg', ...
+                'dependencies', {'depA'});
+            output = evalc('mip.install(''-e'', srcDir)');
+            testCase.verifyFalse(contains(output, 'Installing missing dependencies'), ...
+                'No missing-dep install should run when deps are present');
+            pkgDir = fullfile(testCase.TestRoot, 'packages', 'local', 'mypkg');
+            testCase.verifyTrue(exist(pkgDir, 'dir') > 0);
         end
 
         function testInstallLocal_ShowsLoadHintWithBareName(testCase)

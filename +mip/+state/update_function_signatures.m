@@ -102,7 +102,8 @@ function json = build_signatures(installed, loadable, loaded, pinned)
 
     subcommands = {'install','update','uninstall','list','load','unload', ...
                    'pin','unpin','info','test','compile','bundle','init', ...
-                   'reset','avail','index','arch','root','version','help'};
+                   'reset','avail','index','arch','root','version','help', ...
+                   'env','activate','deactivate'};
 
     lines = {'{', '  "_schemaVersion": "1.0.0"'};
     for i = 1:numel(subcommands)
@@ -132,6 +133,9 @@ function sig = signature_for(cmd, installed, loadable, loaded, pinned, subcomman
             inputs{end+1} = pkg_arg(pinned);
         case 'help'
             inputs{end+1} = choices_arg('subcommand', 'ordered', subcommands);
+        case 'env'
+            inputs{end+1} = choices_arg('subcommand', 'ordered', ...
+                {'create','list','delete','activate','deactivate'});
         case 'install'
             inputs{end+1} = '{"name":"package","kind":"required","repeating":true,"type":["char"]}';
         case 'bundle'

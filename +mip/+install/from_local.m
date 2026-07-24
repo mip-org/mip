@@ -64,21 +64,47 @@ if exist(pkgDir, 'dir')
     return;
 end
 
-% Check dependencies are installed
+% Install any missing channel dependencies declared in mip.yaml, as
+% remote installs do. They are installed transitively (not marked
+% directly installed), so they can be pruned when no longer needed.
+% Non-channel dependencies (local/fex/web) cannot be fetched from a
+% channel, so a missing one is still an error.
+installedMissingDeps = false;
 if ~isempty(mipConfig.dependencies)
     fprintf('Dependencies: %s\n', strjoin(mipConfig.dependencies, ', '));
     missing = mip.dependency.find_missing(mipConfig.dependencies, fqn);
-    if ~isempty(missing)
+    nonChannel = missing(~startsWith(missing, 'gh/'));
+    if ~isempty(nonChannel)
         error('mip:dependencyNotFound', ...
               'Dependency "%s" is not installed. Install it first.', ...
-              mip.parse.display_fqn(missing{1}));
+              mip.parse.display_fqn(nonChannel{1}));
+    end
+    if ~isempty(missing)
+        missingDisplay = cellfun(@mip.parse.display_fqn, missing, 'UniformOutput', false);
+        fprintf('Installing missing dependencies: %s\n', strjoin(missingDisplay, ', '));
+        mip.install.from_repository(missing, '', false);
+        installedMissingDeps = true;
     end
 end
 
-if editable
-    installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile);
-else
-    installCopy(sourceDir, pkgDir, fqn);
+try
+    if editable
+        installEditable(sourceDir, mipConfig, pkgDir, fqn, noCompile);
+    else
+        installCopy(sourceDir, pkgDir, fqn);
+    end
+catch ME
+    % Dependencies installed above are transitive; with their dependent
+    % gone they are orphans, so prune them rather than leave them behind.
+    if installedMissingDeps
+        try
+            mip.state.prune_unused_packages();
+        catch pruneErr
+            warning('mip:rollbackFailed', ...
+                    'Rollback prune failed: %s', pruneErr.message);
+        end
+    end
+    rethrow(ME);
 end
 
 % Mark as directly installed
