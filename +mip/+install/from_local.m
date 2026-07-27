@@ -35,6 +35,9 @@ sourceDir = mip.paths.get_absolute_path(sourceDir);
 mipConfig = mip.config.read_mip_yaml(sourceDir);
 packageName = mipConfig.name;
 
+% No mip package may be installed into an environment (spec §14.7).
+mip.env.assert_no_mip(packageName, 'installed into');
+
 if isempty(mipConfig.version)
     displayVersion = 'unspecified';
 else

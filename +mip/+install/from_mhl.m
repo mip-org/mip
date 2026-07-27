@@ -37,6 +37,9 @@ function installedFqn = from_mhl(mhlSource, channel)
             fqn = mip.parse.make_mhl_fqn(packageName);
         end
 
+        % No mip package may be installed into an environment (spec §14.7).
+        mip.env.assert_no_mip(packageName, 'installed into');
+
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
             if useGhChannel
@@ -56,6 +59,17 @@ function installedFqn = from_mhl(mhlSource, channel)
         if exist(pkgDir, 'dir')
             fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
             mip.state.add_directly_installed(fqn);
+            return
+        end
+
+        % A .mhl may never create the core identity in a root the running
+        % mip does not manage: a fresh gh/mip-org/core/mip copy there
+        % would be a second, non-running mip on disk (spec §1.7.1).
+        if mip.self.is_identity(mip.parse.parse_package_arg(fqn)) && ~mip.self.is_own_root()
+            fprintf(['Refusing to install "%s": this root is not managed by the ' ...
+                     'running mip, so installing the core mip package here would ' ...
+                     'put a second, non-running mip on disk.\n'], ...
+                    mip.parse.display_fqn(fqn));
             return
         end
 

@@ -195,10 +195,12 @@ function install(varargin)
 
     % Handle repository packages
     installedFqns = {};
+    nRefused = 0;
 
     if ~isempty(repoPackages)
         try
-            installedFqns = [installedFqns, mip.install.from_repository(repoPackages, channel)];
+            [newFqns, nRefused] = mip.install.from_repository(repoPackages, channel);
+            installedFqns = [installedFqns, newFqns];
         catch ME
             hint = buildLocalDirHint(repoPackages);
             if ~isempty(hint)
@@ -216,8 +218,9 @@ function install(varargin)
         end
     end
 
-    % Summary
-    if isempty(installedFqns) && isempty(mhlSources)
+    % Summary. Requests the mip self/environment guards refused (with
+    % their own message) are not "already installed".
+    if isempty(installedFqns) && isempty(mhlSources) && nRefused == 0
         fprintf('\nAll packages already installed.\n');
     elseif ~isempty(installedFqns)
         fprintf('\nSuccessfully installed %d package(s).\n', length(installedFqns));

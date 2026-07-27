@@ -10,6 +10,12 @@ function uninstall(varargin)
 % This function uninstalls packages and then prunes any packages that
 % are no longer needed (packages that were installed as dependencies
 % but are not dependencies of any directly installed package).
+%
+% "mip uninstall mip" is the full teardown of mip and its root. It is
+% allowed only from a plain session on the main root: not while an
+% environment is active (deactivate first), not while another mip is
+% loaded (unload it first), and never for a standalone mip (the root is
+% never deleted in standalone mode).
 
     if nargin < 1
         error('mip:uninstall:noPackage', ...
@@ -26,9 +32,13 @@ function uninstall(varargin)
 
     packageArgs = varargin;
 
-    % Resolve all package arguments to FQNs
+    % Resolve all package arguments to FQNs. Arguments that name the self
+    % identity but resolve to nothing installed are tracked separately:
+    % the self-operation guards below decide how to report them (a plain
+    % "not installed" would be wrong for e.g. a standalone mip).
     notInstalled = {};
     resolvedPackages = {};
+    unresolvedSelf = false;
 
     for i = 1:length(packageArgs)
         arg = packageArgs{i};
@@ -46,7 +56,11 @@ function uninstall(varargin)
         else
             allMatches = mip.resolve.find_all_installed_by_name(result.name);
             if isempty(allMatches)
-                notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
+                if mip.name.match(result.name, 'mip')
+                    unresolvedSelf = true;
+                else
+                    notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
+                end
                 continue
             elseif length(allMatches) > 1
                 fprintf('Package name "%s" is ambiguous. It is installed in multiple channels:\n', result.name);
@@ -61,22 +75,64 @@ function uninstall(varargin)
         end
 
         if ~exist(pkgDir, 'dir')
-            notInstalled = [notInstalled, {arg}];
+            if mip.self.is_identity(mip.parse.parse_package_arg(fqn))
+                unresolvedSelf = true;
+            else
+                notInstalled = [notInstalled, {arg}];
+            end
         else
             resolvedPackages = [resolvedPackages, {fqn}];
         end
     end
 
-    % Self-uninstall: gh/mip-org/core/mip triggers full mip removal, but
-    % only when the active root is the root mip actually runs from. In any
-    % other root (an activated environment, or an external MIP_ROOT) the
-    % identity is an ordinary, inert package handled by the loop below, so
-    % the self flow can never delete an environment out from under the user.
-    if ismember('gh/mip-org/core/mip', resolvedPackages) && mip.self.is_own_root()
-        if uninstallSelf()
-            return
+    % Self-operation guards: gh/mip-org/core/mip names the main mip. Its
+    % uninstall — the full root teardown — is allowed only from a plain
+    % session on the main root with no other mip loaded (specification
+    % §1.7.1). In a standalone session the identity is at most an inert
+    % copy: uninstalling an installed copy proceeds as an ordinary
+    % package, and with none installed there is no teardown to run.
+    resolvedSelf = ismember('gh/mip-org/core/mip', resolvedPackages);
+    if resolvedSelf || unresolvedSelf
+        s = mip.self.op_state();
+        switch s.state
+            case 'ok'
+                if uninstallSelf()
+                    return
+                end
+                resolvedPackages = resolvedPackages(~strcmp(resolvedPackages, 'gh/mip-org/core/mip'));
+            case 'standalone'
+                if unresolvedSelf
+                    fprintf(['The running mip is standalone — not installed in the main ' ...
+                             'root — so there is no teardown to run; the root is never ' ...
+                             'deleted in standalone mode.\n' ...
+                             'To remove a standalone mip, delete its folder and remove ' ...
+                             'it from the MATLAB path.\n']);
+                end
+                % A resolved inert copy stays in the list and is
+                % uninstalled as an ordinary package below.
+            case 'env'
+                error('mip:self:envActive', ...
+                      ['Cannot uninstall the main mip while an environment is ' ...
+                       'active. Run "mip deactivate" first.']);
+            case 'mip-loaded'
+                blockers = cellfun(@mip.parse.display_fqn, s.blockers, 'UniformOutput', false);
+                error('mip:self:otherMipLoaded', ...
+                      ['Cannot uninstall the main mip while another mip is ' ...
+                       'loaded (%s). Run "mip unload %s" first.'], ...
+                      strjoin(blockers, ', '), blockers{end});
         end
-        resolvedPackages = resolvedPackages(~strcmp(resolvedPackages, 'gh/mip-org/core/mip'));
+    end
+
+    % A package whose code is currently running cannot be uninstalled
+    % while loaded (Scenario 13): removing it would pull the running
+    % mip's files out from under the session.
+    runningMip = mip.self.running_mip_fqn();
+    if ~isempty(runningMip) && ismember(runningMip, resolvedPackages) && ...
+            mip.state.is_loaded(runningMip)
+        error('mip:uninstall:runningMip', ...
+              ['Package "%s" provides the running mip and cannot be uninstalled ' ...
+               'while it is loaded. Run "mip unload %s" first.'], ...
+              mip.parse.display_fqn(runningMip), mip.parse.display_fqn(runningMip));
     end
 
     % Report packages that aren't installed

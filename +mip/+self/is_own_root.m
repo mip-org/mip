@@ -1,8 +1,9 @@
-function tf = is_own_root()
-%IS_OWN_ROOT   True when the active root is the root mip actually runs from.
+function tf = is_own_root(rootDir)
+%IS_OWN_ROOT   True when a root is the root mip actually runs from.
 %
 % Usage:
-%   tf = mip.self.is_own_root()
+%   tf = mip.self.is_own_root()           - Check the active root
+%   tf = mip.self.is_own_root(rootDir)    - Check a specific root
 %
 % The self flows — self-uninstall (which tears down the entire root) and
 % the self-update/self-install hot swap — must only trigger against the
@@ -13,17 +14,25 @@ function tf = is_own_root()
 % that root.
 %
 % The running mip is located via which('mip', '-all') — every mip.m
-% reachable on the MATLAB path — and the active root is mip's own root
+% reachable on the MATLAB path — and the checked root is mip's own root
 % when its gh/mip-org/core/mip package's source directory is among those
 % locations. An environment's copy is never on the path (mip load mip is
 % a no-op), so it never matches. Membership (rather than the single
 % which('mip') winner) keeps the check correct when something shadows
-% mip.m, e.g. the user's current folder. Returns false when the active
+% mip.m, e.g. the user's current folder. Returns false when the checked
 % root has no such package installed.
+%
+% With rootDir, the same check runs against that root instead of the
+% active one — mip.self.op_state uses this to test the base (main) root
+% while an environment is active.
 
 tf = false;
 
-pkgDir = mip.paths.get_package_dir('gh/mip-org/core/mip');
+if nargin < 1
+    pkgDir = mip.paths.get_package_dir('gh/mip-org/core/mip');
+else
+    pkgDir = fullfile(rootDir, 'packages', 'gh', 'mip-org', 'core', 'mip');
+end
 if ~isfolder(pkgDir)
     return
 end

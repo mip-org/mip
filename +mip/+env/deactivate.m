@@ -4,16 +4,17 @@ function deactivate(varargin)
 % Usage:
 %   mip deactivate
 %
-% Unloads everything the active environment had loaded (the running mip
-% excepted — gh/mip-org/core/mip, plus a loaded preview build of mip if
-% one is shadowing it; see mip.self.running_mip_fqn),
-% restores MIP_ROOT to its pre-activation value (which may be an
-% externally set custom root, or unset), and restores the saved package
-% set: each formerly loaded package goes back on the path with its prior
+% Unloads everything the active environment had loaded, restores
+% MIP_ROOT to its pre-activation value (which may be an externally set
+% custom root, or unset), and restores the saved package set: each
+% formerly loaded package goes back on the path with its prior
 % direct/sticky flags, in its prior load order, so path precedence is
-% exactly what it was before activation. Restoration is best-effort with
-% warnings (e.g. a package uninstalled meanwhile by another session
-% warns rather than aborts).
+% exactly what it was before activation. When a preview build of mip was
+% the running mip before activation, it spent the activation on the path
+% but not as a loaded package (see mip.env.activate); the restore makes
+% it a loaded package again — it was the running mip the whole time.
+% Restoration is best-effort with warnings (e.g. a package uninstalled
+% meanwhile by another session warns rather than aborts).
 %
 % Works even if the environment directory was deleted out from under the
 % session: path entries under the environment are swept rather than
@@ -120,8 +121,10 @@ function restore_saved_packages(s)
 % the list in order reproduces the original path precedence.
     for i = 1:length(s.saved_loaded)
         fqn = s.saved_loaded{i};
-        % The running mip stayed loaded through the whole activation, so
-        % it (like the core identity) needs no restoring.
+        % A running preview mip spent the activation on the path but not
+        % as a loaded package; it is not loaded here, so the replay below
+        % restores it (re-adding its paths is a no-op-like move-to-front)
+        % along with everything else.
         if strcmp(fqn, 'gh/mip-org/core/mip') || mip.state.is_loaded(fqn)
             continue
         end
