@@ -42,6 +42,12 @@ function update(varargin)
 % specifiers are not accepted: update always stays on the installed
 % version's branch or release stream. To switch to a different branch or
 % version, use "mip install <package>@<version>" instead.
+%
+% "mip update mip" updates mip itself, in place, with no restart. It is
+% allowed only from a plain session on the main root: not while an
+% environment is active (deactivate first), not while another mip is
+% loaded (unload it first), and not for a standalone mip (update the
+% standalone copy directly).
 
     if nargin < 1
         error('mip:update:noPackage', 'At least one package name is required for update command.');
@@ -87,16 +93,37 @@ function update(varargin)
         end
         % Pinned packages are always skipped, even with --force. To
         % update a pinned package, run "mip unpin <pkg>" first.
+        % Packages that the self guards would refuse (the main mip while
+        % it cannot be self-updated, or a loaded package providing the
+        % running mip) are skipped with a message rather than aborting
+        % the whole batch: no bulk operation ever errors on — or touches —
+        % running code.
+        selfState = mip.self.op_state();
+        runningMip = mip.self.running_mip_fqn();
         filtered = {};
+        nPinned = 0;
         for i = 1:length(allInstalled)
-            if mip.state.is_pinned(allInstalled{i})
-                fprintf('Skipping pinned package "%s".\n', mip.parse.display_fqn(allInstalled{i}));
+            fqn = allInstalled{i};
+            if mip.state.is_pinned(fqn)
+                nPinned = nPinned + 1;
+                fprintf('Skipping pinned package "%s".\n', mip.parse.display_fqn(fqn));
+            elseif strcmp(fqn, 'gh/mip-org/core/mip') && ...
+                    any(strcmp(selfState.state, {'env', 'mip-loaded'}))
+                fprintf('Skipping "%s": the main mip cannot be updated in this state (see "mip update mip").\n', ...
+                        mip.parse.display_fqn(fqn));
+            elseif ~isempty(runningMip) && strcmp(fqn, runningMip) && mip.state.is_loaded(fqn)
+                fprintf('Skipping "%s": it provides the running mip. Run "mip unload %s" first.\n', ...
+                        mip.parse.display_fqn(fqn), mip.parse.display_fqn(fqn));
             else
-                filtered{end+1} = allInstalled{i}; %#ok<AGROW>
+                filtered{end+1} = fqn; %#ok<AGROW>
             end
         end
         if isempty(filtered)
-            fprintf('All packages are pinned. Nothing to update.\n');
+            if nPinned == length(allInstalled)
+                fprintf('All packages are pinned. Nothing to update.\n');
+            else
+                fprintf('Nothing to update.\n');
+            end
             return
         end
         args = filtered;
@@ -163,6 +190,11 @@ function update(varargin)
                 case 'no-source-skip'
                     fprintf('Skipping "%s": no local source to update from.\n', ...
                             mip.parse.display_fqn(it.pkg.fqn));
+                case 'standalone-skip'
+                    fprintf(['The running mip is standalone — not installed in the main ' ...
+                             'root — so mip does not manage its own files here.\n' ...
+                             'Update the standalone copy itself (pull the checkout, or ' ...
+                             'download a new copy).\n']);
                 case 'self-update'
                     updateSelf(it.pkg, opts.force);
                 case 'process'
@@ -204,14 +236,17 @@ end
 
 function item = classifyArg(packageArg)
 % Classify a single argument into one of:
-%   - pin-skip       : installed and pinned (named-explicit only; --all
-%                      pre-filters, so reaching this branch implies the
-%                      user named the package explicitly)
-%   - self-update    : the gh/mip-org/core/mip identity
-%   - no-source-skip : local install with no recoverable source path
-%   - process        : full update lifecycle should run
+%   - pin-skip        : installed and pinned (named-explicit only; --all
+%                       pre-filters, so reaching this branch implies the
+%                       user named the package explicitly)
+%   - self-update     : the gh/mip-org/core/mip identity, updatable here
+%   - standalone-skip : the identity targeted while the running mip is
+%                       standalone (not installed in the main root)
+%   - no-source-skip  : local install with no recoverable source path
+%   - process         : full update lifecycle should run
 %
-% Validation errors (not installed, missing source dir) are raised here.
+% Validation errors (not installed, missing source dir, self-op guards)
+% are raised here, before any destructive action.
 %
 % The pin check resolves silently against installed packages — if the
 % package is not installed, we fall through to resolvePackage so the
@@ -223,15 +258,58 @@ function item = classifyArg(packageArg)
         return
     end
 
+    % Self-operation guards: updating the main mip is allowed only from a
+    % plain session on the main root with no other mip loaded (see
+    % specification §1.7.1). The identity is targeted by its FQN, or by a
+    % bare "mip" that resolves to nothing installed (in the main root the
+    % core mip is always installed, so an unresolved bare "mip" can only
+    % mean the main mip in a root that does not hold it).
+    parsed = mip.parse.parse_package_arg(packageArg);
+    targetsIdentity = (~isempty(r) && strcmp(r.fqn, 'gh/mip-org/core/mip')) || ...
+        (isempty(r) && (mip.self.is_identity(parsed) || ...
+                        (~parsed.is_fqn && mip.name.match(parsed.name, 'mip'))));
+    if targetsIdentity
+        s = mip.self.op_state();
+        switch s.state
+            case 'ok'
+                item = struct('kind', 'self-update', 'pkg', resolvePackage(packageArg));
+                return
+            case 'standalone'
+                % No copy in this root: nothing to update; report why
+                % (Scenario 14). With an inert copy installed here, fall
+                % through — it is an ordinary remote package (its unload
+                % step never applies; it is never loaded).
+                if isempty(r)
+                    item = struct('kind', 'standalone-skip');
+                    return
+                end
+            case 'env'
+                error('mip:self:envActive', ...
+                      ['Cannot update the main mip while an environment is ' ...
+                       'active. Run "mip deactivate" first.']);
+            case 'mip-loaded'
+                blockers = cellfun(@mip.parse.display_fqn, s.blockers, 'UniformOutput', false);
+                error('mip:self:otherMipLoaded', ...
+                      ['Cannot update the main mip while another mip is ' ...
+                       'loaded (%s). Run "mip unload %s" first.'], ...
+                      strjoin(blockers, ', '), blockers{end});
+        end
+    end
+
     p = resolvePackage(packageArg);
-    % The self-update hot swap only applies when the active root is the
-    % root mip actually runs from. Elsewhere (an activated environment, or
-    % an external MIP_ROOT) the identity is an ordinary package: its copy
-    % is updated through the normal replace path without touching the
-    % running mip.
-    if strcmp(p.fqn, 'gh/mip-org/core/mip') && mip.self.is_own_root()
-        item = struct('kind', 'self-update', 'pkg', p);
-    elseif p.noSource
+
+    % A package whose code is currently running cannot be updated while
+    % loaded (Scenario 13): replacing it would pull the running mip's
+    % files out from under the session.
+    runningMip = mip.self.running_mip_fqn();
+    if ~isempty(runningMip) && strcmp(p.fqn, runningMip) && mip.state.is_loaded(p.fqn)
+        error('mip:update:runningMip', ...
+              ['Package "%s" provides the running mip and cannot be updated ' ...
+               'while it is loaded. Run "mip unload %s" first.'], ...
+              mip.parse.display_fqn(p.fqn), mip.parse.display_fqn(p.fqn));
+    end
+
+    if p.noSource
         item = struct('kind', 'no-source-skip', 'pkg', p);
     else
         item = struct('kind', 'process', 'pkg', p);

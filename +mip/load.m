@@ -98,10 +98,25 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
 
     matched = {};
 
+    % Non-core mip packages may never be loaded from an environment (spec
+    % §14.7). Checked before resolution so the refusal does not depend on
+    % whether the package happens to be installed in the environment.
+    parsedArg = mip.parse.parse_package_arg(packageArg);
+    if parsedArg.is_fqn && ~mip.self.is_identity(parsedArg)
+        mip.env.assert_no_mip(parsedArg.name, 'loaded from');
+    end
+
     % Resolve the FQN for this package, installing first if requested
     try
         fqn = resolveToFqn(packageArg);
     catch ME
+        if strcmp(ME.identifier, 'mip:packageNotFound') && targetsAlwaysLoadedMip(parsedArg)
+            % The running mip need not be installed in the active root (an
+            % environment, a standalone session): loading it is still the
+            % always-loaded no-op, never a "not installed" error.
+            fprintf('Package "mip" is always loaded\n');
+            return
+        end
         if installIfMissing && strcmp(ME.identifier, 'mip:packageNotFound')
             fprintf('Package "%s" is not installed. Installing...\n', packageArg);
             if ~isempty(channel)
@@ -120,6 +135,11 @@ function matched = loadSingle(packageArg, installIfMissing, stickyPackage, chann
         fprintf('Package "mip" is always loaded\n');
         return
     end
+
+    % No mip package may be loaded from an environment (spec §14.7); this
+    % also catches a bare name resolving to an installed mip package.
+    parsedFqn = mip.parse.parse_package_arg(fqn);
+    mip.env.assert_no_mip(parsedFqn.name, 'loaded from');
 
     displayFqn = mip.parse.display_fqn(fqn);
 
@@ -348,6 +368,15 @@ function applyPathAdjustments(packageDir, addPathRels, rmPathRels)
         rmpath(target);
         fprintf('  -rmpath %s\n', target);
     end
+end
+
+function tf = targetsAlwaysLoadedMip(parsedArg)
+% True when an unresolvable argument names the running mip: the core
+% identity FQN, or a bare "mip" that matched no installed package (in a
+% root holding a package named mip, the bare name resolves to it and
+% never reaches this check).
+    tf = mip.self.is_identity(parsedArg) || ...
+         (~parsedArg.is_fqn && mip.name.match(parsedArg.name, 'mip'));
 end
 
 function fqn = resolveToFqn(packageArg)

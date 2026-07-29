@@ -11,11 +11,15 @@ function activate(varargin)
 % and restored by mip deactivate) and swaps the session's load state with
 % it: everything loaded — including sticky packages — is unloaded via the
 % normal unload machinery, and the session starts cold in the new
-% environment. Only the running mip stays: gh/mip-org/core/mip, plus the
-% loaded package actually providing the running mip code when that is a
-% different one, e.g. a preview build loaded over the released mip (see
-% mip.self.running_mip_fqn). Child processes spawned from the session
-% inherit the active environment.
+% environment. The code of the running mip never leaves the MATLAB path:
+% gh/mip-org/core/mip stays loaded and sticky as always, and when a
+% different loaded package provides the running mip code (e.g. a preview
+% build loaded over the released mip, see mip.self.running_mip_fqn) its
+% path entries are kept — it keeps running commands — but it is dropped
+% from the loaded-package lists for the duration of the activation: it is
+% on the path, unmanaged, and becomes a loaded package again on
+% deactivation. Child processes spawned from the session inherit the
+% active environment.
 %
 % Activation is exclusive (one env at a time; activating another env
 % deactivates the current one first) and never installs or executes
@@ -97,6 +101,17 @@ if any_swappable(saved.saved_loaded, saved.running_mip)
     mip.unload('--all', '--force');
 end
 
+% The bulk unload spared the package providing the running mip so its
+% code never left the path. Inside the environment it is not a loaded
+% package, though: drop it from the session lists (its paths stay, so it
+% keeps running commands), and let deactivation restore it as a loaded
+% package from the saved state.
+if ~isempty(saved.running_mip)
+    mip.state.key_value_remove('MIP_LOADED_PACKAGES', saved.running_mip);
+    mip.state.key_value_remove('MIP_DIRECTLY_LOADED_PACKAGES', saved.running_mip);
+    mip.state.key_value_remove('MIP_STICKY_PACKAGES', saved.running_mip);
+end
+
 setenv('MIP_ROOT', targetAbs);
 ensure_session_baseline();
 mip.state.key_value_set('MIP_ENV_STATE', saved);
@@ -119,9 +134,9 @@ function tf = any_swappable(loaded, runningMip)
 end
 
 function ensure_session_baseline()
-% The usual session baseline: mip always loaded and sticky. The swap
-% above already reduced the lists to the running mip with its flags
-% preserved, so only the core identity needs ensuring here.
+% The usual session baseline: mip always loaded and sticky. The swap and
+% running-mip drop above already reduced the lists to (at most) the core
+% identity, so only that needs ensuring here.
     mip.state.key_value_append('MIP_LOADED_PACKAGES', 'gh/mip-org/core/mip');
     mip.state.key_value_append('MIP_STICKY_PACKAGES', 'gh/mip-org/core/mip');
 end

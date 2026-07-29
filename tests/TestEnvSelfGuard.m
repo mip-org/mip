@@ -53,9 +53,12 @@ classdef TestEnvSelfGuard < matlab.unittest.TestCase
         end
 
         function testUninstallMipInsideEnvIsOrdinary(testCase)
-            % Inside an activated env, `mip uninstall mip` removes the
-            % env's inert copy; the env root survives and no confirmation
-            % runs (MIP_CONFIRM=no would abort a self-uninstall).
+            % The session here is standalone (the test root does not run
+            % the session's mip), which takes precedence over the active
+            % env (spec §1.7.1): an inert copy of the identity in the
+            % active root is uninstalled as an ordinary package; the env
+            % root survives and no confirmation runs (MIP_CONFIRM=no
+            % would abort a self-uninstall).
             evalc('mip.env(''create'', ''scratch'')');
             evalc('mip.env(''activate'', ''scratch'')');
             testCase.addTeardown(@() evalc('mip.env(''deactivate'')'));
@@ -74,15 +77,17 @@ classdef TestEnvSelfGuard < matlab.unittest.TestCase
         end
 
         function testUninstallMipInsideEnvNotInstalled(testCase)
-            % With no copy in the env, `mip uninstall mip` reports "not
-            % installed" rather than touching anything.
+            % With no copy anywhere, `mip uninstall mip` explains the
+            % standalone situation (spec §1.7.1 — the standalone state
+            % wins over the active env) rather than touching anything.
             evalc('mip.env(''create'', ''scratch'')');
             evalc('mip.env(''activate'', ''scratch'')');
             testCase.addTeardown(@() evalc('mip.env(''deactivate'')'));
             envRoot = mip.state.get_env_state().root;
 
             output = evalc('mip.uninstall(''mip'')');
-            testCase.verifyTrue(contains(output, 'not installed'));
+            testCase.verifyTrue(contains(output, 'standalone'));
+            testCase.verifyTrue(contains(output, 'no teardown'));
             testCase.verifyTrue(mip.paths.is_valid_root(envRoot));
         end
 
