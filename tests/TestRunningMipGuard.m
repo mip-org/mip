@@ -112,6 +112,10 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
         end
 
         function testPreviewSurvivesActivationRoundTrip(testCase)
+            % Scenarios 18/21: across activation the preview's code stays
+            % on the path — it remains the running mip — but it is not a
+            % loaded package inside the environment; deactivation restores
+            % it as a loaded package with its prior flags.
             srcDir = testCase.loadPreviewMip('labs');
             pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'other');
             otherSrc = fullfile(pkgDir, 'other');
@@ -120,9 +124,10 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
             evalc('mip.env(''create'', ''scratch'')');
             evalc('mip.env(''activate'', ''scratch'')');
 
-            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
-                'The preview must survive the activation swap');
-            testCase.verifyTrue(ismember(srcDir, strsplit(path, pathsep)));
+            testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
+                'Inside the env the preview is not a loaded package');
+            testCase.verifyTrue(ismember(srcDir, strsplit(path, pathsep)), ...
+                'but its code stays on the path — it is still the running mip');
             testCase.verifyFalse(mip.state.is_loaded('gh/mip-org/core/other'), ...
                 'Everything else still swaps out');
             testCase.verifyFalse(ismember(otherSrc, strsplit(path, pathsep)));
@@ -130,16 +135,18 @@ classdef TestRunningMipGuard < matlab.unittest.TestCase
             s = mip.state.get_env_state();
             testCase.verifyEqual(s.running_mip, 'gh/mip-org/labs/mip');
 
-            % A bulk unload inside the env also spares it (detection uses
-            % the activation-time value; the preview is not installed in
-            % the env).
+            % A bulk unload inside the env never touches its path entries
+            % (it is not a loaded package; detection uses the
+            % activation-time value).
             evalc('mip.unload(''--all'', ''--force'')');
-            testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'));
+            testCase.verifyTrue(ismember(srcDir, strsplit(path, pathsep)));
 
             evalc('mip.env(''deactivate'')');
 
             testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/labs/mip'), ...
-                'The preview must survive deactivation');
+                'Deactivation restores the preview as a loaded package');
+            testCase.verifyTrue(mip.state.is_directly_loaded('gh/mip-org/labs/mip'), ...
+                'with its prior direct flag');
             testCase.verifyTrue(ismember(srcDir, strsplit(path, pathsep)));
             testCase.verifyTrue(mip.state.is_loaded('gh/mip-org/core/other'), ...
                 'The saved package set is restored');

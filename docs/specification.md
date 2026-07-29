@@ -103,15 +103,36 @@ These are addressed by the source-type prefix directly; no `<owner>/<channel>` i
 
 ### 1.7 The `gh/mip-org/core/mip` Identity
 
-The package `gh/mip-org/core/mip` is the package manager itself. It has special protections:
+The package `gh/mip-org/core/mip` is the package manager itself. Installed in the **main root** — the root in effect at MATLAB startup: the folder pointed to by `MIP_ROOT` if it was set then, otherwise the root mip was bootstrapped into — it is the **main mip**. It has special protections:
 
 - It is **always** marked as loaded and sticky when any `mip` command runs.
 - It **cannot** be unloaded via `mip unload` (raises `mip:cannotUnloadMip`).
 - It survives `mip unload --all --force`.
 - It is never pruned during dependency pruning.
-- `mip uninstall mip-org/core/mip` triggers a full self-uninstall (see [§6.4](#64-self-uninstall-mip-uninstall-mip)) rather than an ordinary package removal — but only when the active root is the root mip actually runs from (see [§14.7](#147-mip-itself-and-environments)). In any other active root (an activated environment, or an external `MIP_ROOT`), the identity is an ordinary, inert package.
+- `mip load mip` is always the "always loaded" no-op — including in a root that holds no copy of the package (an activated environment, or a standalone session), where the argument resolves to nothing installed ([§4.1](#41-basic-load-mip-load-package)).
+- `mip uninstall mip-org/core/mip` triggers a full self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)), `mip update mip` the in-place self-update ([§7.7](#77-self-update-mip-update-mip)), and `mip install mip-org/core/mip@<version>` the in-place version switch ([§3.1.7](#317-already-installed-behavior)) — all subject to the self-operation preconditions of [§1.7.1](#171-self-operation-preconditions).
 
-**Important**: These protections apply **only** to the exact canonical FQN `gh/mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`) or any `local/mip` or `fex/mip` is treated as a normal package. The match is by name equivalence (see [§1.8](#18-name-equivalence)), so any case variant of `mip` under `gh/mip-org/core/` refers to the same protected identity.
+**Important**: These protections apply **only** to the exact canonical FQN `gh/mip-org/core/mip`. A package named `mip` on any other channel (e.g., `mylab/custom/mip`) or any `local/mip` or `fex/mip` is treated as a normal package — except for the rules that deliberately cover every mip by name: no mip may be installed into or loaded from an environment ([§14.7](#147-mip-itself-and-environments)), any loaded mip blocks self operations on the main mip ([§1.7.1](#171-self-operation-preconditions)), and the loaded package providing the running mip cannot be updated or uninstalled ([§1.7.1](#171-self-operation-preconditions)). The identity match is by name equivalence (see [§1.8](#18-name-equivalence)), so any case variant of `mip` under `gh/mip-org/core/` refers to the same protected identity.
+
+#### 1.7.1 Self-Operation Preconditions
+
+The **self operations** — `mip update mip` ([§7.7](#77-self-update-mip-update-mip)), `mip uninstall mip` ([§6.4](#64-self-uninstall-mip-uninstall-mip)), and `mip install mip@<version>` ([§3.1.7](#317-already-installed-behavior)) — act on the main mip's own files. They are allowed only from the state mip was installed in: a plain session on the main root. [`mip.self.op_state`](../+mip/+self/op_state.m) classifies the session into one of four states:
+
+| State | Meaning | Self operations |
+|---|---|---|
+| `ok` | The active root is the main root, the running mip is the copy installed there, no environment is active, and no other mip is loaded. | Proceed. |
+| `standalone` | The running mip is not installed in the main root: a standalone checkout or download on the path (with `MIP_ROOT` naming the root, [§11.5](#115-mip_root-environment-variable)), or an external `MIP_ROOT` pointing away from the root mip was bootstrapped into. | Refused with a **message** (not an error): mip does not manage its own files here. A standalone mip is updated or removed by updating or deleting the standalone copy itself; the root is never deleted in standalone mode. |
+| `env` | An environment is active (and the main mip is running). | Refused with error `mip:self:envActive`, telling the user to `mip deactivate` first. |
+| `mip-loaded` | Another mip is loaded: any loaded package named `mip` (name equivalence, [§1.8](#18-name-equivalence)) other than the core identity, plus the loaded package providing the running `mip` code ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) even if named differently. | Refused with error `mip:self:otherMipLoaded`, telling the user to `mip unload` it first. |
+
+The states are checked in this order: `standalone` wins over `env` (deactivating would not make the main mip manageable), and `env` over `mip-loaded`. Equivalently: **the main mip may be updated, uninstalled, or version-switched only when the active root is the main root and no other mip is loaded.** Operations on the main mip happen from the state it was installed in — a plain session on the main root — and nowhere else.
+
+Related rules:
+
+- **Running code is never replaced or removed.** `mip update` / `mip uninstall` of the loaded package providing the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) is refused with `mip:update:runningMip` / `mip:uninstall:runningMip`, telling the user to `mip unload` it first. Once unloaded it is an ordinary package again.
+- **Inert copies stay ordinary.** In the `standalone` state, an installed copy of the identity in the active root (a leftover from before these rules — `mip install` no longer creates one, [§3.1.7](#317-already-installed-behavior)) remains an ordinary package: `mip uninstall mip` removes it and `mip update mip` replaces it via the normal staging path, with the unload step skipped (the copy is never on the path). The message-refusals above apply when no copy is installed, where the command would otherwise have nothing to act on.
+- **Bulk operations skip, never error.** `mip update --all` drops the identity (in states `env` / `mip-loaded`) and the loaded running mip from the batch with a "Skipping" message ([§7.1](#71-update-flow-mip-update-x-y-z)).
+- **The self-update notice follows the same gate.** It is printed only in the `ok` state ([§11.8](#118-core-channel-mip-self-update-notice)).
 
 ### 1.8 Name Equivalence
 
@@ -345,6 +366,14 @@ If a package is already installed, `mip install` prints a message and skips it. 
 
 **Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package) and prints `Replacing "<name>" <old> with requested version <new>...`. The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place.
 
+**mip itself.** The identity `gh/mip-org/core/mip` never goes through the unload/replace path above — it is the running code, and `mip unload` refuses it. `mip install mip` when mip is already installed is the usual already-installed no-op. `mip install mip@<version>` with a version that differs from the installed one performs the same in-place hot swap as the self-update ([§7.7](#77-self-update-mip-update-mip), via [`mip.self.hot_swap`](../+mip/+self/hot_swap.m)): the installed files in the main root are replaced with the requested version and the session continues on it, no restart and no change to the saved path. This works in both directions — it is also how mip is downgraded. The self-operation preconditions of [§1.7.1](#171-self-operation-preconditions) apply, checked per argument before any index is fetched:
+
+- `standalone`: refused with a message and dropped from the batch (other requested packages still install). Installing the core identity into a root the running mip does not manage would put a second, non-running mip on disk. The same refusal applies to a `.mhl` install that would create the identity in such a root ([§3.3](#33-installation-from-mhl-file)).
+- `env`: raises `mip:self:envActive` when a version was requested (the deactivated session could honor it), `mip:env:noMip` otherwise. No mip package of any kind may be installed into an environment ([§14.7](#147-mip-itself-and-environments)).
+- `mip-loaded`: a version switch raises `mip:self:otherMipLoaded`; a versionless request falls through to the already-installed no-op.
+
+A bare `mip` argument counts as the identity here unless `--channel` redirects it to a non-core channel; FQN arguments count exactly when they name `gh/mip-org/core`.
+
 #### 3.1.8 Multiple Packages
 
 `mip install pkg1 pkg2 pkg3` installs all listed packages and their combined dependencies in a single operation.
@@ -357,6 +386,8 @@ An argument is treated as a local install only when it begins with `~`, `.`, `/`
 - If the directory does not contain `mip.yaml`, mip prompts the user (`Auto-generate mip.yaml? (y/n):`) to auto-generate one via `mip init`. On `y`/`yes` (case-insensitive), init runs and the install continues. Otherwise, raises `mip:install:abortedNoMipYaml` and no install work is done. The `MIP_CONFIRM` environment variable overrides the prompt for non-interactive use: a value of `y` or `yes` (case-insensitive) auto-confirms; any other non-empty value declines. An unset or empty `MIP_CONFIRM` is ignored and the interactive prompt runs as usual. This applies to both editable and non-editable local installs.
 
 Bare names without a path prefix are **never** dispatched to local install, even if a directory of the same name exists in the current folder ([§3.0](#30-argument-categorization), [#107](https://github.com/mip-org/mip/issues/107)).
+
+While an environment is active, a local directory whose `mip.yaml` names the package `mip` (name equivalence, [§1.8](#18-name-equivalence)) is refused with `mip:env:noMip` — no mip may be installed into an environment ([§14.7](#147-mip-itself-and-environments)). This applies to copy and editable installs alike, and to URL installs, which share the local-install path ([§3.4](#34-installation-from-a-remote-zip-url)).
 
 #### 3.2.1 Non-Editable (Copy) Install
 
@@ -415,6 +446,8 @@ If the package is already installed at `local/<name>`, prints a message and retu
 5. Move extracted files into place. With **no** `--channel`, the package lands under `<root>/packages/mhl/<name>/` (FQN `mhl/<name>`). Placing channel-less `.mhl` installs under their own `mhl/` source type keeps a `.mhl` from an arbitrary path or URL from masquerading as a member of the default core channel.
 6. Passing `--channel <owner>/<channel>` opts in to gh-channel placement instead: the package lands under `<root>/packages/gh/<owner>/<channel>/<name>/` (FQN `gh/<owner>/<channel>/<name>`). There is **no** default-to-`mip-org/core` behavior here — omitting `--channel` selects `mhl/`, not the core channel.
 7. Mark the top-level `.mhl` package as directly installed.
+
+While an environment is active, a `.mhl` whose package name is `mip` (name equivalence, [§1.8](#18-name-equivalence)) is refused with `mip:env:noMip` ([§14.7](#147-mip-itself-and-environments)). A `.mhl` that would freshly create the core identity (`--channel mip-org/core` with a package named `mip`) in a root the running mip does not manage is refused with a message ([§1.7.1](#171-self-operation-preconditions)) — a fresh copy there would be a second, non-running mip on disk.
 
 ### 3.4 Installation from a Remote `.zip` URL
 
@@ -477,7 +510,7 @@ Validation happens *before* extraction so that a malicious entry can never write
 ### 4.1 Basic Load (`mip load <package>`)
 
 1. Resolve the package argument to an FQN (see section 2.4.1 for bare name resolution).
-2. If the FQN is `mip-org/core/mip`, print "always loaded" and return.
+2. If the FQN is `mip-org/core/mip`, print "always loaded" and return. The same no-op applies when the argument names the identity but resolves to nothing installed — the identity FQN, or a bare `mip` matching no installed package, in a root holding no copy (an activated environment, a standalone session): loading the running mip is never a "not installed" error. While an environment is active, loading any **other** package named `mip` (name equivalence, [§1.8](#18-name-equivalence)) is refused with `mip:env:noMip` — checked for FQN arguments before resolution, so the refusal does not depend on the package being installed, and again after bare-name resolution ([§14.7](#147-mip-itself-and-environments)).
 3. Check for circular dependencies in the loading stack.
 4. Look up the package directory. If it doesn't exist, raise `mip:packageNotFound`.
 5. If already loaded:
@@ -602,7 +635,7 @@ When multiple loaded packages share the same bare name:
 
 #### 5.4.1 The Running mip Is Never Bulk-Unloaded
 
-Bulk unloads never pull the running mip off the path. The running mip is `gh/mip-org/core/mip`, **plus** the loaded package actually providing the running `mip` code when that is a different one — e.g. a preview build (`gh/mip-org/labs/mip`) installed and loaded over the released mip. Detection is via [`mip.self.running_mip_fqn`](../+mip/+self/running_mip_fqn.m): the `which('mip', '-all')` locations are walked in path (precedence) order, and the first one lying inside a loaded package's source tree identifies that package as the provider — so if several loaded packages ship a `mip.m`, the most recently loaded copy (the one that wins shadowing) is the provider, and locations belonging to no loaded package (e.g. a `mip.m` in the user's current folder) are skipped. While an environment is active, the value detected at activation time is used ([§14.4](#144-activation-mip-activate--mip-deactivate)). The exemption covers `mip unload --all` (both forms), `mip reset`, the environment activation/deactivation swap, and dependency pruning ([§5.5](#55-dependency-pruning-after-unload)). Explicitly naming a preview build (`mip unload mip-org/labs/mip`) still unloads it — that is how a preview is exited. Only the core identity gets the stronger protections (cannot be unloaded at all, always sticky).
+Bulk unloads never pull the running mip off the path. The running mip is `gh/mip-org/core/mip`, **plus** the loaded package actually providing the running `mip` code when that is a different one — e.g. a preview build (`gh/mip-org/labs/mip`) installed and loaded over the released mip. Detection is via [`mip.self.running_mip_fqn`](../+mip/+self/running_mip_fqn.m): the `which('mip', '-all')` locations are walked in path (precedence) order, and the first one lying inside a loaded package's source tree identifies that package as the provider — so if several loaded packages ship a `mip.m`, the most recently loaded copy (the one that wins shadowing) is the provider, and locations belonging to no loaded package (e.g. a `mip.m` in the user's current folder) are skipped. While an environment is active, the value detected at activation time is used ([§14.4](#144-activation-mip-activate--mip-deactivate)). The exemption covers `mip unload --all` (both forms), `mip reset`, the environment activation/deactivation swap (where the spared provider's path entries are kept but the package is dropped from the loaded lists for the duration of the environment — [§14.4](#144-activation-mip-activate--mip-deactivate)), and dependency pruning ([§5.5](#55-dependency-pruning-after-unload)). Explicitly naming a preview build (`mip unload mip-org/labs/mip`) still unloads it — that is how a preview is exited. A loaded provider additionally cannot be updated or uninstalled at all ([§1.7.1](#171-self-operation-preconditions)). Only the core identity gets the stronger protections (cannot be unloaded at all, always sticky).
 
 ### 5.5 Dependency Pruning After Unload
 
@@ -653,14 +686,19 @@ A loaded native binary keeps its file open for the life of the MATLAB process. O
 1. Resolve each argument to an FQN:
    - FQN arguments: used directly.
    - Bare names: uses `find_all_installed_by_name` (section 2.4.3). If ambiguous, refuses.
-2. If `mip-org/core/mip` is among the resolved packages **and the active root is the root mip actually runs from** ([`mip.self.is_own_root`](../+mip/+self/is_own_root.m); see [§14.7](#147-mip-itself-and-environments)), dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). When the active root is some other root (an activated environment, an external `MIP_ROOT`), the identity stays in the list and is uninstalled as an ordinary package — except that the unload step is skipped for it (its copy there is inert and never on the path; `mip unload` would refuse the identity anyway). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
-3. Walk the resolved packages in argument order, running each package's full lifecycle before moving on to the next. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next:
+2. If the self identity `gh/mip-org/core/mip` is targeted — resolved among the arguments, or named without resolving to anything installed (the identity FQN, or a bare `mip` matching no installed package) — apply the self-operation preconditions ([§1.7.1](#171-self-operation-preconditions)):
+   - `ok`: dispatch to the self-uninstall flow ([§6.4](#64-self-uninstall-mip-uninstall-mip)). If the user confirms, that flow tears down the entire mip root (removing all installed packages along with mip itself) and returns; no further per-package processing happens. If the user declines, `mip-org/core/mip` is dropped from the list and normal uninstallation continues for any other packages.
+   - `standalone`: an installed inert copy in the active root stays in the list and is uninstalled as an ordinary package — except that the unload step is skipped for it (the copy is never on the path; `mip unload` would refuse the identity anyway). With no copy installed, a message explains that there is no teardown to run — the root is never deleted in standalone mode — and that a standalone mip is removed by deleting the copy and removing it from the MATLAB path.
+   - `env`: raises `mip:self:envActive` — run `mip deactivate` first.
+   - `mip-loaded`: raises `mip:self:otherMipLoaded` — run `mip unload` of the other mip first.
+3. If any resolved package is the loaded package providing the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)), raise `mip:uninstall:runningMip`: running code is never removed; the package must be unloaded first ([§1.7.1](#171-self-operation-preconditions)).
+4. Walk the resolved packages in argument order, running each package's full lifecycle before moving on to the next. The per-package output for one package therefore appears as a contiguous block, not interleaved with the next:
    - Unload it if it is currently loaded (which also clears its MEX, [§5.10](#510-mex-unloading-on-unload)).
    - Remove its directory via the robust trash-based removal ([§11.7](#117-robust-directory-removal-and-the-trash-area)). A removal that cannot even move the directory aside raises `mip:uninstallFailed`.
    - Remove it from `directly_installed.txt`.
    - Clear its pin entry, if any (so a reinstall starts unpinned -- see [§7.11](#711-pinned-packages)).
    - Clean up empty parent directories (channel dir, then owner dir).
-4. After the per-package walk, **prune** packages that are no longer needed and check for broken dependencies among the remaining installed packages. These two operations are batched at the end because they depend on the post-uninstall on-disk state of every package in the batch.
+5. After the per-package walk, **prune** packages that are no longer needed and check for broken dependencies among the remaining installed packages. These two operations are batched at the end because they depend on the post-uninstall on-disk state of every package in the batch.
 
 ### 6.2 Dependency Pruning After Uninstall
 
@@ -682,7 +720,7 @@ Using an FQN bypasses this check entirely.
 
 ### 6.4 Self-Uninstall (`mip uninstall mip`)
 
-When `mip-org/core/mip` is among the resolved uninstall targets **and** the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)), the command delegates to a self-uninstall flow:
+When `mip-org/core/mip` is among the resolved uninstall targets **and** the self-operation state is `ok` ([§1.7.1](#171-self-operation-preconditions) — the active root is the main root, the main mip is running, no environment is active, no other mip is loaded), the command delegates to a self-uninstall flow:
 
 1. Print a warning describing what will happen (remove mip from the saved MATLAB path, unload and delete all installed packages, delete the mip root directory).
 2. Prompt the user for confirmation (`y`/`yes` to proceed). The prompt is skipped if the environment variable `MIP_CONFIRM` is set.
@@ -703,13 +741,15 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 ### 7.1 Update Flow (`mip update X Y Z`)
 
 1. Parse `--force`, `--all`, `--deps`, and `--no-compile` flags. Any named argument carrying an `@version` suffix raises `mip:update:versionNotAllowed` — update always stays on the installed version's branch or release stream (see [§7.1.1](#711-target-version-selection-for-update)); switching to a different branch or version requires an explicit `mip install X@<version>`.
-2. If `--all` is specified, expand the argument list to all installed packages, then drop any pinned packages from the batch (a "Skipping pinned package" message is printed for each). `--force` does **not** override the pin filter (see [§7.11](#711-pinned-packages)). If every installed package is pinned, a message is printed and `mip update --all` returns without error. Otherwise (no `--all`), drop any explicitly named pinned packages from the batch with a "Skipping pinned package" message; the unpinned named packages still update. The user must `mip unpin <pkg>` first to update a pinned package. If every named package is pinned, the call returns without error. If `--deps` is specified, expand each remaining package's installed transitive dependencies into the argument list, dropping any pinned dependencies with a "Skipping pinned dependency" message.
+2. If `--all` is specified, expand the argument list to all installed packages, then drop from the batch — each with a "Skipping" message — any pinned packages, the `gh/mip-org/core/mip` identity when the self-operation state is `env` or `mip-loaded` ([§1.7.1](#171-self-operation-preconditions)), and the loaded package providing the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)): a bulk update never errors on — or touches — running code. `--force` does **not** override these filters (see [§7.11](#711-pinned-packages)). If every installed package is pinned, a message is printed and `mip update --all` returns without error. Otherwise (no `--all`), drop any explicitly named pinned packages from the batch with a "Skipping pinned package" message; the unpinned named packages still update. The user must `mip unpin <pkg>` first to update a pinned package. If every named package is pinned, the call returns without error. If `--deps` is specified, expand each remaining package's installed transitive dependencies into the argument list, dropping any pinned dependencies with a "Skipping pinned dependency" message.
 3. Resolve each argument to a `(fqn, owner, channel, name, pkgDir, pkgInfo, isLocal, sourcePath, editable, noSource)` tuple. Validation errors are raised **before** any destructive action:
    - Not installed → `mip:update:notInstalled`.
    - Local package whose `source_path` is non-empty but points to a missing directory → `mip:update:sourceNotFound`.
    - `--no-compile` specified but any package in the batch is not an editable local install → `mip:update:noCompileRequiresEditable` (checked after the `noSource` filter in step 4).
+   - The named package is the loaded package providing the running mip ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) → `mip:update:runningMip`: running code is never replaced; the package must be unloaded first ([§1.7.1](#171-self-operation-preconditions)).
+   - The `gh/mip-org/core/mip` identity named while the self-operation state is `env` → `mip:self:envActive`, or `mip-loaded` → `mip:self:otherMipLoaded` ([§1.7.1](#171-self-operation-preconditions)). A bare `mip` that resolves to nothing installed counts as naming the identity (in the main root the core mip is always installed, so an unresolved bare `mip` can only mean the main mip in a root that does not hold it).
 4. **Skip** local packages whose `source_path` is absent or empty in `mip.json` (`noSource = true`) -- these have no local source to reinstall from (URL installs being the primary case, see [§3.4](#34-installation-from-a-remote-zip-url)). A "Skipping" message is printed and they are dropped from the batch. If every requested package is skipped, `mip update` returns without error. `--force` does not override this skip.
-5. If `mip-org/core/mip` is among the arguments and the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)), handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) and remove it from the batch. In any other active root the identity's copy is an ordinary remote package and follows the normal staging replace (its unload step is skipped — the copy is inert and never on the path).
+5. If `mip-org/core/mip` is among the arguments, apply the self-operation preconditions ([§1.7.1](#171-self-operation-preconditions)): in the `ok` state, handle it via the self-update flow ([§7.7](#77-self-update-mip-update-mip)) as its own step within the walk. In the `standalone` state, an installed inert copy is an ordinary remote package and follows the normal staging replace (its unload step is skipped — the copy is inert and never on the path); with no copy installed, a message explains that the running mip is standalone — not installed in the main root — and is updated by updating the standalone copy itself (pulling the checkout, or downloading a new copy). The `env` and `mip-loaded` states were already rejected in step 3.
 6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
@@ -764,13 +804,13 @@ Skips the up-to-date check. The named package is replaced with the latest versio
 
 ### 7.7 Self-Update (`mip update mip`)
 
-Special flow for `mip-org/core/mip`, taken only when the active root is the root mip actually runs from ([§14.7](#147-mip-itself-and-environments)):
+Special flow for `mip-org/core/mip`, taken only in the `ok` self-operation state ([§1.7.1](#171-self-operation-preconditions) — the active root is the main root, the main mip is running, no environment is active, no other mip is loaded):
 1. Fetch the latest from the `mip-org/core` channel.
 2. Download the new `.mhl`, extract to staging.
 3. Replace the installed package in-place.
 4. Reload: `addpath` each entry from the new `mip.json` `paths` field (resolved against the new package dir).
 
-Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update is processed as its own step within the per-package walk, in argument order, so it is safe to pass `mip` in the same call as other packages. (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
+The session continues on the new version — no restart, no change to the saved path. If no newer version is available, the command reports up to date and changes nothing. Does not go through the normal uninstall-and-reinstall update flow, since mip is running and cannot remove itself mid-update. Self-update is processed as its own step within the per-package walk, in argument order, so it is safe to pass `mip` in the same call as other packages. In the other self-operation states the command is refused — `standalone` with a message, `env` / `mip-loaded` with an error ([§1.7.1](#171-self-operation-preconditions), [§7.1](#71-update-flow-mip-update-x-y-z) steps 3 and 5). (This is distinct from `mip uninstall mip`, which is a user-initiated tear-down — see [§6.4](#64-self-uninstall-mip-uninstall-mip).)
 
 ### 7.8 Load State Preservation
 
@@ -1200,6 +1240,7 @@ Both checks are skipped entirely when the installed mip version is **non-numeric
 
 Noise control and robustness:
 
+- The notice appears **only when its suggestion would actually work**: the self-operation state must be `ok` ([§1.7.1](#171-self-operation-preconditions)), so that running the suggested `mip update mip` succeeds. A standalone mip, an active environment, or another loaded mip suppresses the notice entirely rather than advising something mip would refuse.
 - Each distinct notice is printed **at most once per mip command**: the printed text is remembered in the `MIP_UPDATE_NOTICE_SHOWN` state key, which the `mip` CLI entry point clears at dispatch. Repeated core-index loads within a single command (e.g. a multi-package install) therefore print the notice only once, while the next command prints it again.
 - The check is **best-effort and never raises**: a malformed index, an unreadable version, or any other failure is silently ignored so the notice can never break the command in progress.
 
@@ -1268,6 +1309,10 @@ Noise control and robustness:
 | `mip:pathTraversal` | `.mhl` archive contains an entry that escapes the extraction root (absolute path, drive letter, null byte, out-of-tree `..`, central-directory/local-header mismatch, or escaping symlink) |
 | `mip:update:notInstalled` | Package not installed |
 | `mip:update:sourceNotFound` | Source directory no longer exists |
+| `mip:update:runningMip` | `mip update` of the loaded package providing the running mip (see [§1.7.1](#171-self-operation-preconditions)) |
+| `mip:uninstall:runningMip` | `mip uninstall` of the loaded package providing the running mip (see [§1.7.1](#171-self-operation-preconditions)) |
+| `mip:self:envActive` | A self operation on the main mip (`mip update mip`, `mip uninstall mip`, `mip install mip@<version>`) while an environment is active (see [§1.7.1](#171-self-operation-preconditions)) |
+| `mip:self:otherMipLoaded` | A self operation on the main mip while another mip is loaded (see [§1.7.1](#171-self-operation-preconditions)) |
 | `mip:compile:notInstalled` | Package not installed |
 | `mip:compile:noCompileScript` | Package has no `compile_script` |
 | `mip:uninstall:noPackage` | No package specified for uninstall |
@@ -1305,6 +1350,7 @@ Noise control and robustness:
 | `mip:env:deleteActive` | `mip env delete` of the active environment |
 | `mip:env:nameRequired` | `mip env delete` with no name |
 | `mip:env:tooManyArgs` | An env command given more arguments than it takes |
+| `mip:env:noMip` | Installing into — or loading from — an active environment any package named `mip`, core or otherwise (see [§14.7](#147-mip-itself-and-environments)) |
 | `mip:indexFetchFailed` | Channel index could not be fetched (network failure or non-2xx) |
 | `mip:availFailed` | `mip avail` failed to fetch the channel index |
 | `mip:downloadFailed` | Download of a file (e.g. `.mhl`) failed |
@@ -1400,11 +1446,11 @@ Activation is session state ([§10](#10-state-management), key `MIP_ENV_STATE`):
 
 1. If the same environment is already active: print "already active" and stop (`--load` still performs its load pass). If a different one is active: run the full `mip deactivate` first — so the saved state is always the base session's; there is no activation stack.
 2. Save the session state: the current `MIP_ROOT` value, the loaded / directly-loaded / sticky lists, and the running-mip package ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) detected against the root it was loaded from.
-3. Unload every loaded package **including sticky ones** via the normal unload machinery — path entries removed, MEX binaries cleared. Only the running mip stays: `gh/mip-org/core/mip`, plus a loaded preview build of mip when one is shadowing it.
-4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky; a spared preview build keeps its flags).
+3. Unload every loaded package **including sticky ones** via the normal unload machinery — path entries removed, MEX binaries cleared. The code of the running mip never leaves the path: `gh/mip-org/core/mip` stays loaded and sticky as always, and when a different loaded package provides the running mip (a preview build loaded over the released mip), its path entries are kept — it remains the active mip and keeps running commands — but it is dropped from the loaded / directly-loaded / sticky lists: inside the environment it is on the path, unmanaged, and no longer a loaded package. Activation never changes which mip runs.
+4. `setenv('MIP_ROOT', <env>)` and reset the session load state to the usual baseline (mip always loaded and sticky).
 5. With `--load`: load each of the env's directly installed packages as a direct load (dependencies transitively), best-effort — each failure prints the error, and the command ends with a `Loaded N package(s)[, M failed]` summary. The env stays active regardless. Without `--load`, activation is pointer-only: nothing is on the path until `mip load`.
 
-`mip deactivate` restores the prior session: it unloads everything except the running mip — the mip captured at activation time ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)), not whatever is providing `mip` on the path when `mip deactivate` runs, so a preview build installed into the env and loaded after activating is unloaded here and the session returns to the base mip. It sweeps any remaining path entries under the environment root (so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. The saved state is the load-order lists, not a snapshot of the MATLAB path, so this reproduces the pre-activation path only because mip keeps `path == reverse(MIP_LOADED_PACKAGES)` true at all times, including after a re-load ([§4.1](#41-basic-load-mip-load-package) step 5); replaying the saved order therefore rebuilds the exact path and shadowing that existed before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
+`mip deactivate` restores the prior session: it unloads everything the environment had loaded, sweeps any remaining path entries under the environment root (so it works even if the env directory was deleted out from under the session), restores `MIP_ROOT` to its saved value (possibly unset), and re-loads the saved package set in its original load order with prior direct/sticky flags — so path precedence is exactly what it was before activation. A preview build of mip that was the running mip before activation spent the activation on the path but not as a loaded package (step 3 above); the replay restores it as a loaded package at its original position — it was the active mip the whole time, and deactivation, like activation, never changes which mip runs. The saved state is the load-order lists, not a snapshot of the MATLAB path, so this reproduces the pre-activation path only because mip keeps `path == reverse(MIP_LOADED_PACKAGES)` true at all times, including after a re-load ([§4.1](#41-basic-load-mip-load-package) step 5); replaying the saved order therefore rebuilds the exact path and shadowing that existed before activation. Restoration is best-effort with `mip:env:restoreFailed` warnings. An environment's load state is not remembered across activations; each activation starts cold. With no environment active, `mip deactivate` prints a message and does nothing.
 
 Two MATLAB sessions may activate the same environment concurrently: on-disk state is shared (as with the global root, [§15.7](#157-concurrent-matlab-sessions)), load state is per-session.
 
@@ -1424,11 +1470,13 @@ environment: scratch (~/Documents/MATLAB/mip/envs/scratch)
 
 ### 14.7 mip Itself and Environments
 
-mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment.
+mip always runs from the root it was bootstrapped into — activating an environment never relocates mip, and environments are usable without containing it. mip itself is never installed in an environment, and does not need to be. The `gh/mip-org/core/mip` identity protections ([§1.7](#17-the-ghmip-orgcoremip-identity)) are FQN-based and session-wide, so they hold in every environment.
 
-The self flows key on which root is active: self-uninstall ([§6.4](#64-self-uninstall-mip-uninstall-mip)) and self-update ([§7.7](#77-self-update-mip-update-mip)) trigger **only when the active root is the root mip actually runs from**, as determined by [`mip.self.is_own_root`](../+mip/+self/is_own_root.m): the active root's `gh/mip-org/core/mip` source directory must be among the locations of `mip.m` on the MATLAB path (`which('mip', '-all')`). While an environment is active, `gh/mip-org/core/mip` is an ordinary package there — `mip install mip-org/core/mip` installs an inert copy into the environment, `mip uninstall mip` removes that copy or reports "not installed", and `mip update mip` updates it via the normal staging replace. The running mip is untouched, and `mip load mip` keeps its "always loaded" no-op, so an environment copy can never shadow the running one. This guarantees the self-uninstall flow can never delete an environment root out from under the user.
+**No mip in environments.** While an environment is active, no package named `mip` (name equivalence, [§1.8](#18-name-equivalence)) — core or otherwise — may be installed into it or loaded from it; every install type (channel, local/editable, `.mhl`, URL) and every load raises `mip:env:noMip`. This restriction may be relaxed later. `mip load mip` keeps its "always loaded" no-op ([§4.1](#41-basic-load-mip-load-package)), so nothing loaded from an environment can ever shadow the running mip.
 
-The running mip need not be the core identity: a preview build of mip (e.g. `gh/mip-org/labs/mip`) can be installed and loaded over the released one, and the loaded package providing the running `mip` code is spared by every implicit unload ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)) — so a loaded preview survives `mip activate` / `mip deactivate`. Unlike the core identity it can still be unloaded explicitly, which is how the preview is exited. The spared mip is fixed at activation time: a preview loaded over the base mip *before* activating survives the swap and the later `mip deactivate`, whereas a preview installed into the environment and loaded only after activating is an ordinary env package that deactivation unloads, returning the session to the base mip.
+**Self operations refuse.** The self flows — `mip update mip`, `mip uninstall mip`, `mip install mip@<version>` — are refused with `mip:self:envActive` while an environment is active, telling the user to `mip deactivate` first ([§1.7.1](#171-self-operation-preconditions)). Together with the pin-to-the-main-root rule this guarantees the self-uninstall flow can never delete an environment root out from under the user: operations on the main mip happen from a plain session on the main root, and nowhere else. (In a standalone session the standalone refusals of [§1.7.1](#171-self-operation-preconditions) apply inside the environment as well — deactivating would not make the main mip manageable.)
+
+The running mip need not be the core identity: a preview build of mip (e.g. `gh/mip-org/labs/mip`) can be installed and loaded over the released one in the **base** session, and the package providing the running `mip` code is spared by every implicit unload ([§5.4.1](#541-the-running-mip-is-never-bulk-unloaded)). Across `mip activate` / `mip deactivate` its code stays on the path — it remains the active mip throughout — while its loaded-package bookkeeping is swapped out and back ([§14.4](#144-activation-mip-activate--mip-deactivate)). Unlike the core identity it can still be unloaded explicitly (in the base session, where it is a loaded package), which is how the preview is exited. Since no mip can be installed into or loaded from an environment, a preview build can only ever enter the session from the base root.
 
 ---
 

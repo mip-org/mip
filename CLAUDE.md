@@ -51,4 +51,4 @@ results = run_tests();
 ## Development Rules
 
 - **Always add unit tests** for new functionality. Tests go in `tests/Test*.m` as `matlab.unittest.TestCase` subclasses. Use `createTestPackage` and `createTestSourcePackage` helpers to set up fake packages in temporary directories. Use `MIP_ROOT` env var to isolate tests from the real `<root>` directory.
-- The special identity `gh/mip-org/core/mip` must always be checked by FQN, never by bare name `'mip'`. Other packages named `mip` on different channels must not get special treatment.
+- The special identity `gh/mip-org/core/mip` must always be checked by FQN, never by bare name `'mip'`. Other packages named `mip` on different channels get no special treatment, except where the spec deliberately covers every mip by name (see `docs/mip_self_scenarios.md`): none may be installed into or loaded from an environment, any loaded one blocks self operations on the main mip, and the one providing the running `mip` code cannot be updated or uninstalled while loaded.

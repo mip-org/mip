@@ -39,7 +39,6 @@ function unload(varargin)
     % therefore only use these captured values (and long-stable mip.*
     % functions).
     runningMip = mip.self.running_mip_fqn();
-    envIsActive = ~isempty(mip.state.get_env_state());
 
     % Unload each package
     for k = 1:length(packageArgs)
@@ -59,16 +58,6 @@ function unload(varargin)
         if ~mip.state.is_loaded(fqn)
             fprintf('Package "%s" is not currently loaded\n', displayFqn);
             continue
-        end
-
-        % Unloading the preview build while an environment is active
-        % leaves the session on the released mip, which has no environment
-        % commands to deactivate with.
-        if ~isempty(runningMip) && strcmp(fqn, runningMip) && envIsActive
-            warning('mip:unload:runningMipWhileEnvActive', ...
-                    ['"%s" provides the running mip and an environment is ' ...
-                     'still active. Run "mip deactivate" first to restore ' ...
-                     'your session.'], displayFqn);
         end
 
         % Get package directory

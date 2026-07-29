@@ -13,10 +13,20 @@ function check_mip_update(index, installedVersion)
 % the MIP_UPDATE_NOTICE_SHOWN state key, which mip.m clears at dispatch, so
 % repeated index loads within a single command do not repeat the notice.
 %
+% The notice appears only when its suggestion would actually work: the
+% self-operation state must be 'ok' (main root active, main mip running,
+% no other mip loaded — see mip.self.op_state and specification §1.7.1).
+% In every other state — a standalone mip, an active environment, another
+% mip loaded — "mip update mip" would be refused, so no notice is printed.
+%
 % Best-effort: never raises, so the notice can never break the command in
 % progress.
 
 try
+    s = mip.self.op_state();
+    if ~strcmp(s.state, 'ok')
+        return
+    end
     if nargin < 2 || isempty(installedVersion)
         installedVersion = mip.version();
     end

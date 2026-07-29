@@ -19,17 +19,30 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
             mkdir(testCase.TestRoot);
             mkdir(fullfile(testCase.TestRoot, 'packages'));
             setenv('MIP_ROOT', testCase.TestRoot);
+            clearMipState();
             mip.state.key_value_set('MIP_UPDATE_NOTICE_SHOWN', '');
         end
     end
 
     methods (TestMethodTeardown)
         function teardownTestEnvironment(testCase)
+            cleanupTestPaths(testCase.TestRoot);
             setenv('MIP_ROOT', testCase.OrigMipRoot);
             setappdata(0, 'MIP_UPDATE_NOTICE_SHOWN', testCase.OrigNoticeShown);
             if exist(testCase.TestRoot, 'dir')
                 rmdir(testCase.TestRoot, 's');
             end
+            clearMipState();
+        end
+    end
+
+    methods
+        function makeOwnRoot(testCase)
+            % The notice only prints in the 'ok' self-operation state
+            % (spec §1.7.1): make the test root look like the main root
+            % of the running mip.
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mip');
+            plantStubMip(pkgDir);
         end
     end
 
@@ -148,12 +161,14 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
         % ---- check_mip_update: printing and suppression ----
 
         function testCheckPrintsNotice(testCase)
+            testCase.makeOwnRoot();
             index = makeIndex({mipEntry('9.9.9')});
             output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
             testCase.verifySubstring(output, 'mip update mip');
         end
 
         function testCheckSuppressesRepeatNotice(testCase)
+            testCase.makeOwnRoot();
             index = makeIndex({mipEntry('9.9.9')});
             evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
             output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
@@ -163,6 +178,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
         function testCheckPrintsAgainAfterMarkerCleared(testCase)
             % mip.m clears the marker at dispatch, so the next command
             % prints the notice again.
+            testCase.makeOwnRoot();
             index = makeIndex({mipEntry('9.9.9')});
             evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
             mip.state.key_value_set('MIP_UPDATE_NOTICE_SHOWN', '');
@@ -172,6 +188,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
 
         function testCheckPrintsDifferentNotice(testCase)
             % A different notice (e.g. new version published) is not suppressed.
+            testCase.makeOwnRoot();
             index1 = makeIndex({mipEntry('9.9.9')});
             index2 = makeIndex({mipEntry('10.0.0')});
             evalc('mip.channel.check_mip_update(index1, ''1.0.0'')');
@@ -180,6 +197,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
         end
 
         function testCheckNoNoticeWhenUpToDate(testCase)
+            testCase.makeOwnRoot();
             index = makeIndex({mipEntry('1.0.0')});
             output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
             testCase.verifyEmpty(output);
@@ -187,6 +205,7 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
 
         function testCheckNeverErrorsOnMalformedIndex(testCase)
             % Advisory only: malformed input must not break the caller.
+            testCase.makeOwnRoot();
             evalc('mip.channel.check_mip_update(struct(), ''1.0.0'')');
             evalc('mip.channel.check_mip_update(struct(''packages'', 42), ''1.0.0'')');
             evalc('mip.channel.check_mip_update([], ''1.0.0'')');
@@ -195,6 +214,39 @@ classdef TestMipUpdateNotice < matlab.unittest.TestCase
             % Default installed-version path (resolved via mip.version()).
             evalc('mip.channel.check_mip_update(index)');
             testCase.verifyTrue(true);
+        end
+
+        % ---- check_mip_update: self-operation state gating ----
+
+        function testCheckNoNoticeWhenStandalone(testCase)
+            % The default fixture is a standalone session (the test root
+            % does not run the session's mip): the notice would suggest a
+            % refused command, so it stays quiet.
+            index = makeIndex({mipEntry('9.9.9')});
+            output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
+            testCase.verifyEmpty(output);
+        end
+
+        function testCheckNoNoticeWhileEnvActive(testCase)
+            testCase.makeOwnRoot();
+            evalc('mip.env(''create'', ''scratch'')');
+            evalc('mip.env(''activate'', ''scratch'')');
+            testCase.addTeardown(@() evalc('mip.env(''deactivate'')'));
+            index = makeIndex({mipEntry('9.9.9')});
+            output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
+            testCase.verifyEmpty(output);
+        end
+
+        function testCheckNoNoticeWhileOtherMipLoaded(testCase)
+            testCase.makeOwnRoot();
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'labs', 'mip');
+            fid = fopen(fullfile(pkgDir, 'mip', 'mip.m'), 'w');
+            fprintf(fid, 'function varargout = mip(varargin) %%#ok<STOUT,VANUS>\nend\n');
+            fclose(fid);
+            evalc('mip.load(''mip-org/labs/mip'')');
+            index = makeIndex({mipEntry('9.9.9')});
+            output = evalc('mip.channel.check_mip_update(index, ''1.0.0'')');
+            testCase.verifyEmpty(output);
         end
 
         % ---- fetch_index wiring ----

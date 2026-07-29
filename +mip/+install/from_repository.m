@@ -1,4 +1,4 @@
-function installedFqns = from_repository(repoPackages, channel, markDirectlyInstalled)
+function [installedFqns, nRefused] = from_repository(repoPackages, channel, markDirectlyInstalled)
 %FROM_REPOSITORY   Install packages from channel repositories.
 %
 % The channel-install pipeline, in three phases:
@@ -24,12 +24,24 @@ function installedFqns = from_repository(repoPackages, channel, markDirectlyInst
 %
 % Returns:
 %   installedFqns - Cell array of FQNs newly installed by this call.
+%   nRefused      - Number of requests refused (with a message) by the
+%                   mip self/environment guards and dropped from the call.
 
     if nargin < 3
         markDirectlyInstalled = true;
     end
 
     installedFqns = {};
+
+    % Guard requests naming a mip package before any index is fetched:
+    % installing the main mip's identity is a self operation with strict
+    % preconditions, and no mip at all may be installed into an
+    % environment (specification §1.7.1, §14.7). Refused-with-a-message
+    % requests are dropped here; the rest of the call proceeds.
+    [repoPackages, nRefused] = guardMipRequests(repoPackages, channel);
+    if isempty(repoPackages)
+        return
+    end
 
     [resolvedPackages, packageInfoMap, unavailablePackages, ...
         fetchedChannels, requestedVersions] = resolveRequests(repoPackages, channel);
@@ -76,6 +88,88 @@ function installedFqns = from_repository(repoPackages, channel, markDirectlyInst
 
     installedFqns = [installedFqns, executeInstall(resolvedPackages, ...
         allPackagesToInstall, packageInfoMap, markDirectlyInstalled)];
+end
+
+function [kept, nRefused] = guardMipRequests(repoPackages, channel)
+% Apply the self-operation and environment guards to requests that name a
+% mip package. Runs before any index fetch. Per argument:
+%
+%   - The core identity (an FQN naming gh/mip-org/core, or a bare "mip"
+%     not redirected by --channel) is the main mip. Requests for it
+%     proceed only in the 'ok' self-operation state (specification
+%     §1.7.1): in a standalone session they are refused with a message
+%     and dropped; while an environment is active they error
+%     (mip:self:envActive with @version — the deactivated session could
+%     honor it — otherwise mip:env:noMip); while another mip is loaded, a
+%     version switch errors (mip:self:otherMipLoaded) and a versionless
+%     request falls through to the already-installed no-op.
+%   - Any other package named "mip" is ordinary, except that no mip may
+%     be installed into an environment (mip:env:noMip).
+
+    kept = repoPackages;
+    nRefused = 0;
+
+    parsedArgs = cell(1, numel(repoPackages));
+    anyMip = false;
+    for i = 1:numel(repoPackages)
+        parsedArgs{i} = mip.parse.parse_package_arg(repoPackages{i});
+        anyMip = anyMip || mip.name.match(parsedArgs{i}.name, 'mip');
+    end
+    if ~anyMip
+        return
+    end
+
+    s = mip.self.op_state();
+
+    keep = true(1, numel(repoPackages));
+    for i = 1:numel(repoPackages)
+        parsed = parsedArgs{i};
+        if ~mip.name.match(parsed.name, 'mip')
+            continue
+        end
+        if parsed.is_fqn
+            targetsIdentity = mip.self.is_identity(parsed);
+        else
+            % A bare "mip" resolves to the core channel unless --channel
+            % redirects it elsewhere.
+            targetsIdentity = isempty(channel) || strcmp(channel, 'mip-org/core');
+        end
+
+        if targetsIdentity
+            switch s.state
+                case 'ok'
+                    % Proceed: versionless requests no-op as already
+                    % installed; a differing @version hot-swaps in place.
+                case 'standalone'
+                    fprintf(['Refusing to install "%s": a standalone mip is running, and ' ...
+                             'installing the core mip package into this root would put a ' ...
+                             'second, non-running mip on disk.\n' ...
+                             'To change the standalone mip, update its copy directly.\n'], ...
+                            repoPackages{i});
+                    keep(i) = false;
+                case 'env'
+                    if ~isempty(parsed.version)
+                        error('mip:self:envActive', ...
+                              ['Cannot install a version of the main mip while an ' ...
+                               'environment is active. Run "mip deactivate" first.']);
+                    end
+                    mip.env.assert_no_mip(parsed.name, 'installed into');
+                case 'mip-loaded'
+                    if ~isempty(parsed.version)
+                        blockers = cellfun(@mip.parse.display_fqn, s.blockers, 'UniformOutput', false);
+                        error('mip:self:otherMipLoaded', ...
+                              ['Cannot install a version of the main mip while another ' ...
+                               'mip is loaded (%s). Run "mip unload %s" first.'], ...
+                              strjoin(blockers, ', '), blockers{end});
+                    end
+                    % Versionless: harmless already-installed no-op.
+            end
+        else
+            mip.env.assert_no_mip(parsed.name, 'installed into');
+        end
+    end
+    kept = repoPackages(keep);
+    nRefused = sum(~keep);
 end
 
 function [resolvedPackages, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions] = resolveRequests(repoPackages, channel)
