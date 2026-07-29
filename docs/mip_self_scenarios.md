@@ -21,7 +21,9 @@ installed:
 ```
 
 And it adds mip — the source directory above — to the MATLAB saved path, so
-`mip` is available in every MATLAB session.
+`mip` is available in every MATLAB session. The saved path is a convenience,
+not a requirement: mip works as long as it is on the MATLAB path, however
+that is arranged.
 
 This is the default way that mip can be installed. mip can also be installed
 as a standalone package, not bootstrapped into a root. In this case, the
@@ -35,16 +37,18 @@ root, and nothing more is required; all other per-root state (cache, trash,
 pins, channel subscriptions, install tracking) lives inside the root and is
 created lazily as needed.
 
-**Definition (main root).** The main root is the root in effect at MATLAB
-startup: the folder pointed to by the `MIP_ROOT` environment variable if it
-is set when MATLAB starts, otherwise the root mip was bootstrapped into
-(recovered from the installed mip's own location). The main root does not
-change for the lifetime of the MATLAB session.
-
-**Definition (main mip).** The main mip is the mip command that is active at
-MATLAB startup — the `mip` reached through the MATLAB saved path. For a
+**Definition (main mip).** The main mip is the mip that the `mip` command
+resolves to at MATLAB startup — before any environment is active and before
+any mip other than the one already on the path has been loaded. For a
 default installation this is the copy installed in the main root; for a
 standalone installation it is the standalone copy.
+
+**Definition (main root).** The main root is the root in effect at MATLAB
+startup — the root that applies when no environment is active and no mip
+other than the main mip has been loaded. It is determined by the `MIP_ROOT`
+environment variable if it is set when MATLAB starts, otherwise by the
+location of the main mip. The main root does not change for the lifetime of
+the MATLAB session.
 
 **Definition (active mip).** The active mip is the mip that is running
 commands: the `mip` that MATLAB dispatches to when `mip` is invoked — the
@@ -142,7 +146,12 @@ result of Scenario 7).
 **Outcome:** Loaded like any other package: its paths are placed ahead on
 the MATLAB path, so it becomes the active mip. Subsequent `mip` commands
 are run by it. The main root is unchanged, and the main mip is untouched —
-still installed, still on the saved path.
+still installed.
+
+In this state mip is installed from two channels, so the bare name is
+ambiguous: `mip load mip` is refused with a message asking for the fully
+qualified name, just as for any other package installed from more than one
+channel.
 
 ### Scenario 9
 
@@ -151,9 +160,11 @@ mip (the result of Scenario 8).
 
 **Action:** `mip unload other/channel/mip`
 
-**Outcome:** Allowed — naming it explicitly is the way to unload it. Its
-paths are removed and the main mip becomes the active mip again. The
-session is back to the state of Scenario 8's starting point.
+**Outcome:** Allowed. Its paths are removed and the main mip becomes the
+active mip again. The session is back to the state of Scenario 8's starting
+point. Bare `mip unload mip` does the same thing: `mip unload` acts on the
+most recently loaded package of the given name, which here is
+`other/channel/mip`.
 
 ### Scenario 10
 
@@ -162,10 +173,9 @@ are loaded.
 
 **Action:** `mip unload --all`
 
-**Outcome:** The ordinary packages are unloaded. The core mip and the
-loaded `other/channel/mip` are both spared: no bulk operation ever pulls
-running code off the path. Explicitly naming `other/channel/mip`
-(Scenario 9) remains the only way to unload it.
+**Outcome:** The ordinary packages are unloaded, and so is
+`other/channel/mip` — as in Scenario 9, the main mip becomes the active mip
+again. Only the main mip is spared: it cannot be unloaded (Scenario 2).
 
 ### Scenario 11
 
@@ -174,9 +184,14 @@ and is the active mip. The core channel has a newer version of mip.
 
 **Action:** `mip update mip`
 
-**Outcome:** Refused with an error. The main mip cannot be updated or
-uninstalled while any other mip is loaded; the error says to
-`mip unload other/channel/mip` first. The same rule applies to
+**Outcome:** Refused with an error: mip is installed from two channels, so
+the bare name is ambiguous and the fully qualified name is required. The
+FQN forms are refused too, each with its own message:
+`mip update mip-org/core/mip` because the main mip cannot be updated or
+uninstalled while any other mip is loaded, and
+`mip update other/channel/mip` because a loaded mip cannot be updated
+(Scenario 13). In both cases the error says to
+`mip unload other/channel/mip` first. The same applies to
 `mip install mip@<version>` (Scenario 5), which is the same mechanism.
 
 ### Scenario 12
@@ -186,10 +201,15 @@ and is the active mip.
 
 **Action:** `mip uninstall mip`
 
-**Outcome:** Refused with an error, by the same rule as Scenario 11: the
-main mip cannot be updated or uninstalled while any other mip is loaded.
-The error says to `mip unload other/channel/mip` first; after that, the
-teardown of Scenario 6 is available.
+**Outcome:** Refused with an error, as in Scenario 11: mip is installed
+from two channels, so the bare name is ambiguous and the fully qualified
+name is required. The FQN forms are refused too:
+`mip uninstall mip-org/core/mip` because the main mip cannot be updated or
+uninstalled while any other mip is loaded, and
+`mip uninstall other/channel/mip` because a loaded mip cannot be
+uninstalled (Scenario 13). In both cases the error says to
+`mip unload other/channel/mip` first; after that, the teardown of
+Scenario 6 is available for the main mip.
 
 ### Scenario 13
 
@@ -313,8 +333,10 @@ changes which mip runs.
 
 **State:** As in Scenario 17's result: `myenv` is active.
 
-**Action:** `mip update mip` (or `mip uninstall mip`, or
-`mip install mip@<version>`)
+**Action:** `mip update mip-org/core/mip` (or
+`mip uninstall mip-org/core/mip`, or `mip install mip-org/core/mip@<version>`)
+— the command requires the fully qualified name in this state, since with an
+environment active a bare name is resolved against the environment's root.
 
 **Outcome:** Refused with an error saying to `mip deactivate` first. This
 completes the rule of Scenarios 11 and 12: **the main mip may be updated or
