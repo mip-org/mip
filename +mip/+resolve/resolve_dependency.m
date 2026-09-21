@@ -20,7 +20,7 @@ function depFqn = resolve_dependency(depName, parentFqn)
 %      to prefer, and resolving its bare dependencies to mip-org/core
 %      would mean an installed dependency could never satisfy them: a
 %      package being developed alongside its dependency could not be
-%      installed at all. See the note in mip.install.from_local.
+%      installed at all, whatever channel it targets.
 %
 %   3. Otherwise -- no parent given, a mip-org/core parent, or the
 %      dependency is not installed anywhere the rules above look --
