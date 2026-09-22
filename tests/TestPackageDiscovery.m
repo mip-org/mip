@@ -112,6 +112,56 @@ classdef TestPackageDiscovery < matlab.unittest.TestCase
             testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
         end
 
+        function testResolveDependency_LocalParentUsesInstalledPackage(testCase)
+            % A package installed from a local directory is on no channel,
+            % so a bare dependency resolves to whatever is installed under
+            % that name. Without this, a package developed alongside its
+            % dependency could not be installed at all.
+            createTestPackage(testCase.TestRoot, '', '', 'somepkg', 'type', 'local');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'local/parent');
+            testCase.verifyEqual(fqn, 'local/somepkg');
+        end
+
+        function testResolveDependency_LocalParentPrefersCoreWhenBothInstalled(testCase)
+            % resolve_bare_name's priority applies, so the default channel
+            % still wins over a local install of the same name.
+            createTestPackage(testCase.TestRoot, '', '', 'somepkg', 'type', 'local');
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'local/parent');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
+        function testResolveDependency_LocalParentFindsChannelPackage(testCase)
+            % The installed package need not be local itself.
+            createTestPackage(testCase.TestRoot, 'mylab', 'custom', 'somepkg');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'local/parent');
+            testCase.verifyEqual(fqn, 'gh/mylab/custom/somepkg');
+        end
+
+        function testResolveDependency_LocalParentFallsBackToCoreWhenAbsent(testCase)
+            % Nothing installed under the name: still fetched from the
+            % default channel, exactly as before.
+            fqn = mip.resolve.resolve_dependency('somepkg', 'local/parent');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
+        function testResolveDependency_FexParentUsesInstalledPackage(testCase)
+            % The rule is about the parent being on no channel, not about
+            % it being local specifically.
+            createTestPackage(testCase.TestRoot, '', '', 'somepkg', 'type', 'local');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'fex/parent');
+            testCase.verifyEqual(fqn, 'local/somepkg');
+        end
+
+        function testResolveDependency_ChannelParentIgnoresLocalInstall(testCase)
+            % A package installed from a channel keeps the old behavior: a
+            % local install of the same name must not hijack its bare
+            % dependency, which belongs to the channel it came from.
+            createTestPackage(testCase.TestRoot, '', '', 'somepkg', 'type', 'local');
+            fqn = mip.resolve.resolve_dependency('somepkg', 'gh/mylab/custom/parent');
+            testCase.verifyEqual(fqn, 'gh/mip-org/core/somepkg');
+        end
+
         function testResolveDependency_NonCoreFqnPreserved(testCase)
             fqn = mip.resolve.resolve_dependency('mylab/custom/somepkg');
             testCase.verifyEqual(fqn, 'gh/mylab/custom/somepkg');

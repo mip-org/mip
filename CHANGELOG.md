@@ -22,6 +22,15 @@
   dependencies declared in `mip.yaml` instead of erroring with
   `mip:dependencyNotFound`; the same applies to `mip update` of local
   packages. (#161)
+- A bare dependency of a package that is itself on no channel — installed
+  from a local directory, in editable mode, or from `fex`/`web`/`mhl` —
+  now resolves to whatever is installed under that name, instead of
+  always to `mip-org/core`. Previously a package developed alongside its
+  dependency could not be installed at all: `mip install -e .` resolved
+  its bare dependency to `mip-org/core/<name>` and an editable install of
+  that dependency, being `local/<name>`, could never satisfy it.
+  Packages installed from a channel are unaffected, and a missing
+  dependency is still fetched from `mip-org/core`.
 
 ## 1.1.0 (2026-07-16)
 

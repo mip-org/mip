@@ -224,9 +224,16 @@ Used by: all contexts that resolve dependencies listed in `mip.json` of an **ins
 `resolve_dependency(depName, parentFqn)` takes a dependency name and, optionally, the FQN of the package that declares it.
 
 - If the dependency is a FQN, use as-is.
-- If a bare name: resolve to the **depending package's own channel** — `gh/<parentOwner>/<parentChannel>/<name>` — when `parentFqn` is a `gh` FQN on a channel other than `mip-org/core` **and** that channel has the dependency installed. Otherwise — no `parentFqn`, a `mip-org/core` parent, or the dependency is not installed in the parent's channel — resolve to `gh/mip-org/core/<name>`.
+- If a bare name, in order:
+  1. **The depending package's own channel** — `gh/<parentOwner>/<parentChannel>/<name>` — when `parentFqn` is a `gh` FQN on a channel other than `mip-org/core` **and** that channel has the dependency installed.
+  2. **Whatever is installed under the name** — by the rules of [`resolve_bare_name`](#241-resolving-a-bare-name-among-installed-packages-resolve_bare_name) — when `parentFqn` is a **non-`gh`** FQN (`local`, `fex`, `web`, `mhl`) and some installed package matches.
+  3. Otherwise — no `parentFqn`, a `mip-org/core` parent, or nothing found above — `gh/mip-org/core/<name>`.
 
-This lets a package in a non-core channel depend, by bare name, on sibling packages published in the **same** channel (e.g. `gh/magland/core/chunkie` depending on `fmm2d` resolves to `gh/magland/core/fmm2d` when that is installed), while bare dependencies of `mip-org/core` packages — and bare dependencies not present in the parent's own channel — keep resolving to `mip-org/core`. To depend on a package from an unrelated channel, use the fully qualified name in `mip.yaml`.
+Rule 1 lets a package in a non-core channel depend, by bare name, on sibling packages published in the **same** channel (e.g. `gh/magland/core/chunkie` depending on `fmm2d` resolves to `gh/magland/core/fmm2d` when that is installed), while bare dependencies of `mip-org/core` packages keep resolving to `mip-org/core`.
+
+Rule 2 covers packages that are on no channel at all. A package installed from a local directory or in editable mode has no channel of its own to prefer, so without it every bare dependency would resolve to `mip-org/core` and an already-installed dependency could never satisfy one: a package being developed alongside its dependency could not be installed at all, whatever channel it targets. The rule applies only to non-`gh` parents, so a package installed from a channel is unaffected — a stray `local/<name>` cannot hijack a channel package's bare dependency.
+
+Note that rule 2 consults only **installed** state; it never changes where a *missing* dependency is fetched from, which remains `mip-org/core` (see [§3.2](#32-local-installation)). To depend on a package from an unrelated channel, use the fully qualified name in `mip.yaml`.
 
 #### 2.4.5 Resolving a Dependency During Remote Install (`build_graph`)
 
