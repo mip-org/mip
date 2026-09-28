@@ -182,6 +182,12 @@ function didUninstall = uninstallSelf()
     % Cache the user's current path
     current_path = path;
 
+    % Resetting the path makes MATLAB rescan every folder on it, which
+    % re-reports name conflicts that are not ours (e.g. MATLAB Online's shadow
+    % of the built-in license function).
+    oldState = warning('off', 'MATLAB:dispatcher:nameConflict');
+    restoreWarn = onCleanup(@() warning(oldState)); %#ok<NASGU>
+
     savedOK = false;
     try
         % Change the path to match what it would be if MATLAB had just started up
@@ -204,6 +210,7 @@ function didUninstall = uninstallSelf()
     % MATLAB session
     path(current_path);
     rmpath_safe(mipSourceDir);
+    clear restoreWarn
 
     % Delete the mip root directory
     fprintf('Deleting %s...\n', shorten_home(mipRoot));
