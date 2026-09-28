@@ -285,21 +285,24 @@ classdef TestInstallZipUrl < matlab.unittest.TestCase
             end
             fexUrl = ['https://www.mathworks.com/matlabcentral/fileexchange/' ...
                      '26311-shadederrorbar'];
-            mip.install(fexUrl, '--name', 'fex_seb_test');
+            mip.install(fexUrl, '--name', 'fex_shadederrorbar_test');
 
             installedDir = fullfile(testCase.TestRoot, 'packages', ...
-                                    'fex', 'fex_seb_test');
+                                    'fex', 'fex_shadederrorbar_test');
             testCase.verifyTrue(exist(installedDir, 'dir') > 0, ...
                 'FEX package should install under fex/');
 
             % The auto-generated mip.yaml's repository field should be
-            % the resolved zip URL (UUID path), not the original FEX URL.
-            innerYaml = fullfile(installedDir, 'fex_seb_test', 'mip.yaml');
+            % the resolved zip URL (UUID/version path), not the original
+            % FEX URL.
+            innerYaml = fullfile(installedDir, 'fex_shadederrorbar_test', 'mip.yaml');
             cfg = mip.config.read_mip_yaml(fileparts(innerYaml));
             testCase.verifyTrue(endsWith(lower(cfg.repository), '.zip'), ...
                 'repository should be the resolved .zip URL');
-            testCase.verifyTrue(contains(cfg.repository, 'mlc-downloads'), ...
-                'repository should be the UUID-based mlc-downloads URL');
+            testCase.verifyTrue(startsWith(cfg.repository, ...
+                'https://addons.mathworks.com/downloads/') && ...
+                contains(cfg.repository, 'e56d6dc9-4a80-11e4-9553-005056977bd0'), ...
+                'repository should be the UUID-based addons download URL');
             testCase.verifyFalse(contains(cfg.repository, '?'), ...
                 'repository should have query string stripped');
         end
