@@ -60,7 +60,7 @@ function from_url(zipUrl, pkgName, editable, noCompile)
     isFex = mip.install.is_fex_url(zipUrl);
     if isFex
         fprintf('Resolving File Exchange URL %s...\n', zipUrl);
-        zipUrl = resolveFileExchangeUrl(zipUrl);
+        zipUrl = mip.install.resolve_fex_url(zipUrl);
         fprintf('Resolved to %s\n', zipUrl);
     end
 
@@ -161,64 +161,6 @@ function clearSourcePath(pkgName, sourceType)
     end
     cleaner = onCleanup(@() fclose(fid));
     fwrite(fid, jsonencode(mipData));
-end
-
-function zipUrl = resolveFileExchangeUrl(fexUrl)
-% Resolve a File Exchange landing URL to the underlying .zip download URL.
-% Appends ?download=true (or &download=true if a query string is already
-% present), issues a HEAD request, follows the 302 redirect to the UUID-
-% based mlc-downloads URL, and strips the resulting URL's query string.
-%
-% A non-default User-Agent is required: the MathWorks Akamai layer
-% returns 403 to MATLAB's default UA, but accepts curl-style UAs.
-
-    if contains(fexUrl, '?')
-        landingUrl = [fexUrl '&download=true'];
-    else
-        landingUrl = [fexUrl '?download=true'];
-    end
-
-    try
-        uri = matlab.net.URI(landingUrl);
-        req = matlab.net.http.RequestMessage('HEAD');
-        req.Header = matlab.net.http.HeaderField('User-Agent', 'curl/8.0');
-        opt = matlab.net.http.HTTPOptions('ConnectTimeout', 30);
-        [~, ~, history] = send(req, uri, opt);
-    catch ME
-        error('mip:install:fexResolveFailed', ...
-              'Failed to resolve File Exchange URL %s: %s', fexUrl, ME.message);
-    end
-
-    if isempty(history)
-        error('mip:install:fexResolveFailed', ...
-              'Empty redirect history for File Exchange URL %s.', fexUrl);
-    end
-
-    finalStatus = double(history(end).Response.StatusCode);
-    if finalStatus < 200 || finalStatus >= 300
-        error('mip:install:fexResolveFailed', ...
-              'File Exchange URL %s returned HTTP %d.', fexUrl, finalStatus);
-    end
-
-    finalUrl = char(history(end).URI);
-
-    % Strip query string and fragment.
-    qIdx = strfind(finalUrl, '?');
-    if ~isempty(qIdx)
-        finalUrl = finalUrl(1:qIdx(1)-1);
-    end
-    hIdx = strfind(finalUrl, '#');
-    if ~isempty(hIdx)
-        finalUrl = finalUrl(1:hIdx(1)-1);
-    end
-
-    if ~endsWith(lower(finalUrl), '.zip')
-        error('mip:install:fexResolveFailed', ...
-              ['File Exchange URL %s did not resolve to a .zip URL ' ...
-               '(got: %s).'], fexUrl, finalUrl);
-    end
-
-    zipUrl = finalUrl;
 end
 
 function dir2 = unwrapSingleSubdir(d)
