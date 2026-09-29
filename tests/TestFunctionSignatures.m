@@ -202,6 +202,20 @@ classdef TestFunctionSignatures < matlab.unittest.TestCase
             end
         end
 
+        function testUnchangedStateDoesNotRewriteFile(testCase)
+            % Regenerating with no state change must leave the file
+            % untouched, so tab completion never races a no-op rewrite.
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'alpha');
+            mip.state.update_function_signatures(testCase.ResourcesDir);
+            jsonPath = fullfile(testCase.ResourcesDir, 'functionSignatures.json');
+            before = dir(jsonPath);
+            pause(1.1);
+            mip.state.update_function_signatures(testCase.ResourcesDir);
+            after = dir(jsonPath);
+            testCase.verifyEqual(after.datenum, before.datenum, ...
+                'Unchanged signatures should not rewrite the file');
+        end
+
         function testDuplicateBareNamesAreDeduplicated(testCase)
             % Same bare name on two different channels should appear once
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'pkg');
