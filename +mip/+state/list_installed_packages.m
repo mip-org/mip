@@ -3,8 +3,13 @@ function packages = list_installed_packages()
 %
 % Walks the on-disk packages tree and returns canonical FQNs:
 %   packages/gh/<owner>/<channel>/<name>  ->  gh/<owner>/<channel>/<name>
+%   packages/gh/<owner>/<repo>            ->  gh/<owner>/<repo>
 %   packages/local/<name>                 ->  local/<name>
 %   packages/fex/<name>                   ->  fex/<name>
+%
+% Under packages/gh/<owner>/, a directory containing mip.json is a
+% repository package; any other directory is a channel
+% (see mip.paths.is_repo_package_dir).
 %
 % Non-'gh' top-level entries are treated as source-type roots with a
 % single level of package directories below them (variable-length FQN).
@@ -28,7 +33,7 @@ for i = 1:length(topEntries)
     topPath = fullfile(packagesDir, topName);
 
     if strcmp(topName, 'gh')
-        % gh/<owner>/<channel>/<pkg>
+        % gh/<owner>/<channel>/<pkg> and gh/<owner>/<repo>
         ownerDirs = dir(topPath);
         for j = 1:length(ownerDirs)
             if ~ownerDirs(j).isdir || startsWith(ownerDirs(j).name, '.')
@@ -44,6 +49,11 @@ for i = 1:length(topEntries)
                 end
                 ch = chanDirs(k).name;
                 chanPath = fullfile(ownerPath, ch);
+
+                if mip.paths.is_repo_package_dir(chanPath)
+                    packages{end+1} = mip.parse.make_fqn(owner, '', ch); %#ok<AGROW>
+                    continue
+                end
 
                 pkgDirs = dir(chanPath);
                 for m = 1:length(pkgDirs)

@@ -22,11 +22,21 @@ function depFqn = resolve_dependency(depName, parentFqn)
 %      package being developed alongside its dependency could not be
 %      installed at all, whatever channel it targets.
 %
+%   A parent published from its own repository (gh/<owner>/<repo>) has
+%   no sibling packages, so neither rule applies to it: its bare-name
+%   dependencies resolve to mip-org/core.
+%
 %   3. Otherwise -- no parent given, a mip-org/core parent, or the
 %      dependency is not installed anywhere the rules above look --
 %      resolve to mip-org/core/<name>, as before. A dependency that is
 %      not installed yet is therefore still fetched from the default
 %      channel.
+%
+% A 2-part '<owner>/<name>' dependency resolves to the repository package
+% gh/<owner>/<name> unless only the personal-channel package
+% gh/<owner>/<owner>/<name> is installed (see mip.parse.canonical_fqn).
+% Installs reject this form in a dependency list (mip.dependency.build_graph);
+% it is accepted here so already-installed packages keep loading.
 %
 % Note that rule 2 looks only at what is installed; it never changes
 % where a missing dependency is fetched from. To depend on a package from
@@ -46,13 +56,16 @@ end
 result = mip.parse.parse_package_arg(depName);
 
 if result.is_fqn
-    depFqn = result.fqn;
+    depFqn = mip.parse.canonical_fqn(depName);
     return
 end
 
 if ~isempty(parentFqn)
     p = mip.parse.parse_package_arg(parentFqn);
-    if p.is_fqn && strcmp(p.type, 'gh')
+    if p.is_repo
+        % A repository package has no channel of its own; fall through
+        % to mip-org/core.
+    elseif p.is_fqn && strcmp(p.type, 'gh')
         % Prefer the depending package's own channel (when it is not the
         % default mip-org/core channel) if that channel actually has the
         % dependency installed. Falling through to mip-org/core preserves

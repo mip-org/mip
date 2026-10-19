@@ -37,6 +37,7 @@ function installedFqn = from_mhl(mhlSource, channel)
             fqn = mip.parse.make_mhl_fqn(packageName);
         end
 
+        mip.paths.assert_no_repo_channel_overlap(fqn);
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
             if useGhChannel
@@ -60,6 +61,9 @@ function installedFqn = from_mhl(mhlSource, channel)
         end
 
         if ~isempty(pkgInfo.dependencies)
+            for k = 1:length(pkgInfo.dependencies)
+                mip.dependency.assert_valid_spec(pkgInfo.dependencies{k}, fqn);
+            end
             fprintf('\nPackage "%s" has dependencies: %s\n', ...
                     mip.parse.display_fqn(fqn), strjoin(pkgInfo.dependencies, ', '));
             fprintf('Installing dependencies from remote repository...\n');

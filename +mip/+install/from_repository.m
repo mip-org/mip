@@ -1,11 +1,17 @@
 function installedFqns = from_repository(repoPackages, channel, markDirectlyInstalled)
-%FROM_REPOSITORY   Install packages from channel repositories.
+%FROM_REPOSITORY   Install packages from channels and package repositories.
 %
-% The channel-install pipeline, in three phases:
-%   1. resolveRequests - resolve each argument to a channel-canonical FQN
-%      against the fetched channel indexes.
+% Packages come from an index source (mip.channel.parse_index_source):
+% either a channel, or a GitHub repository that publishes its own package
+% (FQN gh/<owner>/<repo>). The install pipeline, in three phases:
+%   1. resolveRequests - resolve each argument to a source-canonical FQN
+%      against the fetched indexes. A 2-part '<owner>/<name>' argument
+%      refers to the repository github.com/<owner>/<name>; if that
+%      repository publishes no mip package, the personal channel
+%      <owner>/<owner> is used instead, with a message.
 %   2. planInstall     - build the combined dependency graph (fetching
-%      cross-channel indexes on demand) and topologically sort it.
+%      the indexes of other channels and repositories on demand) and
+%      topologically sort it.
 %   3. executeInstall  - replace @version-pinned installs, download and
 %      install the plan, roll back on failure, and update state.
 %
@@ -16,8 +22,9 @@ function installedFqns = from_repository(repoPackages, channel, markDirectlyInst
 % uninstalled.
 %
 % Args:
-%   repoPackages          - Cell array of package args (bare names or FQNs,
-%                           optionally with @version suffixes)
+%   repoPackages          - Cell array of package args (bare names, FQNs,
+%                           or repository URLs, optionally with @version
+%                           suffixes)
 %   channel               - Channel spec from --channel, or '' for the
 %                           priority list (mip-org/core, then subscriptions)
 %   markDirectlyInstalled - (Optional) See above. Default true.
@@ -124,22 +131,40 @@ function [resolvedPackages, packageInfoMap, unavailablePackages, fetchedChannels
         end
     end
 
-    % Resolve each package argument to <owner>/<channel>/<name> (with optional version).
+    % Resolve each package argument to its FQN (with optional version).
+    % Repository arguments are resolved against the repository's index
+    % here, since whether the repository publishes a package decides
+    % between it and the personal-channel fallback, and the index gives
+    % the canonical owner and name.
     resolvedPackages = {};
     requestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     for i = 1:length(repoPackages)
         parsed = parsedArgs{i};
-        if parsed.is_fqn
-            effChannel = '';  % FQN provides its own channel
-        elseif userPassedChannel
-            effChannel = channel;
+        fallbackFrom = '';
+        src = '';
+        if parsed.is_repo
+            [owner, ch, name, fallbackFrom] = resolveRepoArg(parsed);
+            version = parsed.version;
+            if isempty(fallbackFrom)
+                % Keep the source as typed, so the index fetched above is
+                % reused from the cache even when the canonical owner
+                % differs in case.
+                src = ['github.com/' parsed.owner '/' parsed.name];
+            end
         else
-            effChannel = bareChannels{i};
+            if parsed.is_fqn
+                effChannel = '';  % FQN provides its own channel
+            elseif userPassedChannel
+                effChannel = channel;
+            else
+                effChannel = bareChannels{i};
+            end
+            [owner, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, effChannel);
         end
-        [owner, ch, name, version] = mip.resolve.resolve_package_name(repoPackages{i}, effChannel);
         fqn = mip.parse.make_fqn(owner, ch, name);
         resolvedPackages{end+1} = struct('owner', owner, 'channel', ch, 'name', name, ... %#ok<AGROW>
-                                         'fqn', fqn, 'requested_version', version);
+                                         'fqn', fqn, 'requested_version', version, ...
+                                         'source', src, 'fallback_from', fallbackFrom);
         if ~isempty(version)
             requestedVersions(fqn) = version;
         end
@@ -172,7 +197,22 @@ function [resolvedPackages, packageInfoMap, unavailablePackages, fetchedChannels
     end
     for i = 1:length(resolvedPackages)
         s = resolvedPackages{i};
-        fetchChannelIndex([s.owner '/' s.channel], packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
+        src = s.source;
+        if isempty(src)
+            src = mip.channel.index_source(s.fqn);
+        end
+        if isempty(s.fallback_from)
+            fetchChannelIndex(src, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
+            continue
+        end
+        try
+            fetchChannelIndex(src, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
+        catch ME
+            error('mip:packageNotFound', ...
+                  ['Package "%s" not found: %s does not publish a mip package, ' ...
+                   'and the index of the personal channel %s could not be fetched (%s).'], ...
+                  s.name, s.fallback_from, src, ME.message);
+        end
     end
 
     % Canonicalize each requested package to the channel-published name.
@@ -201,6 +241,11 @@ function [resolvedPackages, packageInfoMap, unavailablePackages, fetchedChannels
                         mip.parse.display_fqn(s.fqn), currentArch);
                 fprintf('Available architectures: %s\n', strjoin(archs, ', '));
                 error('mip:packageUnavailable', 'Package not available for this architecture');
+            elseif ~isempty(s.fallback_from)
+                error('mip:packageNotFound', ...
+                      ['Package "%s" not found: %s does not publish a mip package, ' ...
+                       'and the personal channel %s does not provide it.'], ...
+                      s.name, s.fallback_from, [s.owner '/' s.channel]);
             elseif unresolvedBareIdx(i)
                 if isempty(skippedChannels)
                     error('mip:packageNotFound', ...
@@ -235,7 +280,8 @@ function allPackagesToInstall = planInstall(resolvedPackages, packageInfoMap, un
     end
 
     % Build combined dependency graph.
-    % If a cross-channel FQN dep is not in the map, fetch its channel and retry.
+    % If a dep from another channel or repository is not in the map, fetch
+    % its index and retry.
     allRequiredFqns = {};
     for attempt = 1:10
         allRequiredFqns = {};
@@ -251,18 +297,19 @@ function allPackagesToInstall = planInstall(resolvedPackages, packageInfoMap, un
             break
         end
 
-        % Fetch channels for missing cross-channel dependencies
+        % Fetch the indexes of missing dependencies from other channels or
+        % repositories
         fetchedNew = false;
         for i = 1:length(allMissing)
             parsed = mip.parse.parse_package_arg(allMissing{i});
             if ~parsed.is_fqn || ~strcmp(parsed.type, 'gh')
                 error('mip:packageNotFound', 'Package "%s" not found in repository', mip.parse.display_fqn(allMissing{i}));
             end
-            missingChannel = [parsed.owner '/' parsed.channel];
+            missingChannel = mip.channel.index_source(allMissing{i});
             if fetchedChannels.isKey(missingChannel)
                 continue
             end
-            fprintf('Fetching %s index for cross-channel dependency...\n', missingChannel);
+            fprintf('Fetching %s index for dependency...\n', missingChannel);
             fetchChannelIndex(missingChannel, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions);
             fetchedNew = true;
         end
@@ -336,6 +383,7 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
                 % Just replaced above - neither fresh nor "already installed".
                 continue
             end
+            mip.paths.assert_no_repo_channel_overlap(fqn);
             result = mip.parse.parse_package_arg(fqn);
             existingName = mip.resolve.installed_dir(fqn);
             if ~isempty(existingName) && ~strcmp(existingName, result.name)
@@ -519,14 +567,48 @@ function tf = anyUnresolved(parsedArgs, bareChannels)
     end
 end
 
-function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions)
-% Fetch a channel's index and merge into the package info map.
-    if fetchedChannels.isKey(ch)
+function [owner, ch, name, fallbackFrom] = resolveRepoArg(parsed)
+% Resolve a repository argument against the repository's index. Returns
+% the canonical owner and package name with ch = ''. For the 2-part
+% '<owner>/<name>' form, a repository that publishes no mip package (its
+% index download returns 404) falls back to the personal channel
+% <owner>/<owner>; then ch is that channel and fallbackFrom names the
+% repository. Any other failure is raised, not masked by the fallback.
+    src = ['github.com/' parsed.owner '/' parsed.name];
+    fallbackFrom = '';
+    try
+        index = mip.channel.fetch_index(src);
+    catch ME
+        if strcmp(ME.identifier, 'mip:repo:notPublished') && ~isempty(parsed.fallback_fqn)
+            fb = mip.parse.parse_package_arg(parsed.fallback_fqn);
+            fprintf(['%s does not publish a mip package.\n' ...
+                     'Installing %s from the personal channel %s/%s instead.\n'], ...
+                    src, fb.name, fb.owner, fb.channel);
+            owner = fb.owner;
+            ch = fb.channel;
+            name = fb.name;
+            fallbackFrom = src;
+            return
+        end
+        rethrow(ME);
+    end
+    [owner, name] = mip.channel.repo_index_identity(index, parsed.owner, parsed.name);
+    ch = '';
+end
+
+function fetchChannelIndex(src, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions)
+% Fetch the index of a channel or repository (an index source, see
+% mip.channel.parse_index_source) and merge it into the package info map.
+    if fetchedChannels.isKey(src)
         return
     end
-    fprintf('Fetching package index for %s...\n', ch);
-    [chOwner, chName] = mip.parse.parse_channel_spec(ch);
-    chIndex = mip.channel.fetch_index(ch);
+    fprintf('Fetching package index for %s...\n', src);
+    [kind, chOwner, chName] = mip.channel.parse_index_source(src);
+    chIndex = mip.channel.fetch_index(src);
+    if strcmp(kind, 'repo')
+        chOwner = mip.channel.repo_index_identity(chIndex, chOwner, chName);
+        chName = '';
+    end
     % Project FQN-keyed requestedVersions down to name-keyed map for this channel
     chRequestedVersions = containers.Map('KeyType', 'char', 'ValueType', 'any');
     fqnKeys = keys(requestedVersions);
@@ -545,7 +627,7 @@ function fetchChannelIndex(ch, packageInfoMap, unavailablePackages, fetchedChann
     for j = 1:length(chUnavailKeys)
         unavailablePackages(chUnavailKeys{j}) = chUnavail(chUnavailKeys{j});
     end
-    fetchedChannels(ch) = true;
+    fetchedChannels(src) = true;
 end
 
 function rmTempDir(d)

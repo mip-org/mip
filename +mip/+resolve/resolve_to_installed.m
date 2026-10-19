@@ -22,7 +22,7 @@ if parsed.is_fqn
     % Canonicalize: find the actual on-disk name (case-insensitive) so that
     % downstream code (and storage) sees the canonical form regardless of
     % how the user typed the name.
-    fqn = mip.resolve.installed_fqn(parsed.fqn);
+    fqn = mip.resolve.installed_fqn(packageArg);
 else
     fqn = mip.resolve.resolve_bare_name(parsed.name);
 end

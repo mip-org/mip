@@ -1,13 +1,14 @@
-function cacheFile = writeChannelIndex(rootDir, channel, entries)
-%WRITECHANNELINDEX   Write a synthetic channel index for tests.
+function cacheFile = writeChannelIndex(rootDir, channel, entries, githubRepo)
+%WRITECHANNELINDEX   Write a synthetic channel or repository index for tests.
 %
-% Writes a fresh-mtime channel index containing the given packages at the
-% cache path used by mip.channel.fetch_index, so install.m / update.m
-% read it without network access.
+% Writes a fresh-mtime index containing the given packages at the cache
+% path used by mip.channel.fetch_index, so install.m / update.m read it
+% without network access. See also writeRepoIndex.
 %
 % Args:
 %   rootDir - The MIP_ROOT directory (e.g. tempdir)
-%   channel - Channel spec in '<owner>/<channel>' form (e.g. 'mip-org/core')
+%   channel - Index source: a channel spec '<owner>/<channel>' (e.g.
+%             'mip-org/core'), or a repository 'github.com/<owner>/<repo>'
 %   entries - Cell array of entries. Each element is either:
 %             * a char/string package name — shorthand for
 %                 version '1.0.0', architecture 'any', no commit hash.
@@ -20,15 +21,18 @@ function cacheFile = writeChannelIndex(rootDir, channel, entries)
 %                 .mhl_url      (default 'https://example.invalid/sentinel.mhl')
 %                 .dependencies (default {})
 %             Pass {} for an empty index.
+%   githubRepo - (Optional) Value of the index's github_repo field; omitted
+%                when absent or empty.
 %
 % Returns:
 %   cacheFile - Absolute path to the written cache JSON file
 
-parts = strsplit(channel, '/');
-chOwner = parts{1};
-chName  = parts{2};
-
-cacheDir = fullfile(rootDir, 'cache', 'index', chOwner);
+[kind, chOwner, chName] = mip.channel.parse_index_source(channel);
+if strcmp(kind, 'repo')
+    cacheDir = fullfile(rootDir, 'cache', 'repo-index', chOwner);
+else
+    cacheDir = fullfile(rootDir, 'cache', 'index', chOwner);
+end
 if ~isfolder(cacheDir)
     mkdir(cacheDir);
 end
@@ -56,6 +60,9 @@ for i = 1:numel(entries)
     pkgs{i} = pkg;
 end
 indexStruct = struct('packages', {pkgs});
+if nargin >= 4 && ~isempty(githubRepo)
+    indexStruct.github_repo = githubRepo;
+end
 
 fid = fopen(cacheFile, 'w');
 fwrite(fid, jsonencode(indexStruct), 'char');

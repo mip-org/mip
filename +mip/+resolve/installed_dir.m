@@ -11,8 +11,14 @@ function name = installed_dir(fqn)
 % name for subsequent storage and comparison, so that plain strcmp/
 % ismember against already-stored FQNs keeps working.
 %
+% For a repository package (gh/<owner>/<repo>) only directories that are
+% repository packages (mip.paths.is_repo_package_dir) match, so a channel
+% directory of the same name is never mistaken for the package. Conversely,
+% a channel FQN never matches inside a repository package's directory.
+%
 % Args:
-%   fqn - Canonical FQN (gh/<owner>/<channel>/<name>, local/<name>, fex/<name>)
+%   fqn - Canonical FQN (gh/<owner>/<channel>/<name>, gh/<owner>/<repo>,
+%         local/<name>, fex/<name>, ...)
 %
 % Returns:
 %   name - char row vector with the on-disk name, or '' if no matching
@@ -26,8 +32,13 @@ if ~r.is_fqn
 end
 
 packagesDir = mip.paths.get_packages_dir();
-if strcmp(r.type, 'gh')
+if r.is_repo
+    parentDir = fullfile(packagesDir, 'gh', r.owner);
+elseif strcmp(r.type, 'gh')
     parentDir = fullfile(packagesDir, 'gh', r.owner, r.channel);
+    if mip.paths.is_repo_package_dir(parentDir)
+        return
+    end
 else
     parentDir = fullfile(packagesDir, r.type);
 end
@@ -42,6 +53,9 @@ for i = 1:length(entries)
         continue
     end
     if mip.name.match(entries(i).name, r.name)
+        if r.is_repo && ~mip.paths.is_repo_package_dir(fullfile(parentDir, entries(i).name))
+            continue
+        end
         name = entries(i).name;
         return
     end

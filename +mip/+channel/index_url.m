@@ -1,22 +1,26 @@
-function url = index_url(channel)
-%INDEX_URL   Build the URL for a channel's package index.
+function url = index_url(source)
+%INDEX_URL   Build the URL for a package index.
 %
 % Usage:
-%   url = mip.channel.index_url()                      - URL for default channel (mip-org/core)
-%   url = mip.channel.index_url('<owner>/<channel>')   - URL for a user-hosted channel
-%   url = mip.channel.index_url('<owner>')             - Shorthand for '<owner>/<owner>'
+%   url = mip.channel.index_url()                             - URL for default channel (mip-org/core)
+%   url = mip.channel.index_url('<owner>/<channel>')          - URL for a user-hosted channel
+%   url = mip.channel.index_url('github.com/<owner>/<repo>')  - URL for a repository package
 %
-% Channel URL mapping:
-%   'mip-org/core'      -> https://mip-org.github.io/mip-core/index.json
-%   '<owner>/<channel>' -> https://<owner>.github.io/mip-<channel>/index.json
-%   '<owner>'           -> https://<owner>.github.io/mip-<owner>/index.json
+% URL mapping:
+%   'mip-org/core'              -> https://mip-org.github.io/mip-core/index.json
+%   '<owner>/<channel>'         -> https://<owner>.github.io/mip-<channel>/index.json
+%   'github.com/<owner>/<repo>' -> https://github.com/<owner>/<repo>/releases/download/mip-index/index.json
 
-if nargin < 1 || isempty(channel)
-    channel = 'mip-org/core';
+if nargin < 1 || isempty(source)
+    source = 'mip-org/core';
 end
 
-[channelOwner, channelName] = mip.parse.parse_channel_spec(channel);
+[kind, owner, name] = mip.channel.parse_index_source(source);
 
-url = sprintf('https://%s.github.io/mip-%s/index.json', channelOwner, channelName);
+if strcmp(kind, 'repo')
+    url = sprintf('https://github.com/%s/%s/releases/download/mip-index/index.json', owner, name);
+else
+    url = sprintf('https://%s.github.io/mip-%s/index.json', owner, name);
+end
 
 end

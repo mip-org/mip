@@ -38,7 +38,7 @@ function uninstall(varargin)
             % Canonicalize to the on-disk name so the stored FQN we
             % remove from directly_installed.txt matches what was added
             % during install.
-            fqn = mip.resolve.installed_fqn(result.fqn);
+            fqn = mip.resolve.installed_fqn(arg);
             if isempty(fqn)
                 fqn = result.fqn;
             end

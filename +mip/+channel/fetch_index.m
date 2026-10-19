@@ -1,8 +1,10 @@
 function index = fetch_index(channel, forceRefresh)
-%FETCH_INDEX   Download and parse the mip package index for a channel.
+%FETCH_INDEX   Download and parse a mip package index.
 %
 % Args:
-%   channel       - Channel spec (e.g., 'mip-org/core'), or empty for default
+%   channel       - Index source: a channel spec (e.g. 'mip-org/core'), a
+%                   repository 'github.com/<owner>/<repo>' (see
+%                   mip.channel.parse_index_source), or empty for default
 %   forceRefresh  - Optional logical (default false). If true, bypass the
 %                   on-disk cache and always re-download.
 %
@@ -10,9 +12,15 @@ function index = fetch_index(channel, forceRefresh)
 %   index - Parsed struct from the index JSON
 %
 % Successful downloads are cached on disk under
-% <root>/cache/index/<owner>/<channel>.json. The cache entry is reused if it
-% is less than CACHE_TTL_SECONDS old, unless forceRefresh is true. Failed
-% fetches are not cached.
+% <root>/cache/index/<owner>/<channel>.json for a channel, or
+% <root>/cache/repo-index/<owner>/<repo>.json for a repository (kept apart
+% because a channel and a repository may share a name). The cache entry is
+% reused if it is less than CACHE_TTL_SECONDS old, unless forceRefresh is
+% true. Failed fetches are not cached.
+%
+% A repository whose index download returns HTTP 404 publishes no mip
+% package; this raises 'mip:repo:notPublished', so that callers can tell it
+% apart from other failures ('mip:indexFetchFailed').
 %
 % Every load of the mip-org/core index (cached or fresh) also triggers the
 % mip self-update notice check (mip.channel.check_mip_update).
@@ -27,11 +35,16 @@ if isempty(channel)
     channel = 'mip-org/core';
 end
 
-[channelOwner, channelName] = mip.parse.parse_channel_spec(channel);
+[kind, channelOwner, channelName] = mip.channel.parse_index_source(channel);
+if strcmp(kind, 'repo')
+    cacheSubdir = 'repo-index';
+else
+    cacheSubdir = 'index';
+end
 
 cacheFile = '';
 try
-    cacheDir = fullfile(mip.paths.root(), 'cache', 'index', channelOwner);
+    cacheDir = fullfile(mip.paths.root(), 'cache', cacheSubdir, channelOwner);
     cacheFile = fullfile(cacheDir, [channelName '.json']);
 catch
     % If mip.paths.root() is unavailable, proceed without caching.
@@ -46,7 +59,7 @@ if ~forceRefresh && ~isempty(cacheFile) && isfile(cacheFile)
             try
                 indexJson = fileread(cacheFile);
                 index = parse_index_json(indexJson);
-                maybe_check_mip_update(index, channelOwner, channelName);
+                maybe_check_mip_update(index, kind, channelOwner, channelName);
                 return
             catch
                 % Corrupt cache; fall through to re-fetch.
@@ -66,11 +79,16 @@ catch ME
     if exist(tempFile, 'file')
         delete(tempFile);
     end
+    if strcmp(kind, 'repo') && is_http_404(ME)
+        error('mip:repo:notPublished', ...
+              'github.com/%s/%s does not publish a mip package (no index at %s).', ...
+              channelOwner, channelName, indexUrl);
+    end
     error('mip:indexFetchFailed', 'Failed to fetch package index from %s: %s', indexUrl, ME.message);
 end
 
 index = parse_index_json(indexJson);
-maybe_check_mip_update(index, channelOwner, channelName);
+maybe_check_mip_update(index, kind, channelOwner, channelName);
 
 if ~isempty(cacheFile)
     try
@@ -91,12 +109,19 @@ end
 end
 
 
-function maybe_check_mip_update(index, channelOwner, channelName)
+function maybe_check_mip_update(index, kind, channelOwner, channelName)
 % Whenever the core channel index is loaded (cache or network), check
 % whether the running mip is outdated and print a self-update notice.
-if strcmp(channelOwner, 'mip-org') && strcmp(channelName, 'core')
+if strcmp(kind, 'channel') && strcmp(channelOwner, 'mip-org') && strcmp(channelName, 'core')
     mip.channel.check_mip_update(index);
 end
+end
+
+
+function tf = is_http_404(ME)
+% websave reports HTTP status failures with identifiers such as
+% 'MATLAB:webservices:HTTP404StatusCodeError'.
+tf = contains(ME.identifier, 'HTTP404');
 end
 
 

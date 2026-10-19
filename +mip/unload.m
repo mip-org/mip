@@ -102,7 +102,7 @@ function fqn = resolveLoadedFqn(packageArg)
         % Canonicalize to the on-disk name so we match the form stored in
         % MIP_LOADED_PACKAGES. If not installed at all, fall back to the
         % canonical typed form (caller will report "not loaded").
-        fqn = mip.resolve.installed_fqn(result.fqn);
+        fqn = mip.resolve.installed_fqn(packageArg);
         if isempty(fqn)
             fqn = result.fqn;
         end

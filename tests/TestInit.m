@@ -563,6 +563,60 @@ classdef TestInit < matlab.unittest.TestCase
             testCase.verifyEqual(url, '');
         end
 
+        function testInit_GithubFlagWritesWorkflow(testCase)
+            % -g writes the publishing workflow along with mip.yaml.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+
+            evalc('mip.init(pkgDir, ''-g'')');
+
+            testCase.verifyTrue(isfile(fullfile(pkgDir, 'mip.yaml')));
+            wf = fullfile(pkgDir, '.github', 'workflows', 'mip.yml');
+            testCase.verifyTrue(isfile(wf));
+            txt = fileread(wf);
+            testCase.verifySubstring(txt, ...
+                'uses: mip-org/mip_channel_tools/.github/workflows/repo-build.yml@main');
+            testCase.verifySubstring(txt, 'contents: write');
+            testCase.verifySubstring(txt, 'tags: [''v*'']');
+        end
+
+        function testInit_PlainInitDoesNotWriteWorkflow(testCase)
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            evalc('mip.init(pkgDir)');
+            testCase.verifyFalse(isfolder(fullfile(pkgDir, '.github')));
+        end
+
+        function testInit_GithubFlagAfterInitUpdatesWorkflow(testCase)
+            % -g on a directory that already has a mip.yaml writes only the
+            % workflow, replacing an existing one, and leaves mip.yaml alone.
+            pkgDir = fullfile(testCase.TestDir, 'mypkg');
+            mkdir(pkgDir);
+            evalc('mip.init(pkgDir)');
+            yamlBefore = fileread(fullfile(pkgDir, 'mip.yaml'));
+            wfDir = fullfile(pkgDir, '.github', 'workflows');
+            mkdir(wfDir);
+            fid = fopen(fullfile(wfDir, 'mip.yml'), 'w');
+            fprintf(fid, 'old content\n');
+            fclose(fid);
+
+            out = evalc('mip.init(pkgDir, ''--github'')');
+
+            testCase.verifySubstring(out, 'Updated');
+            testCase.verifyEqual(fileread(fullfile(pkgDir, 'mip.yaml')), yamlBefore);
+            testCase.verifySubstring(fileread(fullfile(wfDir, 'mip.yml')), 'repo-build.yml@main');
+        end
+
+        function testInit_GithubFlagWarnsOnNameMismatch(testCase)
+            pkgDir = fullfile(testCase.TestDir, 'somedir');
+            mkdir(fullfile(pkgDir, '.git'));
+            fid = fopen(fullfile(pkgDir, '.git', 'config'), 'w');
+            fprintf(fid, '[remote "origin"]\n\turl = https://github.com/me/myrepo.git\n');
+            fclose(fid);
+            testCase.verifyWarning(@() mip.init(pkgDir, '-g', '--name', 'otherpkg'), ...
+                'mip:init:nameMismatch');
+        end
+
         function testInit_PathsListMatchesAutoUtil(testCase)
             % The paths written into mip.yaml agree with what
             % mip.init.auto_add_paths returns for the same tree.
