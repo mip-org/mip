@@ -346,10 +346,10 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
         if isempty(s.requested_version)
             continue
         end
-        pkgDir = mip.paths.get_package_dir(s.fqn);
-        if ~exist(pkgDir, 'dir')
+        if ~mip.state.is_installed(s.fqn)
             continue
         end
+        pkgDir = mip.paths.get_package_dir(s.fqn);
         installedInfo = mip.config.read_package_json(pkgDir);
         if strcmp(installedInfo.version, s.requested_version)
             continue

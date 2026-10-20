@@ -3,7 +3,7 @@ function missing = find_missing(deps, parentFqn)
 %
 % Each dependency (bare name or FQN) is resolved via
 % mip.resolve.resolve_dependency relative to parentFqn. Returns the
-% resolved FQNs whose package directory does not exist.
+% resolved FQNs that are not installed.
 %
 % Args:
 %   deps      - Cell array of dependency names from mip.yaml / mip.json
@@ -15,7 +15,7 @@ function missing = find_missing(deps, parentFqn)
 missing = {};
 for i = 1:length(deps)
     depFqn = mip.resolve.resolve_dependency(deps{i}, parentFqn);
-    if ~exist(mip.paths.get_package_dir(depFqn), 'dir')
+    if ~mip.state.is_installed(depFqn)
         missing{end+1} = depFqn; %#ok<AGROW>
     end
 end

@@ -7,10 +7,13 @@ function installed = is_installed(fqn)
 %         'local/mypkg', 'fex/mypkg')
 %
 % Returns:
-%   installed - True if the package directory exists
+%   installed - True if an installed package matches the FQN. Checked
+%               via mip.resolve.installed_dir rather than by existence of
+%               mip.paths.get_package_dir, which for a repository FQN that
+%               is not installed can be a channel directory of the same
+%               name.
 
 fqn = mip.parse.canonical_fqn(fqn);
-packageDir = mip.paths.get_package_dir(fqn);
-installed = exist(packageDir, 'dir') ~= 0;
+installed = ~isempty(mip.resolve.installed_dir(fqn));
 
 end

@@ -240,6 +240,48 @@ classdef TestRepoPackages < matlab.unittest.TestCase
                 'mip:repo:conflictsWithChannel');
         end
 
+        function testRepoVersionInstallConflictsWithChannel(testCase)
+            % The @version replacement step must not read the channel
+            % directory as the installed repository package.
+            createTestPackage(testCase.TestRoot, 'myorg', 'repopkg', 'pkga');
+            mhl = bundle(testCase, 'repopkg', '1.0.0');
+            writeRepoIndex(testCase.TestRoot, 'myorg/repopkg', ...
+                {entry('repopkg', '1.0.0', mhl)});
+            testCase.verifyError(@() evalc('mip.install(''myorg/repopkg@1.0.0'')'), ...
+                'mip:repo:conflictsWithChannel');
+        end
+
+        function testRepoNotInstalledWhenChannelOfSameName(testCase)
+            createTestPackage(testCase.TestRoot, 'myorg', 'tools', 'pkga');
+            testCase.verifyFalse(mip.state.is_installed('gh/myorg/tools'));
+            testCase.verifyEqual( ...
+                mip.dependency.find_missing({'github.com/myorg/tools'}, 'gh/myorg/repopkg'), ...
+                {'gh/myorg/tools'});
+        end
+
+        function testUninstallDoesNotDeleteChannel(testCase)
+            createTestPackage(testCase.TestRoot, 'myorg', 'tools', 'pkga');
+            mip.state.add_directly_installed('gh/myorg/tools/pkga');
+
+            out = evalc('mip.uninstall(''myorg/tools'')');
+            testCase.verifySubstring(out, 'not installed');
+            out = evalc('mip.uninstall(''gh/myorg/tools'')');
+            testCase.verifySubstring(out, 'not installed');
+
+            testCase.verifyEqual(mip.state.list_installed_packages(), {'gh/myorg/tools/pkga'});
+        end
+
+        function testUninstallRefusesDirWithoutMipJson(testCase)
+            % A repository package that lost its mip.json reads as a
+            % channel, and its source subdirectory as a channel package;
+            % uninstall must refuse to delete it.
+            pkgDir = createTestPackage(testCase.TestRoot, 'myorg', '', 'foo');
+            delete(fullfile(pkgDir, 'mip.json'));
+            testCase.verifyError(@() evalc('mip.uninstall(''myorg/foo/foo'')'), ...
+                'mip:uninstall:notAPackage');
+            testCase.verifyTrue(isfolder(fullfile(pkgDir, 'foo')));
+        end
+
         function testChannelInstallConflictsWithRepo(testCase)
             createTestPackage(testCase.TestRoot, 'myorg', '', 'tools');
             mhl = bundle(testCase, 'pkga', '1.0.0');

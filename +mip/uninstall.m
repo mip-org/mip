@@ -40,13 +40,14 @@ function uninstall(varargin)
             % during install.
             fqn = mip.resolve.installed_fqn(arg);
             if isempty(fqn)
-                fqn = result.fqn;
+                notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
+                continue
             end
             pkgDir = mip.paths.get_package_dir(fqn);
         else
             allMatches = mip.resolve.find_all_installed_by_name(result.name);
             if isempty(allMatches)
-                notInstalled = [notInstalled, {arg}]; %#ok<*AGROW>
+                notInstalled = [notInstalled, {arg}];
                 continue
             elseif length(allMatches) > 1
                 fprintf('Package name "%s" is ambiguous. It is installed in multiple channels:\n', result.name);
@@ -62,6 +63,13 @@ function uninstall(varargin)
 
         if ~exist(pkgDir, 'dir')
             notInstalled = [notInstalled, {arg}];
+        elseif ~isfile(fullfile(pkgDir, 'mip.json'))
+            % Every installed package has a mip.json; a directory without
+            % one (e.g. a whole channel) must never be deleted. Checked
+            % before anything is removed.
+            error('mip:uninstall:notAPackage', ...
+                  '"%s" does not resolve to an installed package; refusing to delete %s', ...
+                  arg, pkgDir);
         else
             resolvedPackages = [resolvedPackages, {fqn}];
         end
