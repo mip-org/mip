@@ -143,8 +143,13 @@ function [resolvedPackages, packageInfoMap, unavailablePackages, fetchedChannels
         fallbackFrom = '';
         src = '';
         if parsed.is_repo
-            [owner, ch, name, fallbackFrom] = resolveRepoArg(parsed);
+            [owner, ch, name, fallbackFrom] = mip.resolve.repo_arg(parsed);
             version = parsed.version;
+            if ~isempty(fallbackFrom)
+                fprintf(['%s does not publish a mip package.\n' ...
+                         'Installing %s from the personal channel %s/%s instead.\n'], ...
+                        fallbackFrom, name, owner, ch);
+            end
             if isempty(fallbackFrom)
                 % Keep the source as typed, so the index fetched above is
                 % reused from the cache even when the canonical owner
@@ -565,35 +570,6 @@ function tf = anyUnresolved(parsedArgs, bareChannels)
             return
         end
     end
-end
-
-function [owner, ch, name, fallbackFrom] = resolveRepoArg(parsed)
-% Resolve a repository argument against the repository's index. Returns
-% the canonical owner and package name with ch = ''. For the 2-part
-% '<owner>/<name>' form, a repository that publishes no mip package (its
-% index download returns 404) falls back to the personal channel
-% <owner>/<owner>; then ch is that channel and fallbackFrom names the
-% repository. Any other failure is raised, not masked by the fallback.
-    src = ['github.com/' parsed.owner '/' parsed.name];
-    fallbackFrom = '';
-    try
-        index = mip.channel.fetch_index(src);
-    catch ME
-        if strcmp(ME.identifier, 'mip:repo:notPublished') && ~isempty(parsed.fallback_fqn)
-            fb = mip.parse.parse_package_arg(parsed.fallback_fqn);
-            fprintf(['%s does not publish a mip package.\n' ...
-                     'Installing %s from the personal channel %s/%s instead.\n'], ...
-                    src, fb.name, fb.owner, fb.channel);
-            owner = fb.owner;
-            ch = fb.channel;
-            name = fb.name;
-            fallbackFrom = src;
-            return
-        end
-        rethrow(ME);
-    end
-    [owner, name] = mip.channel.repo_index_identity(index, parsed.owner, parsed.name);
-    ch = '';
 end
 
 function fetchChannelIndex(src, packageInfoMap, unavailablePackages, fetchedChannels, requestedVersions)

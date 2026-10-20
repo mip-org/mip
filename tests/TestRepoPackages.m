@@ -149,11 +149,83 @@ classdef TestRepoPackages < matlab.unittest.TestCase
             testCase.verifyEmpty(mip.state.list_installed_packages());
         end
 
-        function testTwoPartDependencyRejected(testCase)
-            map = containers.Map();
-            map('gh/myorg/repopkg') = struct('dependencies', {{'other/depy'}});
-            testCase.verifyError(@() mip.dependency.build_graph('gh/myorg/repopkg', map), ...
-                'mip:invalidDependency');
+        function testTwoPartDependencyResolvesToRepo(testCase)
+            depMhl = bundle(testCase, 'depy', '1.0.0');
+            mhl = bundle(testCase, 'repopkg', '1.0.0', {'other/depy'});
+            writeRepoIndex(testCase.TestRoot, 'other/depy', ...
+                {entry('depy', '1.0.0', depMhl)});
+            writeRepoIndex(testCase.TestRoot, 'myorg/repopkg', ...
+                {entry('repopkg', '1.0.0', mhl, {'other/depy'})});
+
+            evalc('mip.install(''myorg/repopkg'')');
+
+            testCase.verifyEqual(sort(mip.state.list_installed_packages()), ...
+                sort({'gh/myorg/repopkg', 'gh/other/depy'}));
+        end
+
+        function testTwoPartDependencyFallsBackToPersonalChannel(testCase)
+            depMhl = bundle(testCase, 'depz', '1.0.0');
+            mhl = bundle(testCase, 'repopkg', '1.0.0', {'other/depz'});
+            writeRepoNotPublished(testCase.TestRoot, 'other/depz');
+            writeChannelIndex(testCase.TestRoot, 'other/other', ...
+                {entry('depz', '1.0.0', depMhl)});
+            writeRepoIndex(testCase.TestRoot, 'myorg/repopkg', ...
+                {entry('repopkg', '1.0.0', mhl, {'other/depz'})});
+
+            evalc('mip.install(''myorg/repopkg'')');
+
+            testCase.verifyEqual(sort(mip.state.list_installed_packages()), ...
+                sort({'gh/myorg/repopkg', 'gh/other/other/depz'}));
+        end
+
+        function testTwoPartDependencyKeepsInstalledCopy(testCase)
+            % The personal-channel copy is installed; the repository now
+            % publishes the package too. A new dependent must not pull in
+            % a second copy.
+            createTestPackage(testCase.TestRoot, 'other', 'other', 'depz');
+            depMhl = bundle(testCase, 'depz', '1.0.0');
+            mhl = bundle(testCase, 'repopkg', '1.0.0', {'other/depz'});
+            writeRepoIndex(testCase.TestRoot, 'other/depz', ...
+                {entry('depz', '1.0.0', depMhl)});
+            writeChannelIndex(testCase.TestRoot, 'other/other', ...
+                {entry('depz', '1.0.0', depMhl)});
+            writeRepoIndex(testCase.TestRoot, 'myorg/repopkg', ...
+                {entry('repopkg', '1.0.0', mhl, {'other/depz'})});
+
+            evalc('mip.install(''myorg/repopkg'')');
+
+            testCase.verifyEqual(sort(mip.state.list_installed_packages()), ...
+                sort({'gh/myorg/repopkg', 'gh/other/other/depz'}));
+        end
+
+        function testTwoPartDependencyOfLocalInstall(testCase)
+            depMhl = bundle(testCase, 'depz', '1.0.0');
+            writeRepoNotPublished(testCase.TestRoot, 'other/depz');
+            writeChannelIndex(testCase.TestRoot, 'other/other', ...
+                {entry('depz', '1.0.0', depMhl)});
+            base = fullfile(testCase.SourceDir, 'localpkg');
+            mkdir(base);
+            srcDir = createTestSourcePackage(base, 'localpkg', 'dependencies', {'other/depz'});
+
+            evalc('mip.install(srcDir)');
+
+            testCase.verifyEqual(sort(mip.state.list_installed_packages()), ...
+                sort({'gh/other/other/depz', 'local/localpkg'}));
+        end
+
+        function testFindMissingReturnsTwoPartSpecAsWritten(testCase)
+            testCase.verifyEqual( ...
+                mip.dependency.find_missing({'other/depz'}, 'gh/myorg/repopkg'), ...
+                {'other/depz'});
+            createTestPackage(testCase.TestRoot, 'other', 'other', 'depz');
+            testCase.verifyEmpty( ...
+                mip.dependency.find_missing({'other/depz'}, 'gh/myorg/repopkg'));
+        end
+
+        function testNotPublishedIsCached(testCase)
+            writeRepoNotPublished(testCase.TestRoot, 'myorg/nothing');
+            testCase.verifyError(@() mip.channel.fetch_index('github.com/myorg/nothing'), ...
+                'mip:repo:notPublished');
         end
 
         function testBareDependencyIgnoresSameOwnerRepo(testCase)

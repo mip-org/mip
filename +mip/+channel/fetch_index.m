@@ -20,7 +20,10 @@ function index = fetch_index(channel, forceRefresh)
 %
 % A repository whose index download returns HTTP 404 publishes no mip
 % package; this raises 'mip:repo:notPublished', so that callers can tell it
-% apart from other failures ('mip:indexFetchFailed').
+% apart from other failures ('mip:indexFetchFailed'). Unlike other
+% failures, a 404 is cached (as <repo>.notpublished next to the cache
+% entry) for the same TTL, so callers that probe a repository before
+% falling back to the personal channel do not repeat the request.
 %
 % Every load of the mip-org/core index (cached or fresh) also triggers the
 % mip self-update notice check (mip.channel.check_mip_update).
@@ -43,32 +46,33 @@ else
 end
 
 cacheFile = '';
+notPublishedFile = '';
 try
     cacheDir = fullfile(mip.paths.root(), 'cache', cacheSubdir, channelOwner);
     cacheFile = fullfile(cacheDir, [channelName '.json']);
+    if strcmp(kind, 'repo')
+        notPublishedFile = fullfile(cacheDir, [channelName '.notpublished']);
+    end
 catch
     % If mip.paths.root() is unavailable, proceed without caching.
 end
 
-if ~forceRefresh && ~isempty(cacheFile) && isfile(cacheFile)
-    info = dir(cacheFile);
-    if ~isempty(info)
-        mtime = datetime(info(1).datenum, 'ConvertFrom', 'datenum');
-        ageSec = seconds(datetime('now') - mtime);
-        if ageSec >= 0 && ageSec < CACHE_TTL_SECONDS
-            try
-                indexJson = fileread(cacheFile);
-                index = parse_index_json(indexJson);
-                maybe_check_mip_update(index, kind, channelOwner, channelName);
-                return
-            catch
-                % Corrupt cache; fall through to re-fetch.
-            end
-        end
+indexUrl = mip.channel.index_url(channel);
+
+if ~forceRefresh && is_fresh(cacheFile, CACHE_TTL_SECONDS)
+    try
+        indexJson = fileread(cacheFile);
+        index = parse_index_json(indexJson);
+        maybe_check_mip_update(index, kind, channelOwner, channelName);
+        return
+    catch
+        % Corrupt cache; fall through to re-fetch.
     end
 end
 
-indexUrl = mip.channel.index_url(channel);
+if ~forceRefresh && is_fresh(notPublishedFile, CACHE_TTL_SECONDS)
+    not_published(channelOwner, channelName, indexUrl);
+end
 
 tempFile = [tempname, '.json'];
 try
@@ -80,9 +84,8 @@ catch ME
         delete(tempFile);
     end
     if strcmp(kind, 'repo') && is_http_404(ME)
-        error('mip:repo:notPublished', ...
-              'github.com/%s/%s does not publish a mip package (no index at %s).', ...
-              channelOwner, channelName, indexUrl);
+        write_cache_file(notPublishedFile, '');
+        not_published(channelOwner, channelName, indexUrl);
     end
     error('mip:indexFetchFailed', 'Failed to fetch package index from %s: %s', indexUrl, ME.message);
 end
@@ -90,22 +93,54 @@ end
 index = parse_index_json(indexJson);
 maybe_check_mip_update(index, kind, channelOwner, channelName);
 
-if ~isempty(cacheFile)
-    try
-        cacheDir = fileparts(cacheFile);
-        if ~isfolder(cacheDir)
-            mkdir(cacheDir);
-        end
-        fid = fopen(cacheFile, 'w');
-        if fid ~= -1
-            fwrite(fid, indexJson, 'char');
-            fclose(fid);
-        end
-    catch
-        % Cache write failure is non-fatal.
-    end
+write_cache_file(cacheFile, indexJson);
+if isfile(notPublishedFile)
+    delete(notPublishedFile);
 end
 
+end
+
+
+function tf = is_fresh(file, ttlSeconds)
+% True if file exists and is less than ttlSeconds old.
+tf = false;
+if isempty(file) || ~isfile(file)
+    return
+end
+info = dir(file);
+if isempty(info)
+    return
+end
+mtime = datetime(info(1).datenum, 'ConvertFrom', 'datenum');
+ageSec = seconds(datetime('now') - mtime);
+tf = ageSec >= 0 && ageSec < ttlSeconds;
+end
+
+
+function write_cache_file(file, content)
+if isempty(file)
+    return
+end
+try
+    cacheDir = fileparts(file);
+    if ~isfolder(cacheDir)
+        mkdir(cacheDir);
+    end
+    fid = fopen(file, 'w');
+    if fid ~= -1
+        fwrite(fid, content, 'char');
+        fclose(fid);
+    end
+catch
+    % Cache write failure is non-fatal.
+end
+end
+
+
+function not_published(owner, repo, indexUrl)
+error('mip:repo:notPublished', ...
+      'github.com/%s/%s does not publish a mip package (no index at %s).', ...
+      owner, repo, indexUrl);
 end
 
 

@@ -18,11 +18,11 @@ function [depList, missingFqns] = build_graph(packageFqn, packageInfoMap, visite
 % mip-org/core/<name>. A repository package (gh/<owner>/<repo>) has no
 % channel of its own, so its bare-name dependencies always resolve to
 % mip-org/core. FQN dependencies are canonicalized against the fetched
-% indexes (mip.resolve.canonicalize_in_map). The 2-part '<owner>/<repo>'
-% form is rejected in a dependency list, since its personal-channel
-% fallback would make the dependency resolve differently depending on
-% which repositories exist; 'gh/<owner>/<repo>' or
-% 'github.com/<owner>/<repo>' names a repository unambiguously.
+% indexes (mip.resolve.canonicalize_in_map). A 2-part '<owner>/<name>'
+% dependency means what it means to mip install: the repository
+% github.com/<owner>/<name>, or the personal-channel package
+% <owner>/<owner>/<name> if the repository publishes none (see
+% resolveTwoPartDep).
 %
 % Example:
 %   [deps, missing] = mip.dependency.build_graph('mip-org/core/mypackage', pkgMap);
@@ -67,9 +67,10 @@ dependencies = pkgInfo.dependencies;
 
 for i = 1:length(dependencies)
     dep = dependencies{i};
-    mip.dependency.assert_valid_spec(dep, packageFqn);
     depResult = mip.parse.parse_package_arg(dep);
-    if depResult.is_fqn
+    if ~isempty(depResult.fallback_fqn)
+        depFqn = resolveTwoPartDep(dep, depResult, packageInfoMap);
+    elseif depResult.is_fqn
         depFqn = mip.resolve.canonicalize_in_map(depResult.fqn, packageInfoMap);
     else
         depFqn = resolveBareDep(depResult.name, packageFqn, packageInfoMap);
@@ -103,4 +104,26 @@ function depFqn = resolveBareDep(name, parentFqn, packageInfoMap)
         end
     end
     depFqn = mip.parse.make_fqn('mip-org', 'core', name);
+end
+
+function depFqn = resolveTwoPartDep(dep, depResult, packageInfoMap)
+% Resolve a 2-part '<owner>/<name>' dependency. A copy that is already
+% installed, as either the repository or the personal-channel package, is
+% kept, so a later dependent does not pull in a second copy under the
+% other FQN. Otherwise the repository wins if its index is already in
+% packageInfoMap (it publishes the package); if not, mip.resolve.repo_arg
+% decides (the fetch, including a 404, is cached by fetch_index). A
+% result missing from packageInfoMap is reported as missing, so the caller
+% fetches its index and retries.
+    installed = mip.resolve.installed_fqn(dep);
+    if ~isempty(installed)
+        depFqn = mip.resolve.canonicalize_in_map(installed, packageInfoMap);
+        return
+    end
+    depFqn = mip.resolve.canonicalize_in_map(depResult.fqn, packageInfoMap);
+    if isKey(packageInfoMap, depFqn)
+        return
+    end
+    [owner, ch, name] = mip.resolve.repo_arg(depResult);
+    depFqn = mip.resolve.canonicalize_in_map(mip.parse.make_fqn(owner, ch, name), packageInfoMap);
 end

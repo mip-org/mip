@@ -61,13 +61,22 @@ function installedFqn = from_mhl(mhlSource, channel)
         end
 
         if ~isempty(pkgInfo.dependencies)
-            for k = 1:length(pkgInfo.dependencies)
-                mip.dependency.assert_valid_spec(pkgInfo.dependencies{k}, fqn);
+            deps = pkgInfo.dependencies;
+            % A 2-part '<owner>/<name>' dependency already installed as
+            % either the repository or the personal-channel package keeps
+            % that copy, as in mip.dependency.build_graph.
+            for k = 1:length(deps)
+                if ~isempty(mip.parse.parse_package_arg(deps{k}).fallback_fqn)
+                    installed = mip.resolve.installed_fqn(deps{k});
+                    if ~isempty(installed)
+                        deps{k} = installed;
+                    end
+                end
             end
             fprintf('\nPackage "%s" has dependencies: %s\n', ...
                     mip.parse.display_fqn(fqn), strjoin(pkgInfo.dependencies, ', '));
             fprintf('Installing dependencies from remote repository...\n');
-            mip.install.from_repository(pkgInfo.dependencies, channel, false);
+            mip.install.from_repository(deps, channel, false);
         end
 
         fprintf('\nInstalling "%s"...\n', mip.parse.display_fqn(fqn));

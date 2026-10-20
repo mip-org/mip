@@ -35,8 +35,6 @@ function depFqn = resolve_dependency(depName, parentFqn)
 % A 2-part '<owner>/<name>' dependency resolves to the repository package
 % gh/<owner>/<name> unless only the personal-channel package
 % gh/<owner>/<owner>/<name> is installed (see mip.parse.canonical_fqn).
-% Installs reject this form in a dependency list (mip.dependency.build_graph);
-% it is accepted here so already-installed packages keep loading.
 %
 % Note that rule 2 looks only at what is installed; it never changes
 % where a missing dependency is fetched from. To depend on a package from

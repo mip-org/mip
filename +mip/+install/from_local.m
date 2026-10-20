@@ -72,11 +72,8 @@ end
 installedMissingDeps = false;
 if ~isempty(mipConfig.dependencies)
     fprintf('Dependencies: %s\n', strjoin(mipConfig.dependencies, ', '));
-    for k = 1:length(mipConfig.dependencies)
-        mip.dependency.assert_valid_spec(mipConfig.dependencies{k}, fqn);
-    end
     missing = mip.dependency.find_missing(mipConfig.dependencies, fqn);
-    nonChannel = missing(~startsWith(missing, 'gh/'));
+    nonChannel = missing(~cellfun(@(m) strcmp(mip.parse.parse_package_arg(m).type, 'gh'), missing));
     if ~isempty(nonChannel)
         error('mip:dependencyNotFound', ...
               'Dependency "%s" is not installed. Install it first.', ...
