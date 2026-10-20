@@ -60,6 +60,12 @@ function update_function_signatures(targetResourcesDir)
     jsonPath = fullfile(targetResourcesDir, 'functionSignatures.json');
     tmpPath  = [jsonPath '.tmp'];
 
+    % Skip the rewrite when nothing changed, so no-op commands never
+    % touch the file tab completion is reading.
+    if exist(jsonPath, 'file') && strcmp(fileread(jsonPath), json)
+        return
+    end
+
     fid = fopen(tmpPath, 'w');
     if fid == -1
         return
@@ -73,10 +79,28 @@ function update_function_signatures(targetResourcesDir)
         return
     end
 
-    [ok, ~, ~] = movefile(tmpPath, jsonPath, 'f');
-    if ~ok && exist(tmpPath, 'file')
+    if ~replace_file(tmpPath, jsonPath) && exist(tmpPath, 'file')
         delete(tmpPath);
     end
+end
+
+
+function ok = replace_file(src, dst)
+% Rename src over dst atomically. movefile is not atomic: it removes dst
+% before renaming, so a concurrent reader can find dst missing. Use
+% java.nio's ATOMIC_MOVE (a single rename(2)) when the JVM is available.
+    if usejava('jvm')
+        try
+            opts = javaArray('java.nio.file.CopyOption', 1);
+            opts(1) = java.nio.file.StandardCopyOption.ATOMIC_MOVE;
+            java.nio.file.Files.move(java.io.File(src).toPath(), ...
+                                     java.io.File(dst).toPath(), opts);
+            ok = true;
+            return
+        catch
+        end
+    end
+    [ok, ~, ~] = movefile(src, dst, 'f');
 end
 
 
