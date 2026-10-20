@@ -362,7 +362,7 @@ function fqn = resolveToFqn(packageArg)
         % dash/underscore-insensitive) so the rest of load uses the
         % canonical form, matching what's already in the loaded/sticky
         % state lists.
-        fqn = mip.resolve.installed_fqn(result.fqn);
+        fqn = mip.resolve.installed_fqn(packageArg);
     else
         % Resolve bare name to installed FQN
         fqn = mip.resolve.resolve_bare_name(result.name);

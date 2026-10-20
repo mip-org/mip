@@ -5,6 +5,7 @@ function info(varargin)
 %   mip info
 %   mip info <package>
 %   mip info <owner>/<channel>/<package>
+%   mip info <owner>/<repo>                          - Package published from github.com/<owner>/<repo>
 %   mip info --channel <owner>/<channel> <package>
 %   mip info --channel <owner> <package>             - Shorthand for --channel <owner>/<owner>
 %
@@ -19,10 +20,16 @@ function info(varargin)
 %
 % With a package name, shows two kinds of information:
 %   1. Local installation(s) — version, path, loaded/sticky status, deps
-%   2. Remote channel info — available versions and architectures
+%   2. Remote info — available versions and architectures, from the
+%      channel or package repository that publishes it
 %
 % If the package is installed from a channel other than the one being
 % queried, that channel's remote index is also fetched and displayed.
+% A 2-part '<owner>/<name>' argument refers to the repository package
+% gh/<owner>/<name> if it is installed, otherwise to the personal-channel
+% package gh/<owner>/<owner>/<name> if that is installed. If neither is
+% installed, the repository's index is queried, and the personal
+% channel's when the repository publishes no mip package.
 
 [opts, args] = mip.parse.flags(varargin, struct('channel', ''));
 channel = opts.channel;
@@ -53,7 +60,7 @@ packageName = result.name;
 if result.is_fqn
     % FQN: only check that specific installation. Canonicalize the name
     % to the on-disk form so we report and operate on the canonical FQN.
-    fqn = mip.resolve.installed_fqn(result.fqn);
+    fqn = mip.resolve.installed_fqn(packageArg);
     if ~isempty(fqn)
         installedFqns = {fqn};
     else
@@ -64,13 +71,21 @@ else
     installedFqns = mip.resolve.find_all_installed_by_name(packageName);
 end
 
-% ---- Collect channels to query ----
+% ---- Collect index sources (channels and repositories) to query ----
 
-% For a gh FQN, query its specific channel. For bare names and non-gh FQNs,
-% fall back to the --channel flag (default mip-org/core).
+% For a gh FQN, query its specific channel or repository. For bare names
+% and non-gh FQNs, fall back to the --channel flag (default mip-org/core).
 channelsToQuery = {};
+fallbackSource = '';
 if result.is_fqn && strcmp(result.type, 'gh')
-    channelsToQuery{end+1} = [result.owner '/' result.channel]; %#ok<AGROW>
+    if ~isempty(installedFqns)
+        channelsToQuery{end+1} = mip.channel.index_source(installedFqns{1}); %#ok<AGROW>
+    else
+        channelsToQuery{end+1} = mip.channel.index_source(result.fqn); %#ok<AGROW>
+        if ~isempty(result.fallback_fqn)
+            fallbackSource = mip.channel.index_source(result.fallback_fqn);
+        end
+    end
 elseif ~result.is_fqn
     [chOwner, chName] = mip.parse.parse_channel_spec(channel);
     channelsToQuery{end+1} = [chOwner '/' chName];
@@ -81,7 +96,7 @@ for i = 1:length(installedFqns)
     if ~strcmp(r.type, 'gh')
         continue
     end
-    ch = [r.owner '/' r.channel];
+    ch = mip.channel.index_source(installedFqns{i});
     if ~ismember(ch, channelsToQuery)
         channelsToQuery{end+1} = ch; %#ok<AGROW>
     end
@@ -91,7 +106,13 @@ end
 
 remoteIndexes = cell(size(channelsToQuery));
 for i = 1:length(channelsToQuery)
-    remoteIndexes{i} = fetchRemoteIndex(channelsToQuery{i});
+    [remoteIndexes{i}, notPublished] = fetchRemoteIndex(channelsToQuery{i});
+    if notPublished && ~isempty(fallbackSource)
+        % The repository publishes no mip package: query the personal
+        % channel the 2-part form falls back to.
+        channelsToQuery{i} = fallbackSource;
+        remoteIndexes{i} = fetchRemoteIndex(fallbackSource);
+    end
 end
 
 % Check if package exists in any remote channel
@@ -213,12 +234,16 @@ function showLocalInstallInfo(fqn)
 end
 
 
-function index = fetchRemoteIndex(channelStr)
-% Fetch the remote index for a channel. Returns [] on failure.
+function [index, notPublished] = fetchRemoteIndex(channelStr)
+% Fetch the remote index for a channel or repository. Returns [] on
+% failure; notPublished is true when a repository publishes no mip
+% package.
+    notPublished = false;
     try
         index = mip.channel.fetch_index(channelStr);
-    catch
+    catch ME
         index = [];
+        notPublished = strcmp(ME.identifier, 'mip:repo:notPublished');
     end
 end
 
@@ -245,9 +270,13 @@ end
 function showRemoteChannelInfo(channelStr, packageName, index)
 % Display remote channel info for a package using a pre-fetched index.
 
-    [chOwner, chName] = mip.parse.parse_channel_spec(channelStr);
+    [kind, chOwner, chName] = mip.channel.parse_index_source(channelStr);
 
-    fprintf('=== Remote Channel: %s/%s ===\n\n', chOwner, chName);
+    if strcmp(kind, 'repo')
+        fprintf('=== Remote Repository: github.com/%s/%s ===\n\n', chOwner, chName);
+    else
+        fprintf('=== Remote Channel: %s/%s ===\n\n', chOwner, chName);
+    end
 
     if isempty(index)
         fprintf('  Could not fetch index.\n\n');

@@ -7,7 +7,9 @@ function install(varargin)
 %   mip install --channel <owner>/<channel> <package>
 %   mip install --channel <owner> <package>                        - Shorthand for --channel <owner>/<owner>
 %   mip install <owner>/<channel>/<package>
-%   mip install <owner>/<package>                                  - Shorthand for <owner>/<owner>/<package>
+%   mip install <owner>/<repo>                                     - Package published from github.com/<owner>/<repo>
+%                                                                    (falls back to the personal channel <owner>/<owner>)
+%   mip install https://github.com/<owner>/<repo>                  - Same, with no fallback (also gh/<owner>/<repo>)
 %   mip install /path/to/package.mhl                               - Install under mhl/<name>
 %   mip install https://example.com/package.mhl                    - Install under mhl/<name>
 %   mip install --channel <owner>/<channel> /path/to/package.mhl   - Install under gh/<owner>/<channel>/<name>
@@ -54,9 +56,19 @@ function install(varargin)
 %   if a directory of the same name exists in the current folder. Use
 %   './chebfun' to force a local install.
 %
+% Repository packages:
+%   A package published from its own GitHub repository is installed by
+%   naming the repository: '<owner>/<repo>', 'gh/<owner>/<repo>',
+%   'https://github.com/<owner>/<repo>', or 'github.com/<owner>/<repo>'
+%   (a trailing '/' or '.git' is accepted), each with an optional
+%   @version suffix. It is installed as gh/<owner>/<repo>. For the 2-part
+%   form only, if the repository publishes no mip package, mip installs
+%   <repo> from the personal channel <owner>/<owner> instead and says so;
+%   '<owner>/<owner>/<name>' always reaches the channel directly.
+%
 % Packages can be specified by bare name or fully qualified name
-% (<owner>/<channel>/<package>). Fully qualified names override the --channel
-% flag.
+% (<owner>/<channel>/<package>). Fully qualified names and repository
+% arguments override the --channel flag.
 
     if nargin < 1
         error('mip:install:noPackage', 'At least one package name is required for install command.');
@@ -104,7 +116,9 @@ function install(varargin)
     %   - URL source   (File Exchange landing URL or http(s) .zip URL)
     %   - mhl source   (.mhl file or other http(s) URL)
     %   - local path   (starts with ~, ., /, or a Windows drive letter)
-    %   - repo package (bare name or <owner>/<channel>/<package> FQN)
+    %   - repo package (bare name, <owner>/<channel>/<package> FQN, or a
+    %                   package repository such as <owner>/<repo> or
+    %                   https://github.com/<owner>/<repo>)
     urlSources = {};
     mhlSources = {};
     localPaths = {};
@@ -113,6 +127,10 @@ function install(varargin)
         pkg = char(args{i});
         if mip.install.is_url_source(pkg)
             urlSources{end+1} = pkg; %#ok<AGROW>
+        elseif ~isempty(mip.parse.repo_url_path(stripVersion(pkg)))
+            % A GitHub repository URL; checked before the catch-all
+            % below, which sends every other http(s) URL to the .mhl path.
+            repoPackages{end+1} = pkg; %#ok<AGROW>
         elseif endsWith(pkg, '.mhl') || startsWith(pkg, 'http://') || startsWith(pkg, 'https://')
             mhlSources{end+1} = pkg; %#ok<AGROW>
         elseif mip.parse.is_explicit_path(pkg)
@@ -123,14 +141,15 @@ function install(varargin)
             catch
                 error('mip:install:invalidPackageSpec', ...
                       ['Invalid package specifier "%s".\n' ...
-                       'Use "<package>" for a bare name or "<owner>/<channel>/<package>" for a fully qualified name.\n' ...
+                       'Use "<package>" for a bare name, "<owner>/<repo>" for a package repository, ' ...
+                       'or "<owner>/<channel>/<package>" for a fully qualified name.\n' ...
                        'To install a local package, prefix the path with "./":\n' ...
                        '  mip install ./%s'], pkg, pkg);
             end
             if parsed.is_fqn && ~strcmp(parsed.type, 'gh')
                 error('mip:install:invalidPackageSpec', ...
                       ['Invalid package specifier "%s".\n' ...
-                       'Only GitHub channel packages can be installed from a repository.\n' ...
+                       'Only GitHub packages can be installed by name.\n' ...
                        'To install a local package, prefix the path with "./":\n' ...
                        '  mip install ./%s'], pkg, pkg);
             end
@@ -229,6 +248,15 @@ function install(varargin)
                 fprintf('  mip load %s\n', mip.resolve.get_shortest_name(loadable{i}));
             end
         end
+    end
+end
+
+function s = stripVersion(pkg)
+% Drop an @version suffix, as mip.parse.parse_package_arg does.
+    s = pkg;
+    atIdx = strfind(s, '@');
+    if ~isempty(atIdx)
+        s = s(1:atIdx(end)-1);
     end
 end
 

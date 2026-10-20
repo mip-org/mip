@@ -6,6 +6,10 @@ function canonicalFqn = canonicalize_in_map(fqn, packageInfoMap)
 % rules of mip.name.match. If found, returns that key (the channel-
 % canonical FQN). Otherwise returns the input fqn unchanged.
 %
+% For a repository FQN (gh/<owner>/<repo>) the owner is also compared
+% case-insensitively, since GitHub treats owner names that way and the
+% index keys use the owner spelling of the index's github_repo field.
+%
 % Used at the boundary between user-typed names and the channel index,
 % so that the rest of install.m operates on channel-canonical names. The
 % on-disk install path then matches what other commands look up.
@@ -32,7 +36,12 @@ mapKeys = keys(packageInfoMap);
 for i = 1:length(mapKeys)
     k = mapKeys{i};
     parsed = mip.parse.parse_package_arg(k);
-    if strcmp(parsed.owner, target.owner) && ...
+    if target.is_repo
+        ownerMatches = parsed.is_repo && strcmpi(parsed.owner, target.owner);
+    else
+        ownerMatches = strcmp(parsed.owner, target.owner);
+    end
+    if ownerMatches && ...
             strcmp(parsed.channel, target.channel) && ...
             mip.name.match(parsed.name, target.name)
         canonicalFqn = k;

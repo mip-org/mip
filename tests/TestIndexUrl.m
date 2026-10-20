@@ -27,6 +27,16 @@ classdef TestIndexUrl < matlab.unittest.TestCase
             testCase.verifyError(@() mip.channel.index_url('justchannel'), 'mip:invalidChannel');
         end
 
+        function testRepository(testCase)
+            url = mip.channel.index_url('github.com/fastalgorithms/chunkie');
+            testCase.verifyEqual(url, ...
+                'https://github.com/fastalgorithms/chunkie/releases/download/mip-index/index.json');
+        end
+
+        function testRepositoryMalformedErrors(testCase)
+            testCase.verifyError(@() mip.channel.index_url('github.com/onlyowner'), 'mip:invalidChannel');
+        end
+
         function testChannelWithHyphen(testCase)
             url = mip.channel.index_url('mip-org/test-channel1');
             testCase.verifyEqual(url, 'https://mip-org.github.io/mip-test-channel1/index.json');

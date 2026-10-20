@@ -13,12 +13,13 @@ Every installed package has a unique **FQN** that begins with a **source-type pr
 | Source type | Canonical FQN | Example |
 |---|---|---|
 | `gh` — GitHub channel package | `gh/<owner>/<channel>/<name>` | `gh/mip-org/core/chebfun` |
+| `gh` — package published from its own GitHub repository | `gh/<owner>/<repo>` | `gh/fastalgorithms/chunkie` |
 | `local` — local directory / editable install | `local/<name>` | `local/mypkg` |
 | `fex` — File Exchange landing-page URL install | `fex/<name>` | `fex/some_fex_pkg` |
 | `web` — generic remote `.zip` URL install | `web/<name>` | `web/some_web_pkg` |
 | `mhl` — `.mhl` install with no `--channel` | `mhl/<name>` | `mhl/chebfun` |
 
-There are five source-type prefixes in total; the full reserved list is `gh`, `local`, `fex`, `web`, `mhl`. Only `gh` carries an `<owner>/<channel>`; the other four are addressed by the source-type prefix directly (see [§1.6](#16-non-channel-source-types)).
+There are five source-type prefixes in total; the full reserved list is `gh`, `local`, `fex`, `web`, `mhl`. Only `gh` carries an owner (and, for channel packages, a channel); the other four are addressed by the source-type prefix directly (see [§1.6](#16-non-channel-source-types)). A `gh` FQN has 4 parts for a channel package and 3 parts for a repository package (see [§1.5.1](#151-package-repositories)); for a repository package the last component is both the repository name and the package name.
 
 For GitHub channel packages:
 - **owner** -- the GitHub user or organization that owns the channel repository
@@ -29,12 +30,14 @@ All components must match the regex `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` 
 
 #### 1.1.1 Display Form
 
-The **display form** of a canonical FQN strips the `gh/` prefix; non-gh FQNs are displayed unchanged. For **personal channels** — where the channel equals the owner (`gh/<owner>/<owner>/<pkg>`) — the duplicated owner segment is additionally collapsed, yielding the 2-part form `<owner>/<pkg>`. The collapse is skipped when the owner matches a reserved source-type prefix (`gh`, `local`, `fex`, `web`, `mhl`), since the collapsed form would otherwise be re-parsed as a non-gh FQN rather than round-tripping to the original. `mip list`, `mip info`, and all install/load/update messages use the display form. `mip.parse.display_fqn` performs the conversion.
+The **display form** of a canonical FQN strips the `gh/` prefix; non-gh FQNs are displayed unchanged. A repository package therefore displays as `<owner>/<repo>`, the same string the user types to install it. Personal-channel packages (`gh/<owner>/<owner>/<pkg>`) are **not** collapsed to `<owner>/<pkg>`, since that 2-part form refers to the repository `github.com/<owner>/<pkg>` (see [§1.1.2](#112-accepted-user-input)). The `gh/` prefix is kept for a repository package whose owner matches a reserved source-type prefix (`gh`, `local`, `fex`, `web`, `mhl`), since the stripped form would otherwise be re-parsed as a non-gh FQN rather than round-tripping to the original. `mip list`, `mip info`, and all install/load/update messages use the display form. `mip.parse.display_fqn` performs the conversion.
 
 | Canonical FQN | Display form |
 |---|---|
 | `gh/mip-org/core/chebfun` | `mip-org/core/chebfun` |
-| `gh/magland/magland/chunkie` | `magland/chunkie` (personal-channel collapse) |
+| `gh/fastalgorithms/chunkie` | `fastalgorithms/chunkie` (repository package) |
+| `gh/magland/magland/chunkie` | `magland/magland/chunkie` (personal channel: no collapse) |
+| `gh/local/foo` | `gh/local/foo` (repository whose owner is a reserved prefix) |
 | `gh/mip-org/dev/chebfun` | `mip-org/dev/chebfun` (owner ≠ channel: no collapse) |
 | `local/mypkg` | `local/mypkg` |
 | `fex/some_fex_pkg` | `fex/some_fex_pkg` |
@@ -49,7 +52,9 @@ The parser accepts either the canonical form or a shorter form for GitHub packag
 |---|---|
 | `chebfun` | bare name (resolved via §2.4) |
 | `local/mypkg`, `fex/some_pkg`, `web/some_pkg`, `mhl/some_pkg` | 2-part non-gh FQN (first segment a reserved source type) |
-| `magland/chunkie` | 2-part personal-channel shorthand → `gh/magland/magland/chunkie` (first segment not a reserved type) |
+| `fastalgorithms/chunkie` | 2-part (first segment not a reserved type): the repository package `gh/fastalgorithms/chunkie`, with the personal-channel package `gh/fastalgorithms/fastalgorithms/chunkie` as a fallback (see [§2.1](#21-parsing-a-package-argument-parse_package_arg)) |
+| `gh/fastalgorithms/chunkie` | 3-part starting with `gh/`: the repository package, explicit, no fallback |
+| `https://github.com/fastalgorithms/chunkie`, `github.com/fastalgorithms/chunkie` | the repository package, URL form, no fallback (a trailing `/` or `.git` is accepted) |
 | `mip-org/core/chebfun` | 3-part, implicit `gh/` prefix (`gh/mip-org/core/chebfun`) |
 | `gh/mip-org/core/chebfun` | 4-part, explicit canonical form |
 
@@ -90,6 +95,20 @@ Channel strings can be specified as:
 
 A bare channel name passed to the channel parser directly (e.g., just `core`) is **invalid** and raises `mip:invalidChannel`.
 
+#### 1.5.1 Package Repositories
+
+A package may also be published from its own GitHub repository rather than through a channel ([MEP 10](https://github.com/mip-org/meps/blob/main/meps/mep-0010.md)). The repository keeps `mip.yaml` at its root and a workflow (written by `mip init -g`, see [§9.8](#98-mip-init)) that builds `.mhl` files for each architecture, attaches them to the repository's GitHub releases, and maintains an index with the channel index schema as the asset `index.json` of a prerelease tagged `mip-index`:
+
+```
+https://github.com/<owner>/<repo>/releases/download/mip-index/index.json
+```
+
+Such a package has the FQN `gh/<owner>/<repo>`. Its package name must equal the repository name up to name equivalence ([§1.8](#18-name-equivalence)), so the last FQN component is still the package name. In this sense the repository is a channel that holds exactly one package.
+
+Internally, a channel and a package repository are both **index sources** (`mip.channel.parse_index_source`), written `<owner>/<channel>` and `github.com/<owner>/<repo>` respectively. Index fetching, caching, version and architecture selection, and dependency resolution take an index source, so a repository install follows the same steps as a channel install; only the location of the index differs. When a repository's index download returns HTTP 404, the repository publishes no mip package and `mip.channel.fetch_index` raises `mip:repo:notPublished`; any other failure raises `mip:indexFetchFailed`. The 404 is cached for the same TTL as an index (as `<root>/cache/repo-index/<owner>/<repo>.notpublished`), so resolving a 2-part argument or dependency repeatedly does not repeat the request; other failures are not cached.
+
+A repository index must publish exactly one package name, equal (up to equivalence) to the repository name; otherwise installs raise `mip:repo:invalidIndex` (`mip.channel.repo_index_identity`). GitHub treats owner and repository names case-insensitively, so the owner in the FQN is canonicalized to the spelling in the index's `github_repo` field, and the name to the package name the index publishes. This prevents installing the same repository twice under different spellings.
+
 ### 1.6 Non-channel Source Types
 
 Packages installed from local directories, File Exchange, generic remote `.zip` URLs, and channel-less `.mhl` files are not hosted on a GitHub channel. They live under top-level source-type prefixes:
@@ -129,7 +148,7 @@ This rule applies **only to the name component** of an FQN. The `owner` and `cha
 
 Internally, mip stores names in a single **canonical** form per install. The canonical form is:
 
-- **For an installed package**: the actual on-disk directory name under `<root>/packages/gh/<owner>/<channel>/`. Whatever case/separators the directory uses is the canonical form for that install.
+- **For an installed package**: the actual on-disk directory name under `<root>/packages/gh/<owner>/<channel>/` (or `<root>/packages/gh/<owner>/` for a repository package). Whatever case/separators the directory uses is the canonical form for that install.
 - **For a not-yet-installed package being installed**: the name as published by its source — the `name` field in the channel index entry, the `name` field in `mip.yaml` (local install), or the `name` field in `mip.json` (mhl install). The on-disk directory is named to match.
 
 This means the on-disk name is always the canonical name, and stored FQNs (`MIP_LOADED_PACKAGES`, `directly_installed.txt`, etc.) are always in canonical form. User input that differs from the canonical form is canonicalized at command entry by case-insensitive lookup against the on-disk directory or the channel index.
@@ -154,14 +173,20 @@ Input is split on `/` after stripping any `@version` suffix:
 |---|---|
 | `name` | bare name: `is_fqn=false`, `type=''`, `fqn=''` |
 | `<type>/<name>` (2 parts, `<type>` a reserved non-gh source type: `local`, `fex`, `web`, `mhl`) | non-gh FQN: `type=<type>`, `fqn='<type>/<name>'` |
-| `<owner>/<name>` (2 parts, `<owner>` **not** a reserved type) | personal-channel shorthand: `type='gh'`, `owner`=`channel`=`<owner>`, `fqn='gh/<owner>/<owner>/<name>'` |
-| `<owner>/<channel>/<name>` (3 parts) | gh FQN: `type='gh'`; `owner`, `channel`, `name` populated; `fqn='gh/<owner>/<channel>/<name>'` |
+| `<owner>/<name>` (2 parts, `<owner>` **not** a reserved type) | repository package with personal-channel fallback: `type='gh'`, `is_repo=true`, `channel=''`, `fqn='gh/<owner>/<name>'`, `fallback_fqn='gh/<owner>/<owner>/<name>'` |
+| `gh/<owner>/<repo>` (3 parts starting with `gh`) | repository package (explicit): `is_repo=true`, `channel=''`, `fqn='gh/<owner>/<repo>'`, `fallback_fqn=''` |
+| `https://github.com/<owner>/<repo>`, `github.com/<owner>/<repo>` (optionally ending in `/` or `.git`) | repository package (URL form), same result as the explicit form |
+| `<owner>/<channel>/<name>` (3 parts, first not `gh`) | gh FQN: `type='gh'`; `owner`, `channel`, `name` populated; `fqn='gh/<owner>/<channel>/<name>'` |
 | `gh/<owner>/<channel>/<name>` (4 parts) | gh FQN (explicit), same result as 3-part form |
 | 2-part input starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 4-part input not starting with `gh/` | **Error** `mip:invalidPackageSpec` |
 | 5+ parts | **Error** `mip:invalidPackageSpec` |
 
-The reserved source types are `gh`, `local`, `fex`, `web`, `mhl`. For a 2-part input, only these (other than `gh`) form a non-gh FQN; any other first segment is treated as the owner of a personal channel and expands to `gh/<owner>/<owner>/<name>`.
+The reserved source types are `gh`, `local`, `fex`, `web`, `mhl`. For a 2-part input, only these (other than `gh`) form a non-gh FQN; any other first segment is treated as the owner of a repository.
+
+The 2-part form used to mean the package `<name>` in the personal channel `<owner>/<owner>`. To keep such uses working, `fallback_fqn` carries that personal-channel FQN. `mip install` falls back to it when the repository publishes no mip package ([§3.1.9](#319-repository-packages)). Commands that act on installed packages (`load`, `unload`, `uninstall`, `update`, `info`, `pin`, `test`, ...) resolve the 2-part form against what is installed: `gh/<owner>/<name>` if present, otherwise `gh/<owner>/<owner>/<name>` (`mip.resolve.installed_fqn`, and `mip.parse.canonical_fqn` for state lookups). The explicit `<owner>/<owner>/<name>` always reaches the personal channel. A channel named `<a>` of a GitHub owner named `gh` is reachable only through the 4-part form `gh/gh/<a>/<name>`, since `gh/<a>/<name>` is a repository FQN.
+
+A URL whose path under `github.com` is anything other than `<owner>/<repo>` (e.g. `/archive/main.zip`, `/releases/download/v1/pkg.mhl`) is not a repository spec. A repository whose name is not a valid mip name (for example one containing a dot) cannot be addressed this way.
 
 Validation rules (each non-empty component is checked with `mip.name.is_valid`):
 - Each component must match `^[a-zA-Z0-9]([-a-zA-Z0-9_]*[a-zA-Z0-9])?$` — letters, digits, hyphens, and underscores, starting and ending with a letter or digit. Mixed case is accepted (lookup is case-insensitive); the canonical on-disk form is stricter (lowercase — see [§9.8](#98-mip-init) and `mip.name.is_valid_canonical`).
@@ -181,7 +206,7 @@ Validation rules (each non-empty component is checked with `mip.name.is_valid`):
 
 Scans an argument list for `--channel <value>` and extracts it:
 - Returns the channel string and the remaining arguments with `--channel` and its value removed
-- A bare single name `<owner>` (no `/`) is expanded to `<owner>/<owner>` — shorthand for the user's personal channel repo at `github.com/<owner>/mip-<owner>`. The same personal-channel convention also applies to package arguments, in a different input shape: a 2-part `<owner>/<name>` package argument (where `<owner>` is not a reserved source type) expands to `gh/<owner>/<owner>/<name>` (see [§2.1](#21-parsing-a-package-argument-parse_package_arg)).
+- A bare single name `<owner>` (no `/`) is expanded to `<owner>/<owner>` — shorthand for the user's personal channel repo at `github.com/<owner>/mip-<owner>`. Note that a 2-part `<owner>/<name>` *package* argument does not follow this convention: it refers to the repository `github.com/<owner>/<name>` and reaches the personal channel only as a fallback (see [§2.1](#21-parsing-a-package-argument-parse_package_arg)).
 - If `--channel` appears without a following value, raises `mip:missingChannelValue`
 - If `--channel` is absent, returns empty string and the original arguments unchanged
 - Works regardless of position in the argument list (beginning, middle, or end)
@@ -229,6 +254,8 @@ Used by: all contexts that resolve dependencies listed in `mip.json` of an **ins
   2. **Whatever is installed under the name** — by the rules of [`resolve_bare_name`](#241-resolving-a-bare-name-among-installed-packages-resolve_bare_name) — when `parentFqn` is a **non-`gh`** FQN (`local`, `fex`, `web`, `mhl`) and some installed package matches.
   3. Otherwise — no `parentFqn`, a `mip-org/core` parent, or nothing found above — `gh/mip-org/core/<name>`.
 
+A parent published from its own repository (`gh/<owner>/<repo>`) has no sibling packages, so neither rule 1 nor rule 2 applies: its bare-name dependencies resolve to `gh/mip-org/core/<name>`. A 2-part `<owner>/<name>` dependency resolves to the repository package if installed, otherwise to the personal-channel package if installed. If neither is installed, `mip.dependency.find_missing` returns the dependency as written, so that installing it resolves it as `mip install` resolves the same argument ([§3.1.9](#319-repository-packages)).
+
 Rule 1 lets a package in a non-core channel depend, by bare name, on sibling packages published in the **same** channel (e.g. `gh/magland/core/chunkie` depending on `fmm2d` resolves to `gh/magland/core/fmm2d` when that is installed), while bare dependencies of `mip-org/core` packages keep resolving to `mip-org/core`.
 
 Rule 2 covers packages that are on no channel at all. A package installed from a local directory or in editable mode has no channel of its own to prefer, so without it every bare dependency would resolve to `mip-org/core` and an already-installed dependency could never satisfy one: a package being developed alongside its dependency could not be installed at all, whatever channel it targets. The rule applies only to non-`gh` parents, so a package installed from a channel is unaffected — a stray `local/<name>` cannot hijack a channel package's bare dependency.
@@ -239,8 +266,9 @@ Note that rule 2 consults only **installed** state; it never changes where a *mi
 
 Used by: the install process when building the dependency graph from channel indexes
 
-- If the dependency is a FQN, use as-is
-- If a bare name, resolve to the depending package's own channel — `<parentOwner>/<parentChannel>/<name>` — when the parent is on a non-core channel and that channel's fetched index provides the dependency; otherwise resolve to `mip-org/core/<name>`
+- If the dependency is a FQN, use it, canonicalized against the fetched indexes (`mip.resolve.canonicalize_in_map`; for a repository FQN the owner is also compared case-insensitively). A dependency may name a repository package as `github.com/<owner>/<repo>` (with or without `https://`) or `gh/<owner>/<repo>`.
+- If a bare name, resolve to the depending package's own channel — `<parentOwner>/<parentChannel>/<name>` — when the parent is on a non-core channel and that channel's fetched index provides the dependency; otherwise resolve to `mip-org/core/<name>`. A repository parent's index provides only itself, so its bare-name dependencies always resolve to `mip-org/core/<name>`; the author cannot know which channels a user subscribes to, so a dependency outside core must be named explicitly.
+- A 2-part `<owner>/<name>` dependency means what it means to `mip install` ([§3.1.9](#319-repository-packages)): the repository `github.com/<owner>/<name>`, or the personal-channel package `<owner>/<owner>/<name>` if the repository publishes no mip package (`mip.resolve.repo_arg`). A copy already installed under either FQN is kept, so a later dependent does not install a second copy under the other one; `.mhl` installs apply the same preference to the dependencies they install.
 
 This mirrors the post-install rule ([§2.4.4](#244-resolving-a-bare-name-dependency-resolve_dependency)), using the fetched channel index rather than installed state, so a package installed from a channel pulls its bare-name dependencies from that same channel (e.g. installing `magland/core/chunkie` resolves its `fmm2d`/`flam` dependencies to `magland/core`).
 
@@ -271,9 +299,10 @@ Used by: `mip install` for remote packages
 `mip install` accepts a mix of argument types in a single call. Each positional argument is categorized **before** any installation work happens:
 
 1. If the argument is a File Exchange landing-page URL (`https://www.mathworks.com/matlabcentral/fileexchange/...`) or an `http(s)://` URL whose path component (before `?` or `#`) ends in `.zip` (case-insensitive), it is a **URL install source** (see [§3.4](#34-installation-from-a-remote-zip-url)). A plain `http://` `.zip` URL is categorized here too, so that the https requirement is reported by the URL install path (`mip:install:requireHttps`) rather than the argument being misrouted to an `.mhl` download.
-2. Else if the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
-3. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
-4. Else the argument must parse as a package spec — either a bare name (`pkg`) or a fully qualified name (`<owner>/<channel>/<pkg>`). Anything with 2 or 4+ slash-separated parts (e.g. `foo/bar`, `a/b/c/d`) is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
+2. Else if the argument (after removing any `@version` suffix) is a GitHub repository URL, `https://github.com/<owner>/<repo>` or `github.com/<owner>/<repo>` with an optional trailing `/` or `.git`, it is a **package spec** for a repository package (see [§3.1.9](#319-repository-packages)). This check comes before the next rule, which would otherwise send the URL to the `.mhl` path. Other paths under `github.com` keep their meaning: `/archive/...zip` matches rule 1 and `/releases/download/...mhl` matches rule 3.
+3. Else if the argument ends in `.mhl` or starts with `http://` / `https://`, it is an **mhl source** (see [§3.3](#33-installation-from-mhl-file)).
+4. Else if the argument starts with `~`, `.`, `/`, or a Windows drive letter followed by `:\` or `:/` (e.g. `C:\path\mypkg`, `D:/path/mypkg`), it is a **local directory path** (see [§3.2](#32-local-installation)).
+5. Else the argument must parse as a gh package spec ([§2.1](#21-parsing-a-package-argument-parse_package_arg)): a bare name (`pkg`), a repository (`<owner>/<repo>`, `gh/<owner>/<repo>`), or a channel FQN (`<owner>/<channel>/<pkg>`, `gh/<owner>/<channel>/<pkg>`). Anything else, including a non-gh FQN such as `local/foo`, is rejected with `mip:install:invalidPackageSpec`. The error message hints at the `./` form for users who actually meant a local path.
 
 This means a bare name like `chebfun` is **always** treated as a channel install, even if a directory called `chebfun` happens to exist in the current folder. To install a local directory, the user must write `./chebfun`. This was decided in [#107](https://github.com/mip-org/mip/issues/107) to avoid the surprise of a local directory shadowing a channel package.
 
@@ -286,15 +315,15 @@ The `--editable` / `-e` flag is only valid when at least one local path is prese
 #### 3.1.1 Channel Resolution
 
 1. If `--channel` is provided, it is the primary channel for every bare-name argument and the subscription list is **not** consulted. Otherwise (no `--channel`), each bare-name argument is resolved against the **priority list** — `mip-org/core` first, then each subscribed channel in priority order (most recently added first; see [§9.9](#99-mip-channel)) — and takes the first channel whose index publishes that name. Resolution is per-argument, so different bare names in one call may resolve to different channels. A bare name published by none of the consulted channels raises `mip:packageNotFound`, whose message lists every channel consulted.
-2. FQN arguments use the `<owner>/<channel>` encoded in the name; neither `--channel` nor the subscription list applies to them.
+2. FQN arguments use the `<owner>/<channel>` encoded in the name, and repository arguments use the repository; neither `--channel` nor the subscription list applies to them.
 3. If every package argument is a FQN, the `--channel` value is ignored entirely (no warning, no index fetch).
 
 #### 3.1.2 Index Fetching
 
 1. Always fetch the `mip-org/core` index (it is the fallback resolution target for bare-name dependencies -- see [§3.1.5](#315-dependency-resolution)).
 2. If at least one bare-name argument is present, fetch the primary channel index (`--channel` value, or `mip-org/core` by default). When all arguments are FQNs, the primary channel is not fetched.
-3. Also fetch indexes for any channels referenced by FQN arguments.
-4. During dependency resolution, if a cross-channel FQN dependency is missing, fetch its channel lazily (up to 10 retry attempts).
+3. Also fetch indexes for any channels referenced by FQN arguments, and for any repositories named by repository arguments.
+4. During dependency resolution, if an FQN dependency from another channel or repository is missing, fetch its index lazily (up to 10 retry attempts).
 
 Channel index fetches go through an on-disk cache (see [§11.6](#116-channel-index-cache)). Repeat fetches of the same channel within the cache TTL are served from the cache without hitting the network.
 
@@ -340,7 +369,7 @@ Priority: exact match > `numbl_wasm` fallback > `any`.
    - Download the `.mhl` file from the URL in the index.
    - SHA-256 digest verification is **currently suspended** (see [§3.6](#36-mhl-archive-integrity) and [#201](https://github.com/mip-org/mip/issues/201)): the channel index entry may still carry an `mhl_sha256` digest, but the downloaded file is not checked against it, so `mip:digestMismatch` is not raised. When verification is re-enabled, a mismatch will delete the corrupted file and raise `mip:digestMismatch`.
    - Validate the `.mhl` archive against path-traversal attacks before extraction (see [§3.6](#36-mhl-archive-integrity)).
-   - Extract to `<root>/packages/gh/<owner>/<channel>/<name>/`.
+   - Extract to `<root>/packages/gh/<owner>/<channel>/<name>/`, or `<root>/packages/gh/<owner>/<repo>/` for a repository package.
 2. Mark the **user-requested** packages (not their dependencies) as "directly installed" in `directly_installed.txt`.
 3. Print a summary with load hints.
 
@@ -355,6 +384,23 @@ If a package is already installed, `mip install` prints a message and skips it. 
 #### 3.1.8 Multiple Packages
 
 `mip install pkg1 pkg2 pkg3` installs all listed packages and their combined dependencies in a single operation.
+
+#### 3.1.9 Repository Packages
+
+A repository argument ([§2.1](#21-parsing-a-package-argument-parse_package_arg)) is resolved by fetching the repository's index ([§1.5.1](#151-package-repositories)) before any other index:
+
+1. If the index is found, it is validated (`mip:repo:invalidIndex` if it publishes no package, more than one distinct name, or a name that differs from the repository name), and the argument resolves to `gh/<owner>/<name>` with the canonical owner and name. An `@version` suffix selects the version as for channel packages.
+2. If the download returns HTTP 404 and the argument was the 2-part `<owner>/<name>` form, mip prints
+
+   ```
+   github.com/<owner>/<name> does not publish a mip package.
+   Installing <name> from the personal channel <owner>/<owner> instead.
+   ```
+
+   and installs `gh/<owner>/<owner>/<name>` as an ordinary channel package. If the personal channel's index cannot be fetched, or does not provide the package, `mip:packageNotFound` is raised with a message that names both locations.
+3. Only a 404 triggers the fallback. Any other failure, such as a network error (`mip:indexFetchFailed`) or an invalid index (`mip:repo:invalidIndex`), is raised. For the explicit forms (`gh/<owner>/<repo>` and the URL forms) a 404 raises `mip:repo:notPublished`.
+
+Under `<root>/packages/gh/<owner>/`, a channel `<c>` and a repository package `<c>` would share a directory. An install that would create this overlap fails with `mip:repo:conflictsWithChannel` (`mip.paths.assert_no_repo_channel_overlap`), as does a channel install (including `mip install --channel <owner>/<c> <file>.mhl`) into the directory of an installed repository package. Names are compared case-insensitively here, since the two may collide on a case-insensitive file system.
 
 ### 3.2 Local Installation
 
@@ -720,7 +766,7 @@ Packages can be **pinned** to block all `mip update` paths from upgrading them; 
 6. For each remaining package, decide whether it needs updating:
    - `--force`: always yes.
    - Local package: always yes (no up-to-date check).
-   - Remote package: fetch the channel index and pick the target version (see [§7.1.1](#711-target-version-selection-for-update)), then compare installed version + build timestamp with the target:
+   - Remote package: fetch the index of its channel, or of its repository for a repository package (which must still publish exactly that package, see [§1.5.1](#151-package-repositories)), and pick the target version (see [§7.1.1](#711-target-version-selection-for-update)), then compare installed version + build timestamp with the target:
      - Same version **and** same timestamp (or the channel entry has no timestamp): "already up to date", skip.
      - Same version but different timestamp: update (the channel has a newer build of the same version).
      - Different version: update.
@@ -884,7 +930,8 @@ With a package name, displays information about that package from two sources:
 - If the package is not installed locally, shows "Not installed".
 
 **Remote Channel section:**
-- Fetches channel index and shows available versions/architectures.
+- Fetches channel index and shows available versions/architectures. For a repository package the section is headed `=== Remote Repository: github.com/<owner>/<repo> ===` and shows the repository's index.
+- A 2-part `<owner>/<name>` argument refers to whichever of `gh/<owner>/<name>` and `gh/<owner>/<owner>/<name>` is installed (the repository package first). If neither is installed, the repository's index is queried, and the personal channel's when the repository publishes no mip package.
 
 **Bare name with multiple installations:** Shows info for **all** installations with that name.
 
@@ -896,7 +943,9 @@ With a package name, displays information about that package from two sources:
 
 Lists packages available in the channel index. Uses `--channel` to specify which channel (default: `mip-org/core`). Always re-downloads the channel index, bypassing the on-disk cache (see [§11.6](#116-channel-index-cache)) so the displayed list reflects the current state of the channel.
 
-Packages in the default `mip-org/core` channel are listed as bare names — bare names resolve to `mip-org/core` first (see [§3.1.1](#311-channel-resolution)), so the listed names can be passed to `mip install` as-is. Packages in any other channel are listed with display-form qualified names (e.g. `mip-org/test-channel1/alpha`, or `magland/chunkie` for a personal channel), since a bare name would not resolve to that channel.
+Packages in the default `mip-org/core` channel are listed as bare names — bare names resolve to `mip-org/core` first (see [§3.1.1](#311-channel-resolution)), so the listed names can be passed to `mip install` as-is. Packages in any other channel are listed with display-form qualified names (e.g. `mip-org/test-channel1/alpha`, or `magland/magland/chunkie` for a personal channel), since a bare name would not resolve to that channel.
+
+`mip avail <owner>/<repo>` (also `gh/<owner>/<repo>` or `https://github.com/<owner>/<repo>`) instead lists the versions in the repository's index, highest first, each with its architectures. There is no personal-channel fallback here; a repository that publishes no mip package raises `mip:repo:notPublished`. Combining a positional argument with `--channel`, passing more than one, or passing something other than a repository raises `mip:avail:invalidArgs`.
 
 ### 9.4 `mip version`
 
@@ -927,20 +976,23 @@ Bare-name resolution is loaded-first: a currently loaded package wins over an in
 Scaffolds a new mip package by generating a `mip.yaml` in a target directory.
 
 ```
-mip init [<path>] [--name <packagename>] [--repository <url>]
+mip init [<path>] [--name <packagename>] [--repository <url>] [-g | --github]
 ```
 
 - **`<path>`** (optional positional) -- directory to initialize. Defaults to the current directory (`.`) when omitted. Must already exist; otherwise raises `mip:init:notADirectory`.
 - **`--name <packagename>`** (optional) -- overrides the default package name. When omitted, the name defaults to the git repo name (if a `.git/config` is detected -- see below) and otherwise to the target directory's basename. The name must be a valid **canonical** name, matching the regex `^[a-z0-9]([-a-z0-9_]*[a-z0-9])?$` (**lowercase** letters/digits/hyphens/underscores, starting and ending with a letter or digit); otherwise raises `mip:init:invalidName` with a hint to use `--name` to override. The git-repo-name and directory-basename defaults are lowercased before validation, so an uppercase directory name like `MyPkg` yields the canonical name `mypkg`. An explicit `--name` is **not** lowercased and so must already be canonical -- `mip init --name MyPkg` raises `mip:init:invalidName` (pass `--name mypkg` instead).
 - **`--repository <url>`** (optional) -- fills in the generated `mip.yaml`'s `repository` field. When omitted, the field is auto-filled from `.git/config` if a remote URL is detected (see below) and is otherwise left blank.
+- **`-g`, `--github`** (optional) -- "prepare to host on GitHub as a single-package repository": also write `.github/workflows/repo-build.yml` (see below).
 
 Behavior:
 
-1. If the target directory already contains a `mip.yaml`, `mip init` prints a message and exits without modifying anything.
+1. If the target directory already contains a `mip.yaml`, `mip init` prints a message and exits without modifying anything, except that with `-g` it writes the workflow file (and leaves `mip.yaml` unchanged).
 2. `paths` is auto-populated by walking the directory and identifying folders that contain runtime MATLAB code. The walk happens **before** the placeholder test script is created, so the root is not auto-included just because of that new file.
 3. A blank `test_<name>.m` is created at the target root (unless one already exists), and the generated `mip.yaml`'s `test_script` field points at it.
 4. Other optional string fields (`description`, `version`, `license`, `homepage`) are emitted blank for the user to fill in. A single `builds: [{ architectures: [any] }]` entry is emitted.
 5. If `<path>/.git/config` exists, it is parsed directly (no `git` shellout) for `[remote "<name>"] url = ...` entries. The URL of `[remote "origin"]` is used if present; otherwise the first remote in file order. The repo name is derived by stripping a trailing `.git` from the URL and taking the last `/`- or `:`-delimited segment, so `https://`, `ssh://`, and `git@host:owner/repo` forms all work. The URL is preserved verbatim (with any `.git` suffix) when written to the `repository` field. If no `.git/config` is found, no remotes are configured, or the file cannot be parsed, both fields fall back to their non-git defaults. Auto-detection only inspects `<path>/.git/`; parent directories are not searched, so a sub-package inside a larger git repo will not pick up the outer repo's URL.
+
+**The `-g` workflow.** `.github/workflows/repo-build.yml` triggers on pushed tags `v*`, on pushes to `main`, and on `workflow_dispatch`, grants `contents: write`, and calls the reusable workflow `mip-org/mip_channel_tools/.github/workflows/repo-build.yml@main`, which builds and publishes the package as described in [§1.5.1](#151-package-repositories). An existing file is replaced, so running `mip init -g` again updates the workflow. If the git repository name (from `.git/config`) does not match the package name under name equivalence, the warning `mip:init:nameMismatch` is issued, since a package published from its own repository must have the repository's name. Plain `mip init` does not write the workflow, since a package may not be hosted on GitHub, or may be built by a channel that includes it, in which case a workflow in the package repository would publish a second, unintended set of releases.
 
 `mip init` also runs automatically on behalf of local installs that are missing a `mip.yaml` (after the user confirms the prompt -- see [§3.2](#32-local-installation)) and on URL-based installs that land on a source tree with no `mip.yaml` (see [§3.4](#34-installation-from-a-remote-zip-url)). The local-install auto-invocation passes no flags, so the git-config auto-detection applies normally. The URL-based auto-invocation passes `--name` and `--repository` explicitly (the resolved zip URL), so the git-config auto-detection has no effect there.
 
@@ -1042,7 +1094,11 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
     directly_installed.txt                 # Persistent tracking of directly installed packages
     pinned.txt                             # Packages pinned against `mip update` (see §7.11 / §10.5)
     channels.txt                           # Subscribed channels for bare-name resolution (§9.9)
-    gh/                                    # GitHub channel packages, keyed by <owner>/<channel>
+    gh/                                    # GitHub packages: <owner>/<channel>/<name> or <owner>/<repo>
+      fastalgorithms/
+        chunkie/                           # Repository package gh/fastalgorithms/chunkie
+          mip.json                         # (mip.json directly under <owner>/ marks a repository package)
+          chunkie/
       mip-org/
         core/
           mip/                             # The package manager itself
@@ -1073,6 +1129,8 @@ Pinned packages are stored in `<root>/packages/pinned.txt`, one FQN per line. Th
         mip.json
         chebfun/
 ```
+
+Under `packages/gh/<owner>/`, a directory that contains `mip.json` is a repository package; any other directory is a channel whose subdirectories are packages (`mip.paths.is_repo_package_dir`). Existing channel directories never contain `mip.json` at the channel level, so they are classified correctly. A channel FQN never resolves into a repository package's directory, and a repository FQN never resolves to a channel directory.
 
 ### 11.1 `mip.json` Schema
 
@@ -1170,11 +1228,11 @@ The `MIP_ROOT` environment variable overrides the location of the mip root direc
 
 ### 11.6 Channel Index Cache
 
-Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<channel>.json`. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
+Channel index downloads are cached on disk under `<root>/cache/index/<owner>/<channel>.json`, and repository index downloads ([§1.5.1](#151-package-repositories)) under `<root>/cache/repo-index/<owner>/<repo>.json`. The two are kept apart because a channel and a repository of the same owner may share a name. The file stores the raw index JSON exactly as downloaded; the file's modification time is the cache timestamp.
 
 - **TTL**: 30 seconds. A cache entry whose age is `< 30s` is served without contacting the network.
 - **Bypass**: `mip avail` always re-downloads, bypassing the cache, so the displayed list reflects the current state of the channel. All other commands (`mip install`, `mip update`, `mip info`, etc.) use the cache.
-- **Successes only**: only successful downloads are cached. A failed fetch (`mip:indexFetchFailed`) does not write a cache entry, so the next call retries immediately.
+- **Successes only**: only successful downloads are cached. A failed fetch (`mip:indexFetchFailed`, or `mip:repo:notPublished` for a repository) does not write a cache entry, so the next call retries immediately.
 - **Corrupt cache**: if a cache file exists but cannot be read or parsed, it is treated as a miss and a fresh download is attempted.
 - **Cache write failure**: if the cache write itself fails (read-only filesystem, etc.), the fetched index is still returned -- caching is best-effort.
 - The cache directory is created on first write and is not pruned automatically.

@@ -254,28 +254,84 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             testCase.verifyTrue(opts.editable);
         end
 
-        function testParseChannelShorthandAppliesToFqn(testCase)
+        function testParseTwoPartIsRepoWithPersonalFallback(testCase)
             % A 2-part positional arg '<owner>/<pkg>' (where <owner> is not
-            % a reserved source-type prefix) is shorthand for the personal
-            % channel form 'gh/<owner>/<owner>/<pkg>'.
+            % a reserved source-type prefix) refers to the repository
+            % github.com/<owner>/<pkg>, with the personal channel form
+            % 'gh/<owner>/<owner>/<pkg>' as the fallback.
             r = mip.parse.parse_package_arg('foo/pkg1');
             testCase.verifyTrue(r.is_fqn);
+            testCase.verifyTrue(r.is_repo);
             testCase.verifyEqual(r.type, 'gh');
             testCase.verifyEqual(r.name, 'pkg1');
             testCase.verifyEqual(r.owner, 'foo');
-            testCase.verifyEqual(r.channel, 'foo');
-            testCase.verifyEqual(r.fqn, 'gh/foo/foo/pkg1');
+            testCase.verifyEqual(r.channel, '');
+            testCase.verifyEqual(r.fqn, 'gh/foo/pkg1');
+            testCase.verifyEqual(r.fallback_fqn, 'gh/foo/foo/pkg1');
         end
 
-        function testParsePersonalChannelShorthandWithVersion(testCase)
+        function testParseTwoPartWithVersion(testCase)
             r = mip.parse.parse_package_arg('magland/chunkie@1.2.0');
-            testCase.verifyTrue(r.is_fqn);
-            testCase.verifyEqual(r.type, 'gh');
+            testCase.verifyTrue(r.is_repo);
             testCase.verifyEqual(r.owner, 'magland');
-            testCase.verifyEqual(r.channel, 'magland');
             testCase.verifyEqual(r.name, 'chunkie');
-            testCase.verifyEqual(r.fqn, 'gh/magland/magland/chunkie');
+            testCase.verifyEqual(r.fqn, 'gh/magland/chunkie');
+            testCase.verifyEqual(r.fallback_fqn, 'gh/magland/magland/chunkie');
             testCase.verifyEqual(r.version, '1.2.0');
+        end
+
+        function testParseExplicitRepoFqn(testCase)
+            % 'gh/<owner>/<repo>' is the explicit repository FQN; no fallback.
+            r = mip.parse.parse_package_arg('gh/fastalgorithms/chunkie@1.2.0');
+            testCase.verifyTrue(r.is_fqn);
+            testCase.verifyTrue(r.is_repo);
+            testCase.verifyEqual(r.owner, 'fastalgorithms');
+            testCase.verifyEqual(r.channel, '');
+            testCase.verifyEqual(r.name, 'chunkie');
+            testCase.verifyEqual(r.fqn, 'gh/fastalgorithms/chunkie');
+            testCase.verifyEqual(r.fallback_fqn, '');
+            testCase.verifyEqual(r.version, '1.2.0');
+        end
+
+        function testParseRepoUrlForms(testCase)
+            forms = {'https://github.com/fastalgorithms/chunkie', ...
+                     'https://github.com/fastalgorithms/chunkie/', ...
+                     'https://github.com/fastalgorithms/chunkie.git', ...
+                     'github.com/fastalgorithms/chunkie', ...
+                     'github.com/fastalgorithms/chunkie.git/'};
+            for k = 1:numel(forms)
+                r = mip.parse.parse_package_arg(forms{k});
+                testCase.verifyTrue(r.is_repo, forms{k});
+                testCase.verifyEqual(r.fqn, 'gh/fastalgorithms/chunkie', forms{k});
+                testCase.verifyEqual(r.fallback_fqn, '', forms{k});
+                testCase.verifyEqual(r.version, '', forms{k});
+            end
+            r = mip.parse.parse_package_arg('https://github.com/fastalgorithms/chunkie@1.2.0');
+            testCase.verifyEqual(r.fqn, 'gh/fastalgorithms/chunkie');
+            testCase.verifyEqual(r.version, '1.2.0');
+        end
+
+        function testParseRepoUrlInvalid(testCase)
+            % Repository names that are not valid mip names (e.g. with a
+            % dot), and other github.com paths, are not repository specs.
+            testCase.verifyError(@() mip.parse.parse_package_arg( ...
+                'https://github.com/o/my.repo'), 'mip:invalidPackageSpec');
+            testCase.verifyError(@() mip.parse.parse_package_arg( ...
+                'github.com/o/r/archive/main.zip'), 'mip:invalidPackageSpec');
+            testCase.verifyEqual(mip.parse.repo_url_path( ...
+                'https://github.com/o/r/releases/download/v1/r.mhl'), '');
+            testCase.verifyEqual(mip.parse.repo_url_path( ...
+                'https://example.com/o/r'), '');
+        end
+
+        function testParseGhGhChannelStillReachable(testCase)
+            % The 4-part form reaches the channel 'a' of a GitHub owner
+            % named 'gh', which 'gh/a/b' no longer does.
+            r = mip.parse.parse_package_arg('gh/gh/a/b');
+            testCase.verifyFalse(r.is_repo);
+            testCase.verifyEqual(r.owner, 'gh');
+            testCase.verifyEqual(r.channel, 'a');
+            testCase.verifyEqual(r.name, 'b');
         end
 
         function testParsePersonalShorthandReservedTypesUnchanged(testCase)
@@ -342,6 +398,14 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
             testCase.verifyTrue(r.is_fqn);
         end
 
+        function testMakeFqnRepo(testCase)
+            fqn = mip.parse.make_fqn('fastalgorithms', '', 'chunkie');
+            testCase.verifyEqual(fqn, 'gh/fastalgorithms/chunkie');
+            r = mip.parse.parse_package_arg(fqn);
+            testCase.verifyTrue(r.is_repo);
+            testCase.verifyEqual(r.fallback_fqn, '');
+        end
+
         function testMakeFqnRoundTrip(testCase)
             fqn = mip.parse.make_fqn('mip-org', 'core', 'chebfun');
             r = mip.parse.parse_package_arg(fqn);
@@ -360,11 +424,28 @@ classdef TestUtilsParsing < matlab.unittest.TestCase
                 'mip-org/core/chebfun');
         end
 
-        function testDisplayFqnCollapsesPersonalChannel(testCase)
-            % Personal channels (owner == channel) collapse to <owner>/<pkg>.
+        function testDisplayFqnDoesNotCollapsePersonalChannel(testCase)
+            % '<owner>/<pkg>' now refers to a repository, so personal
+            % channels keep the 3-part form.
             testCase.verifyEqual( ...
                 mip.parse.display_fqn('gh/magland/magland/chunkie'), ...
-                'magland/chunkie');
+                'magland/magland/chunkie');
+        end
+
+        function testDisplayFqnRepo(testCase)
+            testCase.verifyEqual( ...
+                mip.parse.display_fqn('gh/fastalgorithms/chunkie'), ...
+                'fastalgorithms/chunkie');
+        end
+
+        function testDisplayFqnRepoReservedOwnerKeepsPrefix(testCase)
+            % 'local/foo' would parse back as a local install.
+            for owner = {'local', 'fex', 'web', 'mhl', 'gh'}
+                fqn = ['gh/' owner{1} '/foo'];
+                testCase.verifyEqual(mip.parse.display_fqn(fqn), fqn);
+                r = mip.parse.parse_package_arg(mip.parse.display_fqn(fqn));
+                testCase.verifyEqual(r.fqn, fqn);
+            end
         end
 
         function testDisplayFqnDoesNotCollapseDistinctChannel(testCase)

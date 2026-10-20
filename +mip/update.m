@@ -4,6 +4,7 @@ function update(varargin)
 % Usage:
 %   mip update <package>
 %   mip update <owner>/<channel>/<package>
+%   mip update <owner>/<repo>
 %   mip update <package1> <package2> ...
 %   mip update --force <package>
 %   mip update --deps <package>
@@ -18,7 +19,8 @@ function update(varargin)
 %
 % For each requested package, checks whether an update is needed. For
 % remote packages, the installed version (and build timestamp) is compared
-% against the latest in the channel index. Local packages are always
+% against the latest in the index of the channel or package repository
+% that published it. Local packages are always
 % considered to need an update. If a package does not need updating,
 % nothing happens for that package (unless --force is specified).
 %
@@ -328,17 +330,22 @@ function p = resolvePackage(packageArg)
 end
 
 function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
-% Fetch the channel index and decide whether p needs updating.
-% Also returns the latestInfo struct (needed for downloading).
+% Fetch the channel (or repository) index and decide whether p needs
+% updating. Also returns the latestInfo struct (needed for downloading).
 
     fqn = p.fqn;
     displayFqn = mip.parse.display_fqn(fqn);
     installedVersion = p.pkgInfo.version;
-    channelStr = [p.owner '/' p.channel];
+    channelStr = mip.channel.index_source(fqn);
 
     fprintf('Checking for updates to "%s"...\n', displayFqn);
 
     index = mip.channel.fetch_index(channelStr);
+    if isempty(p.channel)
+        % Repository package: the index must still publish exactly this
+        % package.
+        mip.channel.repo_index_identity(index, p.owner, p.name);
+    end
 
     % If the installed version is non-numeric (e.g. 'main', 'master'),
     % pin the update lookup to that branch or version.
@@ -356,9 +363,9 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
     catch err
         if strcmp(err.identifier, 'mip:versionNotFound')
             error('mip:update:versionNotInChannel', ...
-                  ['Installed version "%s" of "%s" no longer exists in channel "%s". ' ...
+                  ['Installed version "%s" of "%s" no longer exists in "%s". ' ...
                    'To switch to a different branch or version, run: mip install %s@<version>'], ...
-                  installedVersion, fqn, channelStr, fqn);
+                  installedVersion, displayFqn, channelStr, displayFqn);
         end
         rethrow(err);
     end
@@ -372,7 +379,7 @@ function [tf, latestInfo] = checkRemoteNeedsUpdate(p, force)
                   p.name, currentArch, strjoin(archs, ', '));
         else
             error('mip:update:notInIndex', ...
-                  'Package "%s" not found in the %s channel index.', ...
+                  'Package "%s" not found in the %s index.', ...
                   p.name, channelStr);
         end
     end

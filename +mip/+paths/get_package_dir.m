@@ -11,6 +11,7 @@ function pkgDir = get_package_dir(fqn)
 % Args:
 %   fqn - Canonical FQN:
 %           'gh/<owner>/<channel>/<name>'  (GitHub channel package)
+%           'gh/<owner>/<repo>'            (GitHub repository package)
 %           'local/<name>'                 (Local directory install)
 %           'fex/<name>'                   (File Exchange URL install)
 %           'web/<name>'                   (Generic remote .zip URL install)
@@ -18,7 +19,8 @@ function pkgDir = get_package_dir(fqn)
 %
 % Returns:
 %   pkgDir - Full path:
-%             <root>/packages/gh/<owner>/<channel>/<name>/   (gh)
+%             <root>/packages/gh/<owner>/<channel>/<name>/   (gh channel)
+%             <root>/packages/gh/<owner>/<repo>/             (gh repository)
 %             <root>/packages/<type>/<name>/                (non-gh)
 
 packagesDir = mip.paths.get_packages_dir();
@@ -34,7 +36,9 @@ if isempty(onDisk)
     onDisk = r.name;
 end
 
-if strcmp(r.type, 'gh')
+if r.is_repo
+    pkgDir = fullfile(packagesDir, 'gh', r.owner, onDisk);
+elseif strcmp(r.type, 'gh')
     pkgDir = fullfile(packagesDir, 'gh', r.owner, r.channel, onDisk);
 else
     pkgDir = fullfile(packagesDir, r.type, onDisk);

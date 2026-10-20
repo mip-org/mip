@@ -37,6 +37,7 @@ function installedFqn = from_mhl(mhlSource, channel)
             fqn = mip.parse.make_mhl_fqn(packageName);
         end
 
+        mip.paths.assert_no_repo_channel_overlap(fqn);
         existingName = mip.resolve.installed_dir(fqn);
         if ~isempty(existingName) && ~strcmp(existingName, packageName)
             if useGhChannel
@@ -60,10 +61,22 @@ function installedFqn = from_mhl(mhlSource, channel)
         end
 
         if ~isempty(pkgInfo.dependencies)
+            deps = pkgInfo.dependencies;
+            % A 2-part '<owner>/<name>' dependency already installed as
+            % either the repository or the personal-channel package keeps
+            % that copy, as in mip.dependency.build_graph.
+            for k = 1:length(deps)
+                if ~isempty(mip.parse.parse_package_arg(deps{k}).fallback_fqn)
+                    installed = mip.resolve.installed_fqn(deps{k});
+                    if ~isempty(installed)
+                        deps{k} = installed;
+                    end
+                end
+            end
             fprintf('\nPackage "%s" has dependencies: %s\n', ...
                     mip.parse.display_fqn(fqn), strjoin(pkgInfo.dependencies, ', '));
             fprintf('Installing dependencies from remote repository...\n');
-            mip.install.from_repository(pkgInfo.dependencies, channel, false);
+            mip.install.from_repository(deps, channel, false);
         end
 
         fprintf('\nInstalling "%s"...\n', mip.parse.display_fqn(fqn));

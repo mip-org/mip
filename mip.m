@@ -6,6 +6,7 @@ function varargout = mip(command, varargin)
 %   mip install --channel <owner>/<channel> <pkg>   - Install from a user-hosted channel
 %   mip install --channel <owner> <pkg>             - Shorthand for --channel <owner>/<owner>
 %   mip install <owner>/<channel>/<package>         - Install using fully qualified name
+%   mip install <owner>/<repo>                      - Install a package published from github.com/<owner>/<repo>
 %   mip update <package> [...]                      - Update one or more packages
 %   mip update --force <package>                    - Force update even if up to date
 %   mip update --deps <package>                     - Update package and its dependencies
@@ -30,11 +31,13 @@ function varargout = mip(command, varargin)
 %   mip info --channel <owner>/<channel> <package>  - Display info from a specific channel
 %   mip avail                                       - List available packages in repository
 %   mip avail --channel <owner>/<channel>           - List packages from a specific channel
+%   mip avail <owner>/<repo>                        - List versions published by a package repository
 %   mip version                                     - Display mip version
 %   mip test <package>                              - Run package test script
 %   mip compile <package>                           - Compile/recompile MEX files
 %   mip bundle <directory> [--output <dir>]         - Build .mhl from local package
 %   mip init <directory> [--name <name>]            - Generate a starter mip.yaml
+%   mip init <directory> -g                         - Prepare to host on GitHub as a single-package repository
 %   mip reset                                       - Reset mip to a clean state
 %   mip env                                         - Show the active environment
 %   mip env create [name|path]                      - Create an empty environment
