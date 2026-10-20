@@ -571,7 +571,7 @@ classdef TestInit < matlab.unittest.TestCase
             evalc('mip.init(pkgDir, ''-g'')');
 
             testCase.verifyTrue(isfile(fullfile(pkgDir, 'mip.yaml')));
-            wf = fullfile(pkgDir, '.github', 'workflows', 'mip.yml');
+            wf = fullfile(pkgDir, '.github', 'workflows', 'repo-build.yml');
             testCase.verifyTrue(isfile(wf));
             txt = fileread(wf);
             testCase.verifySubstring(txt, ...
@@ -596,7 +596,7 @@ classdef TestInit < matlab.unittest.TestCase
             yamlBefore = fileread(fullfile(pkgDir, 'mip.yaml'));
             wfDir = fullfile(pkgDir, '.github', 'workflows');
             mkdir(wfDir);
-            fid = fopen(fullfile(wfDir, 'mip.yml'), 'w');
+            fid = fopen(fullfile(wfDir, 'repo-build.yml'), 'w');
             fprintf(fid, 'old content\n');
             fclose(fid);
 
@@ -604,7 +604,7 @@ classdef TestInit < matlab.unittest.TestCase
 
             testCase.verifySubstring(out, 'Updated');
             testCase.verifyEqual(fileread(fullfile(pkgDir, 'mip.yaml')), yamlBefore);
-            testCase.verifySubstring(fileread(fullfile(wfDir, 'mip.yml')), 'repo-build.yml@main');
+            testCase.verifySubstring(fileread(fullfile(wfDir, 'repo-build.yml')), 'repo-build.yml@main');
         end
 
         function testInit_GithubFlagWarnsOnNameMismatch(testCase)

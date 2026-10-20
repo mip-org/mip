@@ -28,7 +28,7 @@ function init(varargin)
 % If the target directory already contains a mip.yaml, init prints a
 % message and exits without modifying anything.
 %
-% With -g (--github), init also writes .github/workflows/mip.yml, a
+% With -g (--github), init also writes .github/workflows/repo-build.yml, a
 % workflow that builds and publishes the package from its own GitHub
 % repository on each pushed tag v* (and each push to main) by calling the
 % reusable workflow repo-build.yml in mip-org/mip_channel_tools. Users then
@@ -129,13 +129,13 @@ end
 
 
 function write_github_workflow(targetDir, pkgName, gitRepoName)
-% Write .github/workflows/mip.yml, which publishes the package from its
+% Write .github/workflows/repo-build.yml, which publishes the package from its
 % own GitHub repository (see "mip init -g" above).
     workflowDir = fullfile(targetDir, '.github', 'workflows');
     if ~isfolder(workflowDir)
         mkdir(workflowDir);
     end
-    workflowPath = fullfile(workflowDir, 'mip.yml');
+    workflowPath = fullfile(workflowDir, 'repo-build.yml');
     existed = isfile(workflowPath);
 
     lines = { ...
