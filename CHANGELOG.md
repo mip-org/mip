@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.3.0 (2026-11-04)
+
+- Packages published from their own GitHub repository (MEP 10).
+  `mip install` accepts `<owner>/<repo>`, `gh/<owner>/<repo>`, and
+  `[https://]github.com/<owner>/<repo>`, optionally with `@<version>`.
+  mip reads the index from the repository's `mip-index` release and
+  installs the package as `gh/<owner>/<repo>`. The 2-part form falls back
+  to the personal channel `<owner>/<owner>` when the repository publishes
+  no mip package. `update`, `info`, and `avail <owner>/<repo>` support
+  repository packages, and `mip init -g` writes the publishing workflow
+  (`repo-build.yml`). Personal-channel packages now display as
+  `<owner>/<owner>/<pkg>`. (#360)
+- Dependencies may be written `github.com/<owner>/<repo>`. A 2-part
+  `<owner>/<name>` dependency resolves as it does for `mip install`: to
+  the repository package if there is one, otherwise to the
+  personal-channel package `<owner>/<owner>/<name>`. Bare-name
+  dependencies of a repository package resolve to `mip-org/core`. (#360)
+- Tab completion no longer intermittently fails with "Failed to parse
+  JSON file ... functionSignatures.json". mip now replaces the file with
+  an atomic rename when the JVM is available, and skips the rewrite when
+  the signatures are unchanged. (#359)
+
 ## 1.2.0 (2026-10-14)
 
 - Environments (MEP 8): `mip env create/list/delete` manage addressable
