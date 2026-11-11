@@ -19,7 +19,8 @@ function info(varargin)
 % architecture tag.
 %
 % With a package name, shows two kinds of information:
-%   1. Local installation(s) — version, path, loaded/sticky status, deps
+%   1. Local installation(s) — version, path, loaded/sticky status, deps,
+%      and optional path groups (examples, tests) for `mip load --with`
 %   2. Remote info — available versions and architectures, from the
 %      channel or package repository that publishes it
 %
@@ -227,7 +228,9 @@ function showLocalInstallInfo(fqn)
     if isfield(pkgInfo, 'extra_paths') && isstruct(pkgInfo.extra_paths) ...
             && ~isempty(fieldnames(pkgInfo.extra_paths))
         groupNames = fieldnames(pkgInfo.extra_paths);
-        fprintf('    Extra paths: %s\n', strjoin(groupNames, ', '));
+        nameInfo = mip.parse.parse_package_arg(fqn);
+        fprintf('    Optional groups: %s (load with: mip load %s --with <group>)\n', ...
+                strjoin(groupNames, ', '), nameInfo.name);
     end
 
     fprintf('\n');
