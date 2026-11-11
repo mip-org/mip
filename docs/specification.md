@@ -927,6 +927,7 @@ With a package name, displays information about that package from two sources:
 
 **Local Installation section:**
 - Version, path, loaded status, dependencies, editable flag, source path.
+- The package's optional path groups (the `extra_paths` of its `mip.json`, such as `examples` or `tests`), on a line `Optional groups: <g1>, <g2> (load with: mip load <name> --with <group>)`, so users can find the groups `mip load --with` accepts.
 - If the package is not installed locally, shows "Not installed".
 
 **Remote Channel section:**

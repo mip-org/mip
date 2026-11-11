@@ -53,6 +53,30 @@ classdef TestInfoPackage < matlab.unittest.TestCase
                 'Info should display installed version');
         end
 
+        function testInfoShowsOptionalGroupsWithLoadHint(testCase)
+            % Groups usable with `mip load --with` are listed by name,
+            % with how to load them (issue #366).
+            ep = struct('examples', {{'examples'}}, 'tests', {{'tests'}});
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg', ...
+                'subdirs', {'examples', 'tests'}, 'extraPaths', ep);
+
+            output = evalc('try; mip.info(''mip-org/core/mypkg''); catch; end');
+            testCase.verifyTrue(contains(output, 'Optional groups: examples, tests'), ...
+                'Info should list the optional groups');
+            testCase.verifyTrue(contains(output, 'mip load mypkg --with <group>'), ...
+                'Info should say how to load a group');
+            testCase.verifyFalse(contains(output, 'Extra paths'), ...
+                'The old "Extra paths" label should be gone');
+        end
+
+        function testInfoOmitsOptionalGroupsWhenNone(testCase)
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
+
+            output = evalc('try; mip.info(''mip-org/core/mypkg''); catch; end');
+            testCase.verifyFalse(contains(output, 'Optional groups'), ...
+                'No groups line for a package without extra_paths');
+        end
+
         function testInfoShowsInstallationPath(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
 
