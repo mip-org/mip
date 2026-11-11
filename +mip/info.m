@@ -19,7 +19,8 @@ function info(varargin)
 % architecture tag.
 %
 % With a package name, shows two kinds of information:
-%   1. Local installation(s) — version, path, loaded/sticky status, deps
+%   1. Local installation(s) — version, architecture of the installed
+%      build, path, loaded/sticky status, deps
 %   2. Remote info — available versions and architectures, from the
 %      channel or package repository that publishes it
 %
@@ -192,6 +193,12 @@ function showLocalInstallInfo(fqn)
 
     if isfield(pkgInfo, 'version')
         fprintf('    Version: %s\n', pkgInfo.version);
+    end
+
+    % Architecture of the installed build (e.g. macos_arm64, or 'any' for
+    % a pure-MATLAB package), so users can see which binaries they got.
+    if isfield(pkgInfo, 'architecture') && ~isempty(pkgInfo.architecture)
+        fprintf('    Architecture: %s\n', pkgInfo.architecture);
     end
 
     fprintf('    Path: %s\n', pkgDir);
