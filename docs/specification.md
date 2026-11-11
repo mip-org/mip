@@ -926,7 +926,7 @@ With no arguments, prints mip's own version (from `mip.yaml`), the resolved mip 
 With a package name, displays information about that package from two sources:
 
 **Local Installation section:**
-- Version, path, loaded status, dependencies, editable flag, source path.
+- Version, architecture of the installed build (the `architecture` field of its `mip.json`, e.g. `macos_arm64`, or `any` for a pure-MATLAB package), path, loaded status, dependencies, editable flag, source path.
 - If the package is not installed locally, shows "Not installed".
 
 **Remote Channel section:**
