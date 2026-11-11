@@ -372,6 +372,8 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
         installedFqns{end+1} = s.fqn; %#ok<AGROW>
     end
 
+    requestedFqns = cellfun(@(r) r.fqn, resolvedPackages, 'UniformOutput', false);
+
     % If a download was attempted and failed, prune orphan deps installed
     % during this call (they aren't in directly_installed.txt yet).
     installAttempted = false;
@@ -402,7 +404,21 @@ function installedFqns = executeInstall(resolvedPackages, allPackagesToInstall, 
             end
             pkgDir = mip.paths.get_package_dir(fqn);
             if exist(pkgDir, 'dir')
-                fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+                % A requested package that was on disk only as a transitive
+                % dependency is promoted to directly installed (so that
+                % uninstalling its parent no longer prunes it). Say so, as
+                % `mip load` does for a promoted load; otherwise the user
+                % sees only "already installed" and cannot tell anything
+                % changed. Mark it here, before any download below, so the
+                % message holds even if a later package fails to install.
+                if markDirectlyInstalled && ismember(fqn, requestedFqns) ...
+                        && ~mip.state.is_directly_installed(fqn)
+                    mip.state.add_directly_installed(fqn);
+                    fprintf('Package "%s" is already installed (now marked as directly installed)\n', ...
+                            mip.parse.display_fqn(fqn));
+                else
+                    fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+                end
             else
                 toInstallFqns{end+1} = fqn; %#ok<AGROW>
             end

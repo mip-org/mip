@@ -509,6 +509,40 @@ classdef TestInstallRemote < matlab.unittest.TestCase
                 ismember('gh/mip-org/test-channel1/alpha', directlyInstalled));
         end
 
+        function testInstallAlreadyInstalledDep_SaysMarkedDirectlyInstalled(testCase)
+            % Promoting a transitive dep must say so (issue #364), as
+            % `mip load` does with "(now marked as direct)".
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+
+            output = evalc('mip.install(''mip-org/test-channel1/alpha'')');
+            testCase.verifyTrue(contains(output, ...
+                'already installed (now marked as directly installed)'), ...
+                'Promoting a transitive dep should be reported');
+        end
+
+        function testInstallAlreadyDirectlyInstalled_NoPromotionMessage(testCase)
+            % Re-installing a package that is already directly installed
+            % changes nothing, so the message must not claim a promotion.
+            mip.install('mip-org/test-channel1/alpha');
+
+            output = evalc('mip.install(''mip-org/test-channel1/alpha'')');
+            testCase.verifyTrue(contains(output, 'already installed'));
+            testCase.verifyFalse(contains(output, 'now marked as directly installed'), ...
+                'An already-direct package should not be reported as promoted');
+        end
+
+        function testInstallParent_DoesNotPromoteInstalledDep(testCase)
+            % Re-installing gamma reports its already-installed dep alpha
+            % without promoting it: only requested packages are promoted.
+            mip.install('--channel', 'mip-org/test-channel1', 'gamma');
+
+            output = evalc('mip.install(''mip-org/test-channel1/gamma'')');
+            testCase.verifyFalse(contains(output, 'now marked as directly installed'));
+            testCase.verifyFalse(ismember('gh/mip-org/test-channel1/alpha', ...
+                mip.state.get_directly_installed()), ...
+                'A dependency must stay transitive when only its parent is re-installed');
+        end
+
         function testUninstallParent_PreservesExplicitlyInstalledDep(testCase)
             % End-to-end check for issue #224: after explicitly installing a
             % package that was already on disk as a transitive dep,

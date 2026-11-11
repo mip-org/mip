@@ -55,7 +55,12 @@ function installedFqn = from_mhl(mhlSource, channel)
 
         pkgDir = mip.paths.get_package_dir(fqn);
         if exist(pkgDir, 'dir')
-            fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+            if mip.state.is_directly_installed(fqn)
+                fprintf('Package "%s" is already installed\n', mip.parse.display_fqn(fqn));
+            else
+                fprintf('Package "%s" is already installed (now marked as directly installed)\n', ...
+                        mip.parse.display_fqn(fqn));
+            end
             mip.state.add_directly_installed(fqn);
             return
         end
