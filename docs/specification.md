@@ -379,6 +379,8 @@ If any package in step 1 fails (download error, extraction failure, etc.), the i
 
 If a package is already installed, `mip install` prints a message and skips it. It does **not** error. It does **not** reinstall or upgrade. Use `mip update` for that.
 
+If a package the user asked for by name is already installed only as a transitive dependency, `mip install` promotes it to directly installed (so uninstalling its parent no longer prunes it) and says so: `Package "<name>" is already installed (now marked as directly installed)`. This matches `mip load`, which prints `(now marked as direct)` when it promotes a package loaded as a dependency.
+
 **Exception** -- explicit version upgrade: if the user passed an explicit `@version` for a directly-requested package and a *different* version is currently installed, `mip install` replaces it (uninstall + install of the requested version, including unload-before / reload-after for the affected package) and prints `Replacing "<name>" <old> with requested version <new>...`. The replacement only triggers when the version that would actually be installed matches the requested version; otherwise the old install is left in place.
 
 #### 3.1.8 Multiple Packages
