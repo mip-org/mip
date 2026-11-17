@@ -53,6 +53,30 @@ classdef TestInfoPackage < matlab.unittest.TestCase
                 'Info should display installed version');
         end
 
+        function testInfoShowsInstalledArchitecture(testCase)
+            % The installed build's architecture comes from mip.json
+            % (createTestPackage writes 'any').
+            createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
+
+            output = evalc('try; mip.info(''mip-org/core/mypkg''); catch; end');
+            testCase.verifyTrue(contains(output, 'Architecture: any'), ...
+                'Info should display the installed build''s architecture');
+        end
+
+        function testInfoShowsInstalledMexArchitecture(testCase)
+            pkgDir = createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
+            jsonPath = fullfile(pkgDir, 'mip.json');
+            data = jsondecode(fileread(jsonPath));
+            data.architecture = 'macos_arm64';
+            fid = fopen(jsonPath, 'w');
+            fwrite(fid, jsonencode(data));
+            fclose(fid);
+
+            output = evalc('try; mip.info(''mip-org/core/mypkg''); catch; end');
+            testCase.verifyTrue(contains(output, 'Architecture: macos_arm64'), ...
+                'Info should display the architecture recorded at install');
+        end
+
         function testInfoShowsInstallationPath(testCase)
             createTestPackage(testCase.TestRoot, 'mip-org', 'core', 'mypkg');
 
