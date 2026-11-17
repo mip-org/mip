@@ -685,9 +685,9 @@ Each entry in the `mip.json` `paths` field is resolved against `srcDir` (see [§
 
 If `mip.json` has no `paths` field, the `mip:unloadNotFound` warning is issued. The package is still removed from tracking either way.
 
-**Defensive path sweep**: after the step above, mip walks the current MATLAB path and `rmpath`s every entry that equals `srcDir` or starts with `srcDir<filesep>`. The `srcDir` is resolved via [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the same base used for `mip load --addpath`/`--rmpath`. The sweep is what catches paths added via `mip load --addpath` that are not listed in the `paths` field.
+**Defensive path sweep**: after the step above, mip walks the current MATLAB path and `rmpath`s every entry that equals `srcDir` or starts with `srcDir<filesep>`. The `srcDir` is resolved via [`mip.paths.get_source_dir`](../+mip/+paths/get_source_dir.m) — the same base used for `mip load --addpath`/`--rmpath`. The sweep is what catches paths added via `mip load --addpath` or `--with` that are not listed in the `paths` field.
 
-Each swept entry is reported (`swept residual path entry for "<fqn>": <path>`). Because the sweep matches only entries beginning with `srcDir<filesep>` (or exactly equal to `srcDir`), a sibling directory whose name happens to share a prefix is never touched.
+The sweep is silent: these entries were added on the package's behalf, so removing them is part of a normal unload. Because the sweep matches only entries beginning with `srcDir<filesep>` (or exactly equal to `srcDir`), a sibling directory whose name happens to share a prefix is never touched.
 
 ### 5.9 Broken Dependency Warning
 
