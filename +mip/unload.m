@@ -153,8 +153,9 @@ function executeUnload(packageDir, fqn)
 
     % Defensive sweep: remove any remaining MATLAB path entries that fall
     % under this package's source directory. This catches paths added via
-    % `mip load --addpath` that the mip.json "paths" list did not cover.
-    sweepPathEntries(packageDir, fqn, pkgInfo);
+    % `mip load --addpath` or `--with` that the mip.json "paths" list did
+    % not cover.
+    sweepPathEntries(packageDir, pkgInfo);
 
     % Unload any compiled MEX this package shipped, so a later uninstall or
     % update can delete the package directory -- a loaded DLL/MEX cannot be
@@ -177,14 +178,13 @@ function clearPackageMex(packageDir, pkgInfo)
     mip.build.clear_mex(srcDir);
 end
 
-function sweepPathEntries(packageDir, fqn, pkgInfo)
+function sweepPathEntries(packageDir, pkgInfo)
 % Remove any MATLAB path entries that lie under the package source dir.
-% Silent if the package was already cleanly unloaded above.
 
     if isempty(packageDir)
         return
     end
-    if nargin < 3 || isempty(pkgInfo)
+    if nargin < 2 || isempty(pkgInfo)
         if ~isfolder(packageDir)
             return
         end
@@ -220,10 +220,8 @@ function sweepPathEntries(packageDir, fqn, pkgInfo)
     end
     oldState = warning('off', 'MATLAB:rmpath:DirNotFound');
     restoreWarn = onCleanup(@() warning(oldState));
-    displayFqn = mip.parse.display_fqn(fqn);
     for k = 1:numel(toRemove)
         rmpath(toRemove{k});
-        fprintf('  swept residual path entry for "%s": %s\n', displayFqn, toRemove{k});
     end
 end
 
